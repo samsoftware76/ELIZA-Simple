@@ -1,86 +1,120 @@
 # ELIZA Project and Client Management App
 
-This is a Flask-based web application for managing clients, projects, and tasks.
-It is designed to be deployed on Vercel.
+A Flask web application for managing clients, projects, tasks, subscriptions and billing.
+Deployed on Vercel with a Neon (PostgreSQL) database.
 
-## Key Features (Planned)
-- Client Information Management
-- Project Tracking
-- Task Management (To-Do style)
-- User Roles and Permissions
-- Email Notifications
-- Secure Data Handling
+## Features
+
+- **Authentication** — register, login, logout, password reset (request + token-based reset)
+- **Client management** — create, view, edit, delete clients
+- **Project management** — create, view, edit, delete projects; assign/remove team members
+- **Task management** — create, view, edit, delete tasks; comments on tasks; time tracking (start/stop/manual entry) per task
+- **Reports & analytics** — project status, task distribution, time tracking, project timeline, overdue tasks; each report can be exported (chart images rendered with matplotlib, data via pandas)
+- **Subscriptions & billing** — subscription plans, trial sign-up, payment via **PesaPal**, payment callback handling, cancel subscription, subscription status
+- **Email** — bulk email sending, unsubscribe, automatic notifications for task assignment, task updates, and task comments
+- **Admin panel** — admin dashboard, user management (add/edit/delete), subscription plan management, system settings
+- **CSRF protection** on all forms (Flask-WTF)
+
+> `security.py` also implements HTTPS-forcing security headers via Flask-Talisman (CSP, HSTS, secure cookies, clickjacking/MIME-sniffing protection), but it isn't wired into `api/index.py` yet — worth enabling before a public production launch.
 
 ## Tech Stack
-- Python (Flask)
-- PostgreSQL (Neon DB - using `psycopg2-binary` and `Flask-SQLAlchemy`)
-- Vercel (Hosting)
-- `python-dotenv` for managing environment variables locally
+
+- **Flask** — web framework
+- **Flask-SQLAlchemy** — ORM
+- **PostgreSQL** (Neon) via `psycopg2-binary` — production database (SQLite fallback for local dev)
+- **Flask-Login** — session/auth management
+- **Flask-WTF / WTForms** — forms and CSRF protection
+- **Flask-Mail** — transactional and notification email
+- **PesaPal** — payment gateway for subscriptions
+- **pandas / matplotlib** — report data processing and chart generation
+- **PyJWT** — token handling (e.g. password reset)
+- **Vercel** — hosting (`api/index.py` is the serverless entry point)
 
 ## Project Structure
-- `ELIZA_App/` (Root project folder)
-  - `api/index.py`: Main Flask application and Vercel entry point.
-  - `models/`: Directory for SQLAlchemy database models.
-  - `services/`: Directory for business logic services.
-  - `static/`: For static files (CSS, JavaScript, images).
-  - `templates/`: For HTML templates.
-  - `vercel.json`: Vercel deployment configuration.
-  - `requirements.txt`: Python dependencies.
-  - `.env.example`: Example for environment variables (especially `DATABASE_URL`).
-  - `.env`: (You create this) For local environment variables like `DATABASE_URL`.
-  - `venv/`: (You create this) Python virtual environment directory.
+
+```
+ELIZA_App/
+├── api/
+│   ├── index.py          # Main Flask app + most routes (auth, clients, projects, tasks, reports, admin)
+│   ├── main.py            # Landing/home routes
+│   ├── subscription.py    # Subscription plan + PesaPal payment routes
+│   ├── payment.py         # PesaPal integration
+│   ├── admin.py           # Admin panel routes
+│   └── email.py           # Bulk email + unsubscribe routes
+├── models/
+│   ├── models.py          # User, Client, Project, Task, Comment, TimeEntry, ProjectMember, ActivityLog
+│   └── subscription.py    # Subscription, SubscriptionPlan, Payment
+├── services/               # Business logic services
+├── utils/
+│   ├── db_utils.py        # DB pool config, retry/safe query helpers
+│   └── email_utils.py     # Email sending + notification templates
+├── forms.py                # WTForms form definitions
+├── filters.py               # Custom Jinja filters
+├── security.py              # Talisman security headers (not yet wired in)
+├── config.py                 # App configuration
+├── migrations/               # Manual DB migration scripts
+├── templates/                # Jinja templates (auth, clients, projects, tasks, reports, subscription, admin, emails)
+├── static/                    # CSS, images, robots.txt, sitemap.xml
+├── vercel.json                 # Vercel build/routing config
+└── requirements.txt
+```
 
 ## Setup for Local Development
 
-1.  **Navigate to the Project Directory**:
-    Open your terminal or command prompt and change to the `ELIZA_App` directory:
-    ```bash
-    cd path\to\company book\ELIZA_App
-    ```
+1. **Navigate to the project directory**:
+   ```bash
+   cd path\to\ELIZA_App
+   ```
 
-2.  **Create and Activate a Virtual Environment** (Highly Recommended):
-    ```bash
-    # Create the virtual environment (only need to do this once)
-    python -m venv venv
+2. **Create and activate a virtual environment** (recommended):
+   ```bash
+   python -m venv venv
 
-    # Activate it (do this every time you work on the project)
-    # Windows (PowerShell):
-    .\venv\Scripts\Activate.ps1
-    # Windows (CMD):
-    # venv\Scripts\activate.bat
-    # Linux/macOS (bash/zsh):
-    # source venv/bin/activate
-    ```
+   # Windows (PowerShell):
+   .\venv\Scripts\Activate.ps1
+   # Linux/macOS:
+   source venv/bin/activate
+   ```
 
-3.  **Install Dependencies**:
-    With your virtual environment activated, install the required Python packages:
-    ```bash
-    pip install -r requirements.txt
-    ```
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-4.  **Set Up Environment Variables (for local development)**:
-    *   In the `ELIZA_App` directory (where `requirements.txt` is), create a new file named exactly `.env` (no `.txt` extension).
-    *   Open the `.env` file and add your Neon database connection string. It should look like this:
-        ```env
-        DATABASE_URL='postgresql://neondb_owner:YOUR_PASSWORD@ep-summer-boat-a5i34m4w-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require'
-        ```
-        Replace `YOUR_PASSWORD` with the actual password for `neondb_owner` you were given.
-        **Important**: Do not commit the `.env` file to Git if you are using version control, especially for public repositories. Add `.env` to your `.gitignore` file.
+4. **Set up environment variables**:
+   Copy `.env.example` to `.env` and fill in real values:
+   ```env
+   DATABASE_URL=postgresql://<user>:<password>@<host>/<db>?sslmode=require
+   SECRET_KEY=your_secret_key
+   FLASK_ENV=development
+   MAIL_SERVER=...
+   MAIL_PORT=587
+   MAIL_USE_TLS=True
+   MAIL_USERNAME=...
+   MAIL_PASSWORD=...
+   MAIL_DEFAULT_SENDER=...
+   PESAPAL_CONSUMER_KEY=...
+   PESAPAL_CONSUMER_SECRET=...
+   PESAPAL_IPN_ID=...
+   ```
+   If `DATABASE_URL` is not set, the app falls back to a local SQLite file (`eliza.db`) — fine for local development, but production must set a real Postgres URL.
 
-5.  **Run the Flask Development Server**:
-    Make sure your virtual environment is still active and you are in the `ELIZA_App` directory.
-    ```bash
-    python api/index.py
-    ```
-    You should see output indicating the server is running, typically on `http://127.0.0.1:5000/`. The console will also show if the `.env` file was loaded and if the `DATABASE_URL` was found.
+   **Never commit your real `.env` file** — it's already git-ignored.
 
-6.  **View in Browser**:
-    Open your web browser and go to `http://127.0.0.1:5000/`.
-    The page should load and indicate whether the database connection string is configured.
+5. **Run the app**:
+   ```bash
+   python api/index.py
+   ```
+   This creates any missing tables on startup and serves at `http://127.0.0.1:5000/`.
 
 ## Deployment to Vercel
 
--   Connect your Git repository (GitHub, GitLab, Bitbucket) to Vercel.
--   Ensure your `DATABASE_URL` (with the correct password) is set as an Environment Variable in your Vercel project settings.
--   Vercel will use `vercel.json` (for build and routing configuration) and `api/index.py` (as the serverless function entry point) to build and deploy your application.
--   Static files in the `static` directory will be served automatically by Vercel based on the `vercel.json` configuration.
+- Connect your Git repository (GitHub) to Vercel.
+- Set `DATABASE_URL`, `SECRET_KEY`, and the mail/PesaPal variables above as Environment Variables in the Vercel project settings.
+- Vercel uses `vercel.json` for build/routing config and `api/index.py` as the serverless function entry point.
+- Static files under `static/` are served automatically per `vercel.json`.
+
+## Known Gaps
+
+- `security.py`'s Talisman security headers are written but not yet applied in `api/index.py`.
+- No automated test suite yet.
