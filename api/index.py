@@ -44,7 +44,7 @@ from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, Passwor
 from filters import register_filters
 
 # Import email utilities
-from utils.email_utils import mail, send_task_assignment_notification, send_task_update_notification, send_task_comment_notification, send_bulk_email
+from utils.email_utils import mail, send_task_assignment_notification, send_task_update_notification, send_task_comment_notification, send_bulk_email, send_password_reset_email
 
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 
@@ -247,28 +247,32 @@ def reset_password_request():
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
         if user:
-            # In a real application, you would generate a token and send an email here
-            # For now, we'll just show a message
-            flash('Password reset instructions have been sent to your email.', 'info')
-            return redirect(url_for('login'))
-        else:
-            flash('Email not found in our records.', 'danger')
-    
+            reset_url = url_for('reset_password', token=user.get_reset_token(), _external=True)
+            send_password_reset_email(user, reset_url)
+        # Same message whether or not the account exists - don't let this
+        # route be used to enumerate which emails are registered.
+        flash('If that email is registered, password reset instructions have been sent to it.', 'info')
+        return redirect(url_for('login'))
+
     return render_template('auth/reset_password_request.html', title='Reset Password', form=form)
 
 @app.route('/reset-password/<token>', methods=['GET', 'POST'])
 def reset_password(token):
     if current_user.is_authenticated:
         return redirect(url_for('home'))
-    
-    # In a real application, you would validate the token here
-    # For now, we'll just show the form
+
+    user = User.verify_reset_token(token)
+    if not user:
+        flash('That password reset link is invalid or has expired.', 'danger')
+        return redirect(url_for('reset_password_request'))
+
     form = PasswordResetForm()
     if form.validate_on_submit():
-        # In a real application, you would find the user by token and update their password
+        user.set_password(form.password.data)
+        db.session.commit()
         flash('Your password has been reset successfully. You can now log in with your new password.', 'success')
         return redirect(url_for('login'))
-    
+
     return render_template('auth/reset_password.html', title='Reset Password', form=form)
 
 # Client Management Routes

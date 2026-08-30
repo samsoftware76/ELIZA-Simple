@@ -227,6 +227,32 @@ ELIZA Project Management System
     # Send email to all recipients
     send_email(subject, recipients, text_body, html_body)
 
+def send_password_reset_email(user, reset_url):
+    """
+    Email a user a link to reset their password.
+
+    Args:
+        user: The User object requesting the reset
+        reset_url (str): Fully-qualified, signed, time-limited reset link
+    """
+    subject = "[ELIZA] Reset your password"
+    recipients = [user.email]
+
+    try:
+        text_body = (
+            f"Hello {user.first_name},\n\n"
+            f"We received a request to reset your ELIZA password. This link expires in 30 minutes:\n"
+            f"{reset_url}\n\n"
+            f"If you didn't request this, you can ignore this email.\n\n"
+            f"Thank you,\nELIZA Project Management"
+        )
+        html_body = render_template('emails/password_reset.html', user=user, reset_url=reset_url)
+        send_email(subject, recipients, text_body, html_body)
+        logger.info(f"Password reset email sent to {user.email}")
+    except Exception as e:
+        logger.error(f"Failed to send password reset email to {user.email}: {str(e)}")
+
+
 def send_quote_email(quote, portal_url):
     """
     Email a client a link to view and respond to a quote via the client portal.

@@ -58,9 +58,28 @@ class User(db.Model, UserMixin):
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
-        
+
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    def get_reset_token(self, expires_sec=1800):
+        """A signed, time-limited token for the forgot-password flow (default 30 min)."""
+        from itsdangerous import URLSafeTimedSerializer
+        from flask import current_app
+        s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+        return s.dumps({'user_id': self.id}, salt='password-reset')
+
+    @staticmethod
+    def verify_reset_token(token, expires_sec=1800):
+        """Returns the User for a valid, unexpired token, or None."""
+        from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+        from flask import current_app
+        s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+        try:
+            data = s.loads(token, salt='password-reset', max_age=expires_sec)
+        except (BadSignature, SignatureExpired):
+            return None
+        return User.query.get(data.get('user_id'))
     
     def __repr__(self):
         return f'<User {self.username}>'
