@@ -44,6 +44,11 @@ class User(db.Model, UserMixin):
     last_name = db.Column(db.String(50), nullable=False)
     phone = db.Column(db.String(20))
     role = db.Column(db.Enum(UserRole), nullable=False, default=UserRole.DEVELOPER)
+    # Shown to clients on the portal/emails instead of the ELIZA brand, so a
+    # freelancer's own clients see their business, not ours - see the
+    # HoneyBook "cannot remove logo" complaint this exists to avoid.
+    business_name = db.Column(db.String(150))
+    business_logo_url = db.Column(db.String(500))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

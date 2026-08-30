@@ -52,7 +52,14 @@
 <body>
     <div class="portal-header">
         <div class="container">
-            <span class="brand"><i class="fas fa-briefcase mr-2"></i>ELIZA</span>
+            <span class="brand">
+                {% if brand_logo_url %}
+                <img src="{{ brand_logo_url }}" alt="{{ brand_name }}" style="height: 28px; vertical-align: middle;" class="mr-2">
+                {% else %}
+                <i class="fas fa-briefcase mr-2"></i>
+                {% endif %}
+                {{ brand_name|default('ELIZA') }}
+            </span>
         </div>
     </div>
 
@@ -75,7 +82,11 @@
     </div>
 
     <div class="portal-footer">
+        {% if brand_name and brand_name != 'ELIZA' %}
+        &copy; {{ brand_name }} &mdash; powered by ELIZA
+        {% else %}
         &copy; ELIZA Project Management
+        {% endif %}
     </div>
 
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>

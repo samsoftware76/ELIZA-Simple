@@ -38,7 +38,7 @@ from models.subscription import Payment
 from api.payment import PesaPalPayment
 
 # Import forms
-from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, ProjectAssignmentForm
+from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, ProjectAssignmentForm, BusinessProfileForm
 
 # Import template filters
 from filters import register_filters
@@ -223,6 +223,20 @@ def logout():
     logout_user()
     flash('You have been logged out.', 'info')
     return redirect(url_for('home'))
+
+@app.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    """Let a user set the business name/logo shown to their own clients on
+    the portal and in quote/invoice emails, instead of the ELIZA brand."""
+    form = BusinessProfileForm(obj=current_user)
+    if form.validate_on_submit():
+        current_user.business_name = form.business_name.data
+        current_user.business_logo_url = form.business_logo_url.data
+        db.session.commit()
+        flash('Business profile updated.', 'success')
+        return redirect(url_for('profile'))
+    return render_template('profile.html', form=form)
 
 @app.route('/reset-password-request', methods=['GET', 'POST'])
 def reset_password_request():

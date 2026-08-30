@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Business Profile - ELIZA{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card" style="max-width: 600px; margin: 0 auto;">
+        <div class="card-header bg-primary text-white">
+            <h2 class="mb-0">Business Profile</h2>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">This is what your clients see on the quote/invoice portal and in emails from you &mdash; not ELIZA's own name.</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form method="POST">
+                {{ form.hidden_tag() }}
+                <div class="form-group">
+                    {{ form.business_name.label }}
+                    {{ form.business_name(class="form-control", placeholder="e.g. Kampala Web Studio") }}
+                    <small class="form-text text-muted">{{ form.business_name.description }}</small>
+                </div>
+                <div class="form-group">
+                    {{ form.business_logo_url.label }}
+                    {{ form.business_logo_url(class="form-control", placeholder="https://...") }}
+                    <small class="form-text text-muted">{{ form.business_logo_url.description }}</small>
+                </div>
+                {% if not current_user.business_name %}
+                <div class="alert alert-info">
+                    No business name set yet &mdash; your clients currently see "ELIZA" on your quote/invoice portal links. Set one below.
+                </div>
+                {% endif %}
+                {{ form.submit(class="btn btn-primary") }}
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

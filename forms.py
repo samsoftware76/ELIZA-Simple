@@ -65,6 +65,17 @@ class PasswordResetForm(FlaskForm):
     ])
     submit = SubmitField('Reset Password')
 
+class BusinessProfileForm(FlaskForm):
+    """Form for a user to set their own business branding, shown to their
+    clients on the portal and in quote/invoice emails instead of ELIZA's own
+    brand (see User.business_name/business_logo_url)."""
+    business_name = StringField('Business Name', validators=[Optional(), Length(max=150)],
+                                 description="Shown to your clients instead of your personal name or 'ELIZA'")
+    business_logo_url = StringField('Logo URL', validators=[Optional(), Length(max=500)],
+                                     description="Optional: a public URL to your logo image")
+    submit = SubmitField('Save')
+
+
 class ClientForm(FlaskForm):
     """Form for creating and editing clients"""
     name = StringField('Company/Client Name', validators=[DataRequired(), Length(max=100)])

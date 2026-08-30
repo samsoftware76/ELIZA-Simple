@@ -23,6 +23,16 @@ portal_bp = Blueprint('portal', __name__, url_prefix='/portal')
 pesapal = PesaPalPayment()
 
 
+def _brand_context(owner):
+    """Branding shown to the client: the quote/invoice creator's own business
+    name/logo if they've set one (see /profile), falling back to ELIZA so an
+    unconfigured account still looks presentable."""
+    return {
+        'brand_name': (owner.business_name or 'ELIZA') if owner else 'ELIZA',
+        'brand_logo_url': (owner.business_logo_url if owner else None) or None,
+    }
+
+
 def _split_name(full_name):
     """Best-effort split of a single 'contact_person' field into first/last name for PesaPal"""
     parts = (full_name or '').strip().split(' ', 1)
@@ -39,7 +49,7 @@ def _split_name(full_name):
 def view_quote(token):
     """Client-facing quote view: accept or decline"""
     quote = Quote.query.filter_by(public_token=token).first_or_404()
-    return render_template('portal/quote.html', quote=quote)
+    return render_template('portal/quote.html', quote=quote, **_brand_context(quote.created_by))
 
 
 @portal_bp.route('/quote/<token>/accept', methods=['POST'])
@@ -96,7 +106,8 @@ def view_invoice(token):
     """Client-facing invoice view: pay via PesaPal"""
     invoice = Invoice.query.filter_by(public_token=token).first_or_404()
     pesapal_configured = bool(pesapal.consumer_key and pesapal.consumer_secret)
-    return render_template('portal/invoice.html', invoice=invoice, pesapal_configured=pesapal_configured)
+    return render_template('portal/invoice.html', invoice=invoice, pesapal_configured=pesapal_configured,
+                            **_brand_context(invoice.created_by))
 
 
 @portal_bp.route('/invoice/<token>/pay', methods=['POST'])
