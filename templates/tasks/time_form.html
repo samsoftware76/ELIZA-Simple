@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ 'Add Time Entry' if not time_entry else 'Edit Time Entry' }} | {{ task.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{{ 'Add Time Entry' if not time_entry else 'Edit Time Entry' }}</h5>
+                    <span class="badge bg-info">{{ task.title }}</span>
+                </div>
+                <div class="card-body">
+                    <form method="POST" class="needs-validation" novalidate>
+                        {{ form.hidden_tag() }}
+                        {{ form.task_id }}
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.start_time.label(class="form-label") }}
+                                    {{ form.start_time(class="form-control", type="datetime-local") }}
+                                    {% if form.start_time.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.start_time.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.end_time.label(class="form-label") }}
+                                    {{ form.end_time(class="form-control", type="datetime-local") }}
+                                    {% if form.end_time.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.end_time.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    <small class="text-muted">Leave blank if timer is still running</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            {{ form.duration.label(class="form-label") }}
+                            {{ form.duration(class="form-control") }}
+                            {% if form.duration.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.duration.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <small class="text-muted">Optional: Specify duration directly instead of end time</small>
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            {{ form.description.label(class="form-label") }}
+                            {{ form.description(class="form-control", rows=3) }}
+                            {% if form.description.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.description.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{{ url_for('task_detail', task_id=task.id) }}" class="btn btn-secondary">Cancel</a>
+                            {{ form.submit(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Format datetime-local inputs with current date/time
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set default start time to now if not already set
+        if (!document.getElementById('start_time').value) {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            
+            document.getElementById('start_time').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+    });
+</script>
+{% endblock %}

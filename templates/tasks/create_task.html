@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Create New Task{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Create New Task</h1>
+        <a href="{{ url_for('all_tasks') }}" class="btn btn-secondary btn-sm">Back to Tasks</a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('create_task') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="mb-3">
+                    <label for="title" class="form-label">Task Title *</label>
+                    <input type="text" class="form-control" id="title" name="title" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="project_id" class="form-label">Project *</label>
+                        <select class="form-select" id="project_id" name="project_id" required>
+                            <option value="" selected disabled>Select a project</option>
+                            {% for project in projects %}
+                                <option value="{{ project.id }}">{{ project.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="assignee_id" class="form-label">Assignee</label>
+                        <select class="form-select" id="assignee_id" name="assignee_id">
+                            <option value="">Unassigned</option>
+                            {% for user in users %}
+                                <option value="{{ user.id }}" {% if user.id == current_user.id %}selected{% endif %}>{{ user.username }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="status" class="form-label">Status *</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="TODO" selected>To Do</option>
+                            <option value="IN_PROGRESS">In Progress</option>
+                            <option value="REVIEW">In Review</option>
+                            <option value="COMPLETED">Completed</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="priority" class="form-label">Priority *</label>
+                        <select class="form-select" id="priority" name="priority" required>
+                            <option value="1">Low</option>
+                            <option value="2" selected>Medium</option>
+                            <option value="3">High</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="due_date" class="form-label">Due Date</label>
+                        <input type="date" class="form-control" id="due_date" name="due_date">
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="estimated_hours" class="form-label">Estimated Hours</label>
+                        <input type="number" class="form-control" id="estimated_hours" name="estimated_hours" step="0.5" min="0">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="is_billable" class="form-label">Billable</label>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="is_billable" name="is_billable" value="1" checked>
+                            <label class="form-check-label" for="is_billable">
+                                Task is billable to client
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="{{ url_for('all_tasks') }}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Create Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="jumbotron">
+    <h1 class="display-4">Welcome to ELIZA Project Management</h1>
+    <p class="lead">The Complete Solution for Client, Project, and Task Management</p>
+    <hr class="my-4">
+
+    <p>ELIZA helps you manage your entire business workflow - from client acquisition to project completion and everything in between.</p>
+    <p>Track time, manage tasks, generate reports, and keep your clients updated with our powerful email notification system.</p>
+    {% if current_user.is_authenticated %}
+        {% set active_subscription = subscription|default(None) %}
+        {% if active_subscription and active_subscription.is_trial %}
+            {% set days_left = active_subscription.days_left_in_trial() %}
+            <div class="alert {% if days_left <= 3 %}alert-danger{% else %}alert-warning{% endif %} mt-4">
+                <div class="d-flex align-items-center">
+                    <div>
+                        <h4 class="alert-heading mb-1">{% if days_left <= 3 %}Your trial is ending soon!{% else %}Free Trial Active{% endif %}</h4>
+                        <p class="mb-0">
+                            {% if days_left > 0 %}
+                                You have {{ days_left }} day{% if days_left != 1 %}s{% endif %} left in your free trial of the {{ active_subscription.plan.name }} plan.
+                                {% if days_left <= 3 %}<strong>Please provide payment details to continue your service.</strong>{% endif %}
+                            {% else %}
+                                Your free trial has ended. Please provide payment details to continue using premium features.
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="ms-auto">
+                        <a href="{{ url_for('subscription.trial_payment', subscription_id=active_subscription.id) }}" class="btn btn-primary">Complete Subscription</a>
+                    </div>
+                </div>
+            </div>
+        {% elif active_subscription and active_subscription.is_active and not active_subscription.is_trial %}
+            <div class="alert alert-success mt-4">
+                <h4 class="alert-heading mb-1">{{ active_subscription.plan.name }} Plan Active</h4>
+                <p class="mb-0">Your subscription is active until {{ active_subscription.end_date.strftime('%B %d, %Y') }}.</p>
+            </div>
+        {% endif %}
+        <div class="mt-4">
+            <h2>Quick Links</h2>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Clients</h5>
+                            <p class="card-text">Manage your client information and contacts.</p>
+                            <a href="{{ url_for('clients') }}" class="btn btn-primary">View Clients</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Projects</h5>
+                            <p class="card-text">Track and manage your ongoing projects.</p>
+                            <a href="{{ url_for('projects') }}" class="btn btn-primary">View Projects</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Tasks</h5>
+                            <p class="card-text">Manage your to-do list and track progress.</p>
+                            <a href="{{ url_for('all_tasks') }}" class="btn btn-primary">View Tasks</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <p>Please <a href="{{ url_for('login') }}">log in</a> or <a href="{{ url_for('register') }}">register</a> to access the full features of ELIZA.</p>
+    {% endif %}
+</div>
+
+<!-- Database status notification removed as requested -->
+{% endblock %}

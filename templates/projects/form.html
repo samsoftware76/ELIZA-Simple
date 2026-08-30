@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Edit Project' if project else 'New Project' }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('projects') }}">Projects</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ 'Edit Project' if project else 'New Project' }}</li>
+        </ol>
+    </nav>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">{{ 'Edit Project' if project else 'New Project' }}</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" novalidate>
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label for="{{ form.title.id }}" class="form-label">{{ form.title.label.text }} <span class="text-danger">*</span></label>
+                                {{ form.title(class="form-control" + (" is-invalid" if form.title.errors else "")) }}
+                                {% for error in form.title.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label for="{{ form.description.id }}" class="form-label">{{ form.description.label.text }}</label>
+                                {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), rows=4) }}
+                                {% for error in form.description.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                                <div class="form-text">Provide a detailed description of the project scope and objectives.</div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.client_id.id }}" class="form-label">{{ form.client_id.label.text }} <span class="text-danger">*</span></label>
+                                {{ form.client_id(class="form-select" + (" is-invalid" if form.client_id.errors else "")) }}
+                                {% for error in form.client_id.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.status.id }}" class="form-label">{{ form.status.label.text }} <span class="text-danger">*</span></label>
+                                {{ form.status(class="form-select" + (" is-invalid" if form.status.errors else "")) }}
+                                {% for error in form.status.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.start_date.id }}" class="form-label">{{ form.start_date.label.text }} <span class="text-danger">*</span></label>
+                                {{ form.start_date(class="form-control" + (" is-invalid" if form.start_date.errors else ""), type="date") }}
+                                {% for error in form.start_date.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.end_date.id }}" class="form-label">{{ form.end_date.label.text }}</label>
+                                {{ form.end_date(class="form-control" + (" is-invalid" if form.end_date.errors else ""), type="date") }}
+                                {% for error in form.end_date.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.priority.id }}" class="form-label">{{ form.priority.label.text }} <span class="text-danger">*</span></label>
+                                {{ form.priority(class="form-select" + (" is-invalid" if form.priority.errors else "")) }}
+                                {% for error in form.priority.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.budget.id }}" class="form-label">{{ form.budget.label.text }}</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    {{ form.budget(class="form-control" + (" is-invalid" if form.budget.errors else ""), type="number", step="0.01", min="0") }}
+                                    {% for error in form.budget.errors %}
+                                    <div class="invalid-feedback">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-4">
+                            <a href="{{ url_for('projects') }}" class="btn btn-outline-secondary">Cancel</a>
+                            {{ form.submit(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

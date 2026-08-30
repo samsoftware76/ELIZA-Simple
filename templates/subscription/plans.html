@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Subscription Plans{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Choose Your Plan</h1>
+    
+    <div class="alert alert-info mb-4">
+        <h4 class="alert-heading"><i class="bi bi-info-circle-fill me-2"></i>Start with a 14-day free trial!</h4>
+        <p class="mb-0">All plans come with a 14-day free trial. No credit card required to start. You'll only be asked to provide payment details when your trial ends.</p>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-primary text-white text-center py-3">
+                    <h3 class="mb-0">Basic</h3>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div class="text-center mb-4">
+                        <h4 class="card-title pricing-card-title">
+                            <span class="display-4">$9.99</span>
+                            <small class="text-muted fw-light">/month</small>
+                        </h4>
+                        <p class="text-muted">or $99.99/year (save 16%)</p>
+                    </div>
+                    <ul class="list-unstyled mt-3 mb-4">
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Up to 5 projects</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Up to 10 clients</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> 3 team members</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Basic reporting</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Email notifications</li>
+                        <li class="mb-2 text-muted"><i class="bi bi-x-circle-fill text-danger me-2"></i> Bulk email campaigns</li>
+                        <li class="mb-2 text-muted"><i class="bi bi-x-circle-fill text-danger me-2"></i> Advanced analytics</li>
+                    </ul>
+                    <div class="mt-auto">
+                        <a href="{{ url_for('subscription.subscribe', plan='basic', cycle='monthly') }}" class="w-100 btn btn-lg btn-primary mb-2">Choose Monthly</a>
+                        <a href="{{ url_for('subscription.subscribe', plan='basic', cycle='yearly') }}" class="w-100 btn btn-lg btn-outline-primary">Choose Yearly</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow border-primary">
+                <div class="card-header bg-primary text-white text-center py-3">
+                    <h3 class="mb-0">Professional</h3>
+                    <span class="badge bg-warning text-dark">Most Popular</span>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div class="text-center mb-4">
+                        <h4 class="card-title pricing-card-title">
+                            <span class="display-4">$19.99</span>
+                            <small class="text-muted fw-light">/month</small>
+                        </h4>
+                        <p class="text-muted">or $199.99/year (save 16%)</p>
+                    </div>
+                    <ul class="list-unstyled mt-3 mb-4">
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Up to 15 projects</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Up to 30 clients</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> 10 team members</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Advanced reporting</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Email notifications</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Bulk email campaigns</li>
+                        <li class="mb-2 text-muted"><i class="bi bi-x-circle-fill text-danger me-2"></i> Advanced analytics</li>
+                    </ul>
+                    <div class="mt-auto">
+                        <a href="{{ url_for('subscription.subscribe', plan='professional', cycle='monthly') }}" class="w-100 btn btn-lg btn-primary mb-2">Choose Monthly</a>
+                        <a href="{{ url_for('subscription.subscribe', plan='professional', cycle='yearly') }}" class="w-100 btn btn-lg btn-outline-primary">Choose Yearly</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-header bg-primary text-white text-center py-3">
+                    <h3 class="mb-0">Enterprise</h3>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div class="text-center mb-4">
+                        <h4 class="card-title pricing-card-title">
+                            <span class="display-4">$49.99</span>
+                            <small class="text-muted fw-light">/month</small>
+                        </h4>
+                        <p class="text-muted">or $499.99/year (save 16%)</p>
+                    </div>
+                    <ul class="list-unstyled mt-3 mb-4">
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Unlimited projects</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Unlimited clients</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Unlimited team members</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Advanced reporting</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Email notifications</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Bulk email campaigns</li>
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Advanced analytics</li>
+                    </ul>
+                    <div class="mt-auto">
+                        <a href="{{ url_for('subscription.subscribe', plan='enterprise', cycle='monthly') }}" class="w-100 btn btn-lg btn-primary mb-2">Choose Monthly</a>
+                        <a href="{{ url_for('subscription.subscribe', plan='enterprise', cycle='yearly') }}" class="w-100 btn btn-lg btn-outline-primary">Choose Yearly</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h4>Why Choose ELIZA Project Management?</h4>
+                    <p>ELIZA is a complete solution for managing your clients, projects, and tasks. With our powerful features, you can:</p>
+                    <ul>
+                        <li>Track time spent on tasks</li>
+                        <li>Generate detailed reports</li>
+                        <li>Send email notifications to clients and team members</li>
+                        <li>Manage your entire client database</li>
+                        <li>Send bulk emails for updates and marketing</li>
+                    </ul>
+                    <p>Start your 14-day free trial today and experience the power of ELIZA!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="card-title text-center mb-4">Why Choose ELIZA Project Management?</h2>
+                    <p class="lead text-center mb-4">ELIZA is a complete solution for managing your clients, projects, and tasks. With our powerful features, you can:</p>
+                    
+                    <div class="row text-center">
+                        <div class="col-md-4 mb-3">
+                            <div class="p-3">
+                                <i class="bi bi-clock-history fs-1 text-primary mb-3"></i>
+                                <h4>Track Time</h4>
+                                <p>Accurately track time spent on tasks and generate detailed reports for billing and productivity analysis.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="p-3">
+                                <i class="bi bi-graph-up fs-1 text-primary mb-3"></i>
+                                <h4>Generate Reports</h4>
+                                <p>Create comprehensive reports on project progress, resource allocation, and financial performance.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="p-3">
+                                <i class="bi bi-envelope-paper fs-1 text-primary mb-3"></i>
+                                <h4>Email Notifications</h4>
+                                <p>Keep clients and team members updated with automated email notifications for important events.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row text-center">
+                        <div class="col-md-4 mb-3">
+                            <div class="p-3">
+                                <i class="bi bi-people fs-1 text-primary mb-3"></i>
+                                <h4>Client Management</h4>
+                                <p>Manage your entire client database with detailed profiles, communication history, and project tracking.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="p-3">
+                                <i class="bi bi-megaphone fs-1 text-primary mb-3"></i>
+                                <h4>Bulk Emails</h4>
+                                <p>Send bulk emails for updates, marketing campaigns, and important announcements to your clients.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="p-3">
+                                <i class="bi bi-shield-check fs-1 text-primary mb-3"></i>
+                                <h4>Secure & Reliable</h4>
+                                <p>Your data is protected with industry-standard security measures and regular backups.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-4">
+                        <h3>Start your 14-day free trial today and experience the power of ELIZA!</h3>
+                        <p class="text-muted">No credit card required to start. You'll only be asked to provide payment details when your trial ends.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

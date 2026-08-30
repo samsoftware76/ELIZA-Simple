@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('projects') }}">Projects</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ project.title }}</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{{ project.title }}</h1>
+        <div>
+            <a href="{{ url_for('project_edit', project_id=project.id) }}" class="btn btn-outline-primary">
+                <i class="fas fa-edit"></i> Edit
+            </a>
+            <a href="{{ url_for('project_delete', project_id=project.id) }}" class="btn btn-outline-danger ms-2"
+               onclick="return confirm('Are you sure you want to delete this project?')">
+                <i class="fas fa-trash"></i> Delete
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Project Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <h6 class="fw-bold">Description</h6>
+                        <p class="mb-0">{{ project.description|nl2br|safe if project.description else 'No description provided.' }}</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <h6 class="fw-bold">Client</h6>
+                            <p class="mb-0">
+                                <a href="{{ url_for('client_detail', client_id=project.client.id) }}">
+                                    {{ project.client.name }}
+                                </a>
+                            </p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <h6 class="fw-bold">Status</h6>
+                            <span class="badge bg-{{ project.status|status_badge }}">
+                                {{ project.status.value }}
+                            </span>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <h6 class="fw-bold">Priority</h6>
+                            {% if project.priority == 3 %}
+                            <span class="badge bg-danger">High</span>
+                            {% elif project.priority == 2 %}
+                            <span class="badge bg-warning text-dark">Medium</span>
+                            {% else %}
+                            <span class="badge bg-info text-dark">Low</span>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <h6 class="fw-bold">Budget</h6>
+                            <p class="mb-0">{{ '${:,.2f}'.format(project.budget) if project.budget else 'Not specified' }}</p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <h6 class="fw-bold">Start Date</h6>
+                            <p class="mb-0">{{ project.start_date.strftime('%B %d, %Y') }}</p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <h6 class="fw-bold">End Date</h6>
+                            <p class="mb-0">{{ project.end_date.strftime('%B %d, %Y') if project.end_date else 'Not specified' }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Tasks</h5>
+                    <a href="{{ url_for('task_create', project_id=project.id) }}" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-plus"></i> Add Task
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    {% if project.tasks %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Title</th>
+                                    <th>Status</th>
+                                    <th>Priority</th>
+                                    <th>Assigned To</th>
+                                    <th>Due Date</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for task in project.tasks %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('task_detail', task_id=task.id) }}" class="text-decoration-none fw-medium">
+                                            {{ task.title }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ task.status|status_badge }}">
+                                            {{ task.status.value }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if task.priority == 3 %}
+                                        <span class="badge bg-danger">High</span>
+                                        {% elif task.priority == 2 %}
+                                        <span class="badge bg-warning text-dark">Medium</span>
+                                        {% else %}
+                                        <span class="badge bg-info text-dark">Low</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if task.assigned_to %}
+                                        <span data-bs-toggle="tooltip" title="{{ task.assigned_to.email }}">
+                                            {{ task.assigned_to.username }}
+                                        </span>
+                                        {% else %}
+                                        <span class="text-muted">Unassigned</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if task.due_date %}
+                                        <span class="{% if now.date() > task.due_date %}text-danger{% endif %}">
+                                            {{ task.due_date.strftime('%b %d, %Y') }}
+                                        </span>
+                                        {% else %}
+                                        <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('task_detail', task_id=task.id) }}" class="btn btn-outline-secondary" title="View">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{{ url_for('task_edit', task_id=task.id) }}" class="btn btn-outline-secondary" title="Edit">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <a href="{{ url_for('task_delete', task_id=task.id) }}" class="btn btn-outline-danger" 
+                                               onclick="return confirm('Are you sure you want to delete this task?')" title="Delete">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-muted mb-0">No tasks have been added to this project yet.</p>
+                        <a href="{{ url_for('task_create', project_id=project.id) }}" class="btn btn-sm btn-primary mt-2">
+                            <i class="fas fa-plus"></i> Create First Task
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Project Timeline</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-3">
+                        <div>
+                            <small class="text-muted d-block">Start Date</small>
+                            <span class="fw-medium">{{ project.start_date.strftime('%b %d, %Y') }}</span>
+                        </div>
+                        <div class="text-end">
+                            <small class="text-muted d-block">End Date</small>
+                            <span class="fw-medium">{{ project.end_date.strftime('%b %d, %Y') if project.end_date else '—' }}</span>
+                        </div>
+                    </div>
+
+                    {% if project.start_date and project.end_date %}
+                    {% set total_days = (project.end_date - project.start_date).days %}
+                    {% set days_passed = (now.date() - project.start_date).days %}
+                    {% set progress = (days_passed / total_days * 100)|int if total_days > 0 else 0 %}
+                    {% set progress = 100 if progress > 100 else progress %}
+                    
+                    <div class="progress mb-2" style="height: 8px;">
+                        <div class="progress-bar bg-primary" role="progressbar" style="width: {{ progress }}%" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <small class="text-muted">{{ progress }}% Complete</small>
+                        <small class="text-muted">
+                            {% if now.date() > project.end_date %}
+                            Overdue by {{ (now.date() - project.end_date).days }} days
+                            {% elif now.date() < project.end_date %}
+                            {{ (project.end_date - now.date()).days }} days remaining
+                            {% else %}
+                            Due today
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">Timeline not available</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Team Members</h5>
+                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#teamAssignmentForm">
+                        <i class="fas fa-plus"></i> Add Member
+                    </button>
+                </div>
+                
+                <div class="collapse" id="teamAssignmentForm">
+                    <div class="card-body border-bottom">
+                        <form method="POST" action="{{ url_for('project_assign_user', project_id=project.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="project_id" value="{{ project.id }}">
+                            
+                            <div class="row g-3">
+                                <div class="col-md-5">
+                                    <select name="user_id" class="form-select" required>
+                                        <option value="">Select User</option>
+                                        {% for user in users %}
+                                        <option value="{{ user.id }}">{{ user.username }} ({{ user.email }})</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-5">
+                                    <select name="role" class="form-select" required>
+                                        <option value="">Select Role</option>
+                                        <option value="manager">Project Manager</option>
+                                        <option value="developer">Developer</option>
+                                        <option value="designer">Designer</option>
+                                        <option value="tester">Tester</option>
+                                        <option value="stakeholder">Stakeholder</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <button type="submit" class="btn btn-primary w-100">Add</button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        {% if project.team_members %}
+                        {% for member in project.team_members %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-user-circle me-2 text-secondary"></i>
+                                    <span class="fw-medium">{{ member.user.username }}</span>
+                                    <span class="badge bg-secondary ms-2">{{ member.role|title }}</span>
+                                </div>
+                                <small class="text-muted d-block mt-1">{{ member.user.email }}</small>
+                            </div>
+                            <div>
+                                <span class="badge bg-primary rounded-pill me-2">
+                                    {{ project.tasks|selectattr('assigned_to')|selectattr('assigned_to.id', 'equalto', member.user.id)|list|length }} tasks
+                                </span>
+                                <a href="{{ url_for('project_remove_user', project_id=project.id, user_id=member.user.id) }}" 
+                                   class="btn btn-sm btn-outline-danger" 
+                                   onclick="return confirm('Are you sure you want to remove this team member?')">
+                                    <i class="fas fa-times"></i>
+                                </a>
+                            </div>
+                        </li>
+                        {% endfor %}
+                        {% elif project.tasks|selectattr('assigned_to')|list %}
+                        {% for user in project.tasks|selectattr('assigned_to')|map(attribute='assigned_to')|unique %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="fw-medium">{{ user.username }}</span>
+                                <small class="text-muted d-block">{{ user.email }}</small>
+                            </div>
+                            <span class="badge bg-primary rounded-pill">
+                                {{ project.tasks|selectattr('assigned_to')|selectattr('assigned_to.id', 'equalto', user.id)|list|length }} tasks
+                            </span>
+                        </li>
+                        {% endfor %}
+                        {% else %}
+                        <li class="list-group-item text-center py-3">
+                            <p class="text-muted mb-0">No team members assigned</p>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,249 @@
+{% extends 'base.html' %}
+
+{% block title %}Project Timeline Report{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('reports') }}">Reports</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Project Timeline</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Project Timeline Report</h1>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Project Gantt Chart</h5>
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    Filter
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="{{ url_for('report_project_timeline') }}">All Projects</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    {% for project in projects %}
+                    <li><a class="dropdown-item" href="{{ url_for('report_project_timeline', project_id=project.id) }}">{{ project.title }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        <div class="card-body">
+            <div id="gantt-chart" style="height: 600px;"></div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Project Timeline Summary</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Project</th>
+                                    <th>Start Date</th>
+                                    <th>End Date</th>
+                                    <th>Duration</th>
+                                    <th>Progress</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for project in projects %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('project_detail', project_id=project.id) }}">
+                                            {{ project.title }}
+                                        </a>
+                                    </td>
+                                    <td>{{ project.start_date.strftime('%b %d, %Y') if project.start_date else 'Not set' }}</td>
+                                    <td>{{ project.end_date.strftime('%b %d, %Y') if project.end_date else 'Not set' }}</td>
+                                    <td>
+                                        {% if project.start_date and project.end_date %}
+                                        {{ (project.end_date - project.start_date).days }} days
+                                        {% else %}
+                                        <span class="text-muted">Unknown</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% set progress = timeline_data|selectattr('id', 'equalto', 'p' ~ project.id)|map(attribute='progress')|first %}
+                                        <div class="progress" style="height: 10px;">
+                                            <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress }}%;" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                        <small class="text-muted">{{ progress }}%</small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Task Timeline Summary</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Task</th>
+                                    <th>Project</th>
+                                    <th>Start Date</th>
+                                    <th>Due Date</th>
+                                    <th>Assignee</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in timeline_data if item.type == 'task' %}
+                                {% set task_id = item.id[1:]|int %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('task_detail', task_id=task_id) }}">
+                                            {{ item.name }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        {% for project_item in timeline_data if project_item.id == item.parent %}
+                                            <a href="{{ url_for('project_detail', project_id=project_item.id[1:]|int) }}">
+                                                {{ project_item.name }}
+                                            </a>
+                                        {% endfor %}
+                                    </td>
+                                    <td>{{ item.start if item.start else 'Not set' }}</td>
+                                    <td>{{ item.end if item.end else 'Not set' }}</td>
+                                    <td>{{ item.assignee if item.assignee else 'Unassigned' }}</td>
+                                    <td>
+                                        <span class="badge {% if item.progress == 100 %}bg-success{% elif item.progress > 50 %}bg-info{% elif item.progress > 0 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                            {% if item.progress == 100 %}Completed
+                                            {% elif item.progress > 75 %}Review
+                                            {% elif item.progress > 0 %}In Progress
+                                            {% else %}Not Started{% endif %}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.css">
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Prepare data for Gantt chart
+    const tasks = {{ timeline_data|tojson }};
+    
+    // Filter out tasks with missing dates
+    const validTasks = tasks.filter(function(task) { return task.start && task.end; });
+    
+    // Initialize Gantt chart
+    const gantt = new Gantt("#gantt-chart", validTasks, {
+        header_height: 50,
+        column_width: 30,
+        step: 24,
+        view_modes: ['Day', 'Week', 'Month'],
+        bar_height: 20,
+        bar_corner_radius: 3,
+        arrow_curve: 5,
+        padding: 18,
+        view_mode: 'Month',
+        date_format: 'YYYY-MM-DD',
+        custom_popup_html: function(task) {
+            // Format the popup content
+            function dateFormat(dateStr) {
+                var date = new Date(dateStr);
+                return date.toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'short', 
+                    day: 'numeric' 
+                });
+            }
+            
+            // Different content for projects vs tasks
+            if (task.type === 'project') {
+                return '<div class="gantt-popup">'
+                    + '<h6>' + task.name + '</h6>'
+                    + '<p><strong>Start:</strong> ' + dateFormat(task.start) + '</p>'
+                    + '<p><strong>End:</strong> ' + dateFormat(task.end) + '</p>'
+                    + '<p><strong>Progress:</strong> ' + task.progress + '%</p>'
+                    + '</div>';
+            } else {
+                var projectName = 'Unknown';
+                for (var i = 0; i < tasks.length; i++) {
+                    if (tasks[i].id === task.parent) {
+                        projectName = tasks[i].name;
+                        break;
+                    }
+                }
+                
+                return '<div class="gantt-popup">'
+                    + '<h6>' + task.name + '</h6>'
+                    + '<p><strong>Project:</strong> ' + projectName + '</p>'
+                    + '<p><strong>Start:</strong> ' + dateFormat(task.start) + '</p>'
+                    + '<p><strong>Due:</strong> ' + dateFormat(task.end) + '</p>'
+                    + '<p><strong>Assignee:</strong> ' + (task.assignee || 'Unassigned') + '</p>'
+                    + '<p><strong>Progress:</strong> ' + task.progress + '%</p>'
+                    + '</div>';
+            }
+        },
+        on_click: function(task) {
+            // Handle click on task
+            if (task.type === 'project') {
+                window.location.href = '/projects/' + task.id.substring(1);
+            } else {
+                window.location.href = '/tasks/' + task.id.substring(1);
+            }
+        }
+    });
+});
+</script>
+<style type="text/css">
+.gantt-container {
+    font-family: var(--bs-font-sans-serif);
+}
+.gantt .bar-progress {
+    fill: #28a745;
+}
+.gantt .bar {
+    fill: #007bff;
+}
+.gantt .bar-wrapper.project .bar {
+    fill: #6c757d;
+}
+.gantt-popup {
+    background: white;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    padding: 10px;
+    width: 200px;
+}
+.gantt-popup h6 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+}
+.gantt-popup p {
+    margin: 5px 0;
+}
+</style>
+{% endblock %}

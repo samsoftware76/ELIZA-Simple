@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Cancel Subscription{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-danger text-white">
+                    <h3 class="mb-0">Cancel Your Subscription</h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <h5>Are you sure you want to cancel your subscription?</h5>
+                        <p>If you cancel, your access to premium features will end when your trial period expires on {{ subscription.get_trial_end_date().strftime('%B %d, %Y') }}.</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5>Subscription Details</h5>
+                        <table class="table">
+                            <tr>
+                                <th>Plan:</th>
+                                <td>{{ subscription.plan.name }}</td>
+                            </tr>
+                            <tr>
+                                <th>Trial End Date:</th>
+                                <td>{{ subscription.get_trial_end_date().strftime('%B %d, %Y') }}</td>
+                            </tr>
+                            <tr>
+                                <th>Features:</th>
+                                <td>{{ subscription.plan.features }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <form method="post" action="{{ url_for('subscription.cancel_trial', subscription_id=subscription.id) }}">
+                        <!-- Add CSRF token -->
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="mb-3">
+                            <label for="reason" class="form-label">Please tell us why you're cancelling (optional)</label>
+                            <select class="form-select mb-2" id="reason_select" onchange="showOtherReason()">
+                                <option value="">Select a reason</option>
+                                <option value="Too expensive">Too expensive</option>
+                                <option value="Missing features">Missing features</option>
+                                <option value="Found a better alternative">Found a better alternative</option>
+                                <option value="Not using it enough">Not using it enough</option>
+                                <option value="Technical issues">Technical issues</option>
+                                <option value="other">Other reason</option>
+                            </select>
+                            <textarea class="form-control" id="reason" name="reason" rows="3" placeholder="Please provide details about why you're cancelling..."></textarea>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-danger btn-lg">Confirm Cancellation</button>
+                            <a href="{{ url_for('home') }}" class="btn btn-outline-secondary">Keep My Subscription</a>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer">
+                    <small class="text-muted">We're sorry to see you go. If you have any feedback or issues we can help with, please contact our support team.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function showOtherReason() {
+    const reasonSelect = document.getElementById('reason_select');
+    const reasonText = document.getElementById('reason');
+    
+    if (reasonSelect.value === 'other') {
+        reasonText.style.display = 'block';
+        reasonText.value = '';
+    } else {
+        reasonText.value = reasonSelect.value;
+        reasonText.style.display = reasonSelect.value === '' ? 'none' : 'block';
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    showOtherReason();
+});
+</script>
+{% endblock %}

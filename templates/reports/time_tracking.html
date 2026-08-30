@@ -1,0 +1,245 @@
+{% extends 'base.html' %}
+
+{% block title %}Time Tracking Report{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('reports') }}">Reports</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Time Tracking</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Time Tracking Report</h1>
+        <div>
+            <a href="{{ url_for('export_time_tracking_report') }}" class="btn btn-outline-primary">
+                <i class="fas fa-download"></i> Export to CSV
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Time Spent by Project</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="projectTimeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Time Spent by User</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="userTimeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Project Time Efficiency</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Project</th>
+                            <th>Estimated Hours</th>
+                            <th>Actual Hours</th>
+                            <th>Efficiency</th>
+                            <th>Progress</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for project in projects %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('project_detail', project_id=project.id) }}">
+                                    {{ project.title }}
+                                </a>
+                            </td>
+                            <td>
+                                {% set total_estimated = project.tasks|sum(attribute='estimated_hours')|default(0) %}
+                                {{ total_estimated|round(1) }}
+                            </td>
+                            <td>
+                                {% set total_actual = 0 %}
+                                {% for task in project.tasks %}
+                                    {% if task.actual_hours is not none %}
+                                        {% set total_actual = total_actual + task.actual_hours %}
+                                    {% endif %}
+                                {% endfor %}
+                                {{ total_actual|round(1) }}
+                            </td>
+                            <td>
+                                {% if total_estimated > 0 %}
+                                {% set efficiency = (total_estimated / total_actual * 100)|round if total_actual > 0 else 0 %}
+                                {% if efficiency > 100 %}
+                                <span class="text-success">{{ efficiency }}%</span>
+                                {% elif efficiency >= 80 %}
+                                <span class="text-primary">{{ efficiency }}%</span>
+                                {% elif efficiency >= 50 %}
+                                <span class="text-warning">{{ efficiency }}%</span>
+                                {% else %}
+                                <span class="text-danger">{{ efficiency }}%</span>
+                                {% endif %}
+                                {% else %}
+                                <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% set task_count = project.tasks|length %}
+                                {% if task_count > 0 %}
+                                {% set completed_tasks = project.tasks|selectattr('status.name', 'equalto', 'COMPLETED')|list|length %}
+                                {% set progress = (completed_tasks / task_count * 100)|int %}
+                                <div class="progress" style="height: 10px;">
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress }}%" 
+                                         aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <small class="text-muted">{{ completed_tasks }}/{{ task_count }} tasks ({{ progress }}%)</small>
+                                {% else %}
+                                <span class="text-muted">No tasks</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Recent Time Entries</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>User</th>
+                            <th>Task</th>
+                            <th>Project</th>
+                            <th>Start Time</th>
+                            <th>End Time</th>
+                            <th>Duration</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in time_entries %}
+                        <tr>
+                            <td>{{ entry.user.username }}</td>
+                            <td>
+                                <a href="{{ url_for('task_detail', task_id=entry.task.id) }}">
+                                    {{ entry.task.title }}
+                                </a>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('project_detail', project_id=entry.task.project.id) }}">
+                                    {{ entry.task.project.title }}
+                                </a>
+                            </td>
+                            <td>{{ entry.start_time.strftime('%b %d, %Y %H:%M') }}</td>
+                            <td>
+                                {% if entry.end_time %}
+                                {{ entry.end_time.strftime('%b %d, %Y %H:%M') }}
+                                {% else %}
+                                <span class="badge bg-success">Active</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if entry.duration %}
+                                {{ entry.duration|round(2) }} hrs
+                                {% elif entry.end_time %}
+                                {{ ((entry.end_time - entry.start_time).total_seconds() / 3600)|round(2) }} hrs
+                                {% else %}
+                                <span class="badge bg-secondary">Running</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ entry.description|truncate(30) if entry.description else '' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Time by Project Chart
+    const projectTimeCtx = document.getElementById('projectTimeChart').getContext('2d');
+    const projectTimeChart = new Chart(projectTimeCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ project_labels|tojson }},
+            datasets: [{
+                label: 'Hours Spent',
+                data: {{ project_hours|tojson }},
+                backgroundColor: '#007bff',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Hours'
+                    }
+                }
+            }
+        }
+    });
+
+    // Time by User Chart
+    const userTimeCtx = document.getElementById('userTimeChart').getContext('2d');
+    const userTimeChart = new Chart(userTimeCtx, {
+        type: 'pie',
+        data: {
+            labels: {{ user_labels|tojson }},
+            datasets: [{
+                data: {{ user_hours|tojson }},
+                backgroundColor: [
+                    '#007bff', '#28a745', '#17a2b8', '#ffc107', '#dc3545', 
+                    '#6c757d', '#6610f2', '#fd7e14', '#20c997', '#e83e8c'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

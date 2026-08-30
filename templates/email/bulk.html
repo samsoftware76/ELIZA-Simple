@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Send Bulk Email{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1>Send Bulk Email to Clients</h1>
+            <p class="lead">Use this form to send updates, newsletters, or important information to multiple clients at once.</p>
+            
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('email.bulk_email') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <div class="mb-3">
+                            <label for="subject" class="form-label">Email Subject *</label>
+                            <input type="text" class="form-control" id="subject" name="subject" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="message" class="form-label">Email Message *</label>
+                            <textarea class="form-control" id="message" name="message" rows="6" required></textarea>
+                            <small class="text-muted">HTML formatting is supported.</small>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="cta_text" class="form-label">Call-to-Action Button Text</label>
+                                <input type="text" class="form-control" id="cta_text" name="cta_text" placeholder="e.g., Learn More">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="cta_url" class="form-label">Call-to-Action URL</label>
+                                <input type="url" class="form-control" id="cta_url" name="cta_url" placeholder="https://...">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Select Recipients *</label>
+                            <div class="card">
+                                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                    <span>Clients</span>
+                                    <div>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" id="selectAll">Select All</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAll">Deselect All</button>
+                                    </div>
+                                </div>
+                                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                                    {% if clients %}
+                                        <div class="row">
+                                            {% for client in clients %}
+                                                {% if client.email and not client.email_opt_out %}
+                                                    <div class="col-md-4 mb-2">
+                                                        <div class="form-check">
+                                                            <input class="form-check-input client-checkbox" type="checkbox" name="client_ids" value="{{ client.id }}" id="client{{ client.id }}">
+                                                            <label class="form-check-label" for="client{{ client.id }}">
+                                                                {{ client.name }} <small class="text-muted">({{ client.email }})</small>
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <p class="text-muted">No clients available. <a href="{{ url_for('client_create') }}">Add a client</a> first.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('clients') }}" class="btn btn-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">Send Email</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const selectAllBtn = document.getElementById('selectAll');
+        const deselectAllBtn = document.getElementById('deselectAll');
+        const clientCheckboxes = document.querySelectorAll('.client-checkbox');
+        
+        selectAllBtn.addEventListener('click', function() {
+            clientCheckboxes.forEach(checkbox => {
+                checkbox.checked = true;
+            });
+        });
+        
+        deselectAllBtn.addEventListener('click', function() {
+            clientCheckboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+        });
+    });
+</script>
+{% endblock %}

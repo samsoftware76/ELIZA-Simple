@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}All Tasks{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>All Tasks</h1>
+        <div>
+            <a href="{{ url_for('create_task') }}" class="btn btn-primary btn-sm">Create New Task</a>
+            <a href="{{ url_for('report_task_distribution') }}" class="btn btn-info btn-sm">Task Reports</a>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Filter Tasks</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('all_tasks') }}" class="row g-3">
+                <div class="col-md-3">
+                    <label for="status" class="form-label">Status</label>
+                    <select name="status" id="status" class="form-select">
+                        <option value="">All Statuses</option>
+                        <option value="TODO" {% if request.args.get('status') == 'TODO' %}selected{% endif %}>To Do</option>
+                        <option value="IN_PROGRESS" {% if request.args.get('status') == 'IN_PROGRESS' %}selected{% endif %}>In Progress</option>
+                        <option value="REVIEW" {% if request.args.get('status') == 'REVIEW' %}selected{% endif %}>In Review</option>
+                        <option value="COMPLETED" {% if request.args.get('status') == 'COMPLETED' %}selected{% endif %}>Completed</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="priority" class="form-label">Priority</label>
+                    <select name="priority" id="priority" class="form-select">
+                        <option value="">All Priorities</option>
+                        <option value="1" {% if request.args.get('priority') == '1' %}selected{% endif %}>Low</option>
+                        <option value="2" {% if request.args.get('priority') == '2' %}selected{% endif %}>Medium</option>
+                        <option value="3" {% if request.args.get('priority') == '3' %}selected{% endif %}>High</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="assignee" class="form-label">Assignee</label>
+                    <select name="assignee" id="assignee" class="form-select">
+                        <option value="">All Assignees</option>
+                        <option value="me" {% if request.args.get('assignee') == 'me' %}selected{% endif %}>Assigned to Me</option>
+                        <option value="unassigned" {% if request.args.get('assignee') == 'unassigned' %}selected{% endif %}>Unassigned</option>
+                        {% for user in users %}
+                            <option value="{{ user.id }}" {% if request.args.get('assignee') == user.id|string %}selected{% endif %}>{{ user.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="project" class="form-label">Project</label>
+                    <select name="project" id="project" class="form-select">
+                        <option value="">All Projects</option>
+                        {% for project in projects %}
+                            <option value="{{ project.id }}" {% if request.args.get('project') == project.id|string %}selected{% endif %}>{{ project.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-12 mt-3">
+                    <button type="submit" class="btn btn-primary btn-sm">Apply Filters</button>
+                    <a href="{{ url_for('all_tasks') }}" class="btn btn-secondary btn-sm">Clear Filters</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if tasks %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Title</th>
+                        <th>Project</th>
+                        <th>Status</th>
+                        <th>Priority</th>
+                        <th>Assignee</th>
+                        <th>Due Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for task in tasks %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('task_detail', task_id=task.id) }}">{{ task.title }}</a>
+                            </td>
+                            <td>
+                                {% if task.project %}
+                                    <a href="{{ url_for('project_detail', project_id=task.project.id) }}">{{ task.project.title }}</a>
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if task.status.name == 'TODO' %}
+                                    <span class="badge bg-secondary">To Do</span>
+                                {% elif task.status.name == 'IN_PROGRESS' %}
+                                    <span class="badge bg-primary">In Progress</span>
+                                {% elif task.status.name == 'REVIEW' %}
+                                    <span class="badge bg-info">In Review</span>
+                                {% elif task.status.name == 'COMPLETED' %}
+                                    <span class="badge bg-success">Completed</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if task.priority == 1 %}
+                                    <span class="badge bg-success">Low</span>
+                                {% elif task.priority == 2 %}
+                                    <span class="badge bg-warning text-dark">Medium</span>
+                                {% elif task.priority == 3 %}
+                                    <span class="badge bg-danger">High</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if task.assignee_id %}
+                                    {{ task.assigned_to.username }}
+                                {% else %}
+                                    <span class="text-muted">Unassigned</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if task.due_date %}
+                                    {% if task.due_date < now.date() and task.status.name != 'COMPLETED' %}
+                                        <span class="text-danger">{{ task.due_date.strftime('%b %d, %Y') }} (Overdue)</span>
+                                    {% else %}
+                                        {{ task.due_date.strftime('%b %d, %Y') }}
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">No due date</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{{ url_for('task_detail', task_id=task.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                                    <a href="{{ url_for('task_edit', task_id=task.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            <p>No tasks found matching your criteria.</p>
+            {% if request.args %}
+                <p>Try adjusting your filters or <a href="{{ url_for('all_tasks') }}">view all tasks</a>.</p>
+            {% else %}
+                <p>Get started by <a href="{{ url_for('task_create') }}">creating a new task</a>.</p>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

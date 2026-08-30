@@ -1,0 +1,274 @@
+"""
+Email utility functions for the ELIZA Project Management App
+"""
+import os
+from flask import render_template, current_app
+from flask_mail import Mail, Message
+import logging
+import os
+from threading import Thread
+
+logger = logging.getLogger(__name__)
+
+mail = Mail()
+
+def send_async_email(app, msg):
+    """Send email asynchronously to avoid blocking the main thread"""
+    with app.app_context():
+        mail.send(msg)
+
+def send_email(subject, recipients, text_body, html_body=None, sender=None):
+    """
+    Send an email with the given parameters
+    
+    Args:
+        subject (str): Email subject
+        recipients (list): List of recipient email addresses
+        text_body (str): Plain text email body
+        html_body (str, optional): HTML email body. Defaults to None.
+        sender (str, optional): Sender email address. Defaults to app config value.
+    """
+    app = current_app._get_current_object()
+    sender = sender or app.config['MAIL_DEFAULT_SENDER']
+    
+    msg = Message(subject, sender=sender, recipients=recipients)
+    msg.body = text_body
+    if html_body:
+        msg.html = html_body
+    
+    # Send email asynchronously
+    Thread(target=send_async_email, args=(app, msg)).start()
+
+def send_task_assignment_notification(task, user):
+    """
+    Send an email notification when a task is assigned to a user
+    
+    Args:
+        task: The Task object
+        user: The User object the task is assigned to
+    """
+    subject = f"[ELIZA] Task Assigned: {task.title}"
+    recipients = [user.email]
+    
+    try:
+        logger.info(f"Sending task assignment notification to {user.email}")
+        text_body = f"Hello {user.first_name},\n\nYou have been assigned a new task: {task.title}\n\nDescription: {task.description}\n\nDue Date: {task.due_date}\n\nRegards,\nELIZA Project Management Team"
+        html_body = render_template('emails/task_assignment.html', user=user, task=task)
+        send_email(subject, recipients, text_body, html_body)
+        logger.info(f"Task assignment notification sent successfully to {user.email}")
+    except Exception as e:
+        logger.error(f"Failed to send task assignment notification: {str(e)}")
+
+def test_email_configuration(recipient_email=None):
+    """
+    Send a test email to verify email configuration is working
+    
+    Args:
+        recipient_email (str, optional): Email address to send test to. 
+                                        If None, uses the configured MAIL_USERNAME.
+    
+    Returns:
+        bool: True if email sent successfully, False otherwise
+    """
+    try:
+        app = current_app._get_current_object()
+        sender = app.config['MAIL_DEFAULT_SENDER']
+        recipient = recipient_email or app.config['MAIL_USERNAME']
+        
+        logger.info(f"Sending test email from {sender} to {recipient}")
+        
+        subject = "[ELIZA] Email Configuration Test"
+        text_body = "This is a test email to verify that the ELIZA Project Management App email configuration is working correctly."
+        html_body = "<h1>ELIZA Email Test</h1><p>This is a test email to verify that the ELIZA Project Management App email configuration is working correctly.</p>"
+        
+        msg = Message(subject, sender=sender, recipients=[recipient])
+        msg.body = text_body
+        msg.html = html_body
+        
+        # Send email synchronously for testing
+        mail.send(msg)
+        
+        logger.info("Test email sent successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send test email: {str(e)}")
+        return False
+    
+    text_body = f"""
+Hello {user.first_name},
+
+You have been assigned a new task in the ELIZA Project Management system:
+
+Task: {task.title}
+Project: {task.project.title}
+Priority: {"High" if task.priority == 3 else "Medium" if task.priority == 2 else "Low"}
+Due Date: {task.due_date.strftime('%B %d, %Y') if task.due_date else 'Not specified'}
+
+Description:
+{task.description or 'No description provided.'}
+
+You can view the task details and start working on it by clicking the link below:
+{current_app.config['BASE_URL']}/tasks/{task.id}
+
+Thank you,
+ELIZA Project Management System
+"""
+    
+    html_body = render_template('emails/task_assignment.html', 
+                               user=user, 
+                               task=task,
+                               base_url=current_app.config['BASE_URL'])
+    
+    send_email(subject, recipients, text_body, html_body)
+
+def send_task_update_notification(task, update_type, updated_by):
+    """
+    Send an email notification when a task is updated
+    
+    Args:
+        task: The Task object
+        update_type (str): Type of update (status_change, due_date_change, etc.)
+        updated_by: The User who made the update
+    """
+    # Only send notifications to task assignee and project team members
+    recipients = []
+    
+    # Add task assignee if exists and is not the updater
+    if task.assignee_id and task.assignee_id != updated_by.id:
+        recipients.append(task.assigned_to.email)
+    
+    # Add project team members who are not the updater
+    for member in task.project.team_members:
+        if member.user_id != updated_by.id and member.user.email not in recipients:
+            recipients.append(member.user.email)
+    
+    # Don't send if no recipients
+    if not recipients:
+        return
+    
+    subject = f"[ELIZA] Task Updated: {task.title}"
+    
+    update_message = ""
+    if update_type == "status_change":
+        update_message = f"The status has been changed to: {task.status.value}"
+    elif update_type == "due_date_change":
+        update_message = f"The due date has been changed to: {task.due_date.strftime('%B %d, %Y') if task.due_date else 'Not specified'}"
+    elif update_type == "assignment_change":
+        if task.assignee_id:
+            update_message = f"The task has been assigned to: {task.assigned_to.username}"
+        else:
+            update_message = "The task is now unassigned"
+    else:
+        update_message = "The task has been updated"
+    
+    text_body = f"""
+Hello,
+
+A task in the ELIZA Project Management system has been updated by {updated_by.username}:
+
+Task: {task.title}
+Project: {task.project.title}
+{update_message}
+
+You can view the task details by clicking the link below:
+{current_app.config['BASE_URL']}/tasks/{task.id}
+
+Thank you,
+ELIZA Project Management System
+"""
+    
+    html_body = render_template('emails/task_update.html', 
+                               task=task,
+                               update_type=update_type,
+                               update_message=update_message,
+                               updated_by=updated_by,
+                               base_url=current_app.config['BASE_URL'])
+    
+    send_email(subject, recipients, text_body, html_body)
+
+def send_bulk_email(subject, recipients, template, template_data=None):
+    """
+    Send a bulk email to multiple recipients
+    
+    Args:
+        subject (str): Email subject
+        recipients (list): List of recipient email addresses
+        template (str): Template name (without .html extension)
+        template_data (dict, optional): Data to pass to the template. Defaults to None.
+    """
+    if not recipients:
+        return
+    
+    # Default template data
+    template_data = template_data or {}
+    
+    # Add base_url to template data
+    template_data['base_url'] = current_app.config['BASE_URL']
+    
+    # Prepare email content
+    html_body = render_template(f'emails/{template}.html', **template_data)
+    text_body = f"""Hello,
+
+{subject}
+
+Please view this email with an HTML-compatible email client to see the full content.
+
+Thank you,
+ELIZA Project Management System
+"""
+    
+    # Send email to all recipients
+    send_email(subject, recipients, text_body, html_body)
+
+def send_task_comment_notification(task, comment, commented_by):
+    """
+    Send an email notification when a comment is added to a task
+    
+    Args:
+        task: The Task object
+        comment: The Comment object
+        commented_by: The User who made the comment
+    """
+    # Only send notifications to task assignee and project team members
+    recipients = []
+    
+    # Add task assignee if exists and is not the commenter
+    if task.assignee_id and task.assignee_id != commented_by.id:
+        recipients.append(task.assigned_to.email)
+    
+    # Add project team members who are not the commenter
+    for member in task.project.team_members:
+        if member.user_id != commented_by.id and member.user.email not in recipients:
+            recipients.append(member.user.email)
+    
+    # Don't send if no recipients
+    if not recipients:
+        return
+    
+    subject = f"[ELIZA] New Comment on Task: {task.title}"
+    
+    text_body = f"""
+Hello,
+
+A new comment has been added to a task in the ELIZA Project Management system by {commented_by.username}:
+
+Task: {task.title}
+Project: {task.project.title}
+
+Comment:
+{comment.content}
+
+You can view the task and reply to the comment by clicking the link below:
+{current_app.config['BASE_URL']}/tasks/{task.id}
+
+Thank you,
+ELIZA Project Management System
+"""
+    
+    html_body = render_template('emails/task_comment.html', 
+                               task=task,
+                               comment=comment,
+                               commented_by=commented_by,
+                               base_url=current_app.config['BASE_URL'])
+    
+    send_email(subject, recipients, text_body, html_body)

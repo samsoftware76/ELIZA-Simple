@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block title %}ELIZA - Project Management Made Simple{% endblock %}
+
+{% block meta %}
+<meta name="description" content="ELIZA is a powerful project management tool that helps teams organize, track, and manage their work efficiently. Start your free trial today!">
+<meta name="keywords" content="project management, task management, team collaboration, productivity tool, ELIZA">
+<meta name="author" content="ELIZA Team">
+
+<!-- Open Graph / Facebook -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ request.url }}">
+<meta property="og:title" content="ELIZA - Project Management Made Simple">
+<meta property="og:description" content="ELIZA is a powerful project management tool that helps teams organize, track, and manage their work efficiently.">
+<meta property="og:image" content="{{ url_for('static', filename='img/og-image.jpg', _external=True) }}">
+
+<!-- Twitter -->
+<meta property="twitter:card" content="summary_large_image">
+<meta property="twitter:url" content="{{ request.url }}">
+<meta property="twitter:title" content="ELIZA - Project Management Made Simple">
+<meta property="twitter:description" content="ELIZA is a powerful project management tool that helps teams organize, track, and manage their work efficiently.">
+<meta property="twitter:image" content="{{ url_for('static', filename='img/og-image.jpg', _external=True) }}">
+
+<!-- Canonical URL -->
+<link rel="canonical" href="{{ request.url }}">
+{% endblock %}
+
+{% block content %}
+<div class="landing-page">
+    <div class="hero-section">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <h1 class="display-4 fw-bold">Manage Projects with Ease</h1>
+                    <p class="lead my-4">ELIZA helps teams organize, track, and manage their work efficiently. Streamline your workflow and boost productivity.</p>
+                    <div class="cta-buttons">
+                        <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-lg me-3">Get Started</a>
+                        <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-lg">Sign In</a>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <img src="{{ url_for('static', filename='img/hero-image.svg') }}" alt="Project Management" class="img-fluid">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="features-section py-5">
+        <div class="container">
+            <h2 class="text-center mb-5">Why Choose ELIZA?</h2>
+            <div class="row">
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-tasks fa-3x mb-3 text-primary"></i>
+                            <h3 class="card-title">Task Management</h3>
+                            <p class="card-text">Create, assign, and track tasks with ease. Set priorities and deadlines to keep your team on track.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-users fa-3x mb-3 text-primary"></i>
+                            <h3 class="card-title">Team Collaboration</h3>
+                            <p class="card-text">Collaborate seamlessly with your team. Share files, comments, and updates in real-time.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body text-center">
+                            <i class="fas fa-chart-line fa-3x mb-3 text-primary"></i>
+                            <h3 class="card-title">Progress Tracking</h3>
+                            <p class="card-text">Monitor project progress with visual dashboards and reports. Make data-driven decisions.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="pricing-section py-5 bg-light">
+        <div class="container">
+            <h2 class="text-center mb-5">Choose Your Plan</h2>
+            <div class="row">
+                {% for plan in plans %}
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100 {% if plan.name == 'Premium' %}border-primary{% endif %}">
+                        <div class="card-header text-center {% if plan.name == 'Premium' %}bg-primary text-white{% endif %}">
+                            <h3 class="my-0">{{ plan.name }}</h3>
+                        </div>
+                        <div class="card-body">
+                            <h2 class="card-title pricing-card-title">${{ plan.price_monthly }}<small class="text-muted fw-light">/mo</small></h2>
+                            <p class="mt-3 mb-4">{{ plan.description }}</p>
+                            <ul class="list-unstyled mt-3 mb-4">
+                                <li><i class="fas fa-check text-success me-2"></i>{{ plan.max_projects }} Projects</li>
+                                <li><i class="fas fa-check text-success me-2"></i>{{ plan.max_users }} Team Members</li>
+                                <li><i class="fas fa-check text-success me-2"></i>{{ plan.max_clients }} Clients</li>
+                                {% if plan.features %}
+                                    {% for feature in plan.features.split(',') %}
+                                    <li><i class="fas fa-check text-success me-2"></i>{{ feature.strip() }}</li>
+                                    {% endfor %}
+                                {% endif %}
+                            </ul>
+                            <a href="{{ url_for('subscription.subscribe', plan=plan.id, cycle='monthly') }}" class="w-100 btn {% if plan.name == 'Premium' %}btn-primary{% else %}btn-outline-primary{% endif %} btn-lg">Start Free Trial</a>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="testimonials-section py-5">
+        <div class="container">
+            <h2 class="text-center mb-5">What Our Customers Say</h2>
+            <div class="row">
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex mb-3">
+                                <div class="text-warning">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                </div>
+                            </div>
+                            <p class="card-text">"ELIZA has transformed how our team manages projects. The intuitive interface and powerful features have boosted our productivity significantly."</p>
+                            <div class="d-flex align-items-center mt-3">
+                                <div class="flex-shrink-0">
+                                    <img src="{{ url_for('static', filename='img/avatar1.jpg') }}" alt="Customer" class="rounded-circle" width="50">
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <h5 class="mb-0">Sarah Johnson</h5>
+                                    <p class="text-muted mb-0">Project Manager, TechCorp</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex mb-3">
+                                <div class="text-warning">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                </div>
+                            </div>
+                            <p class="card-text">"The client management features in ELIZA are exceptional. It's helped us maintain better relationships with our clients and deliver projects on time."</p>
+                            <div class="d-flex align-items-center mt-3">
+                                <div class="flex-shrink-0">
+                                    <img src="{{ url_for('static', filename='img/avatar2.jpg') }}" alt="Customer" class="rounded-circle" width="50">
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <h5 class="mb-0">Michael Brown</h5>
+                                    <p class="text-muted mb-0">CEO, Design Studio</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex mb-3">
+                                <div class="text-warning">
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star-half-alt"></i>
+                                </div>
+                            </div>
+                            <p class="card-text">"As a small business owner, ELIZA has been a game-changer. It's affordable, easy to use, and has all the features we need to manage our growing team."</p>
+                            <div class="d-flex align-items-center mt-3">
+                                <div class="flex-shrink-0">
+                                    <img src="{{ url_for('static', filename='img/avatar3.jpg') }}" alt="Customer" class="rounded-circle" width="50">
+                                </div>
+                                <div class="flex-grow-1 ms-3">
+                                    <h5 class="mb-0">Emily Chen</h5>
+                                    <p class="text-muted mb-0">Founder, Startup Inc.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="cta-section py-5 bg-primary text-white">
+        <div class="container text-center">
+            <h2 class="mb-4">Ready to Get Started?</h2>
+            <p class="lead mb-4">Join thousands of teams already using ELIZA to manage their projects efficiently.</p>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-light btn-lg">Sign Up for Free</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hero-section {
+        padding: 5rem 0;
+        background-color: #f8f9fa;
+    }
+    
+    .features-section .card {
+        transition: transform 0.3s;
+        border: none;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+    
+    .features-section .card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .pricing-section .card {
+        transition: transform 0.3s;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    }
+    
+    .pricing-section .card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .testimonials-section .card {
+        border: none;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+    }
+    
+    .cta-section {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    }
+</style>
+{% endblock %}

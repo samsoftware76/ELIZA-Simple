@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Complete Your Subscription{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">Complete Your Subscription</h3>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h5>Your 14-day free trial is ending soon!</h5>
+                        <p>To continue using the {{ plan.name }} plan, please complete your payment information below.</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h5>Subscription Details</h5>
+                        <table class="table">
+                            <tr>
+                                <th>Plan:</th>
+                                <td>{{ plan.name }}</td>
+                            </tr>
+                            <tr>
+                                <th>Price:</th>
+                                <td id="price-display">${{ plan.price_monthly if subscription.billing_cycle == 'monthly' else plan.price_yearly }} / {{ 'month' if subscription.billing_cycle == 'monthly' else 'year' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Trial End Date:</th>
+                                <td>{{ trial_end_date.strftime('%B %d, %Y') }}</td>
+                            </tr>
+                            <tr>
+                                <th>Features:</th>
+                                <td>{{ plan.features }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <form method="post" action="{{ url_for('subscription.trial_payment', subscription_id=subscription.id) }}">
+                        <!-- Add CSRF token -->
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <h5 class="mb-3">Payment Options</h5>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="billing_cycle" class="form-label">Billing Cycle</label>
+                                <select class="form-select" id="billing_cycle" name="billing_cycle" onchange="updatePriceDisplay()">
+                                    <option value="monthly" {% if subscription.billing_cycle == 'monthly' %}selected{% endif %}>Monthly</option>
+                                    <option value="yearly" {% if subscription.billing_cycle == 'yearly' %}selected{% endif %}>Yearly (Save up to 17%)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="currency" class="form-label">Currency</label>
+                                <select class="form-select" id="currency" name="currency" onchange="updatePriceDisplay()">
+                                    <option value="USD">USD (US Dollar)</option>
+                                    <option value="UGX">UGX (Ugandan Shilling)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <p><i class="fas fa-info-circle"></i> You will be redirected to PesaPal's secure payment page to complete your transaction.</p>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">Proceed to Payment</button>
+                            <a href="{{ url_for('subscription.cancel_trial', subscription_id=subscription.id) }}" class="btn btn-outline-secondary">Cancel Subscription</a>
+                        </div>
+                    </form>
+                </div>
+                <div class="card-footer">
+                    <small class="text-muted">Your payment information is secure and encrypted. We use PesaPal's industry-standard security measures to protect your data.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function updatePriceDisplay() {
+        var billingCycle = document.getElementById('billing_cycle').value;
+        var currency = document.getElementById('currency').value;
+        var priceDisplay = document.getElementById('price-display');
+        
+        // Get the base prices from the plan
+        var monthlyPrice = {{ plan.price_monthly }};
+        var yearlyPrice = {{ plan.price_yearly }};
+        
+        // Determine which price to use based on billing cycle
+        var price = billingCycle === 'monthly' ? monthlyPrice : yearlyPrice;
+        var period = billingCycle === 'monthly' ? 'month' : 'year';
+        
+        // Format based on currency
+        if (currency === 'USD') {
+            priceDisplay.textContent = '$' + price.toFixed(2) + ' / ' + period;
+        } else if (currency === 'UGX') {
+            // Simple conversion rate (1 USD = 3700 UGX approx)
+            var ugxPrice = price * 3700;
+            priceDisplay.textContent = 'UGX ' + ugxPrice.toLocaleString() + ' / ' + period;
+        }
+    }
+    
+    // Initialize price display on page load
+    document.addEventListener('DOMContentLoaded', updatePriceDisplay);
+</script>
+{% endblock %}

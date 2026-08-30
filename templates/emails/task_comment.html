@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Comment on Task</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #6c757d;
+            color: white;
+            padding: 15px;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+        }
+        .task-info {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .comment {
+            background-color: #f0f0f0;
+            padding: 15px;
+            border-left: 4px solid #6c757d;
+            margin: 15px 0;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }
+        .button {
+            display: inline-block;
+            background-color: #6c757d;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+        .commented-by {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .comment-time {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>New Comment on Task</h2>
+    </div>
+    <div class="content">
+        <p>Hello,</p>
+        
+        <p>A new comment has been added to a task in the ELIZA Project Management system:</p>
+        
+        <div class="task-info">
+            <p><strong>Task:</strong> {{ task.title }}</p>
+            <p><strong>Project:</strong> {{ task.project.title }}</p>
+        </div>
+        
+        <div class="comment">
+            <p class="commented-by">{{ commented_by.username }} commented:</p>
+            <p class="comment-time">{% if comment.created_at %}{{ comment.created_at.strftime('%B %d, %Y at %H:%M') }}{% else %}Just now{% endif %}</p>
+            <p>{{ comment.content|replace('\n', '<br>')|safe }}</p>
+        </div>
+        
+        <p>You can view the task and reply to the comment by clicking the button below:</p>
+        
+        <a href="{{ base_url }}/tasks/{{ task.id }}" class="button">View Task</a>
+        
+        <p>Thank you,<br>
+        ELIZA Project Management System</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message from the ELIZA Project Management System. Please do not reply to this email.</p>
+    </div>
+</body>
+</html>

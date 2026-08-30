@@ -1,0 +1,20 @@
+# Environment / secrets
+.env
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# Local DB / logs
+*.db
+*.log
+uploads/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

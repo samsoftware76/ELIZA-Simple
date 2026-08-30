@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}System Settings{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">System Settings</h1>
+    
+    <div class="row">
+        <div class="col-md-3">
+            <div class="list-group">
+                <a href="{{ url_for('admin_dashboard') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-speedometer2 me-2"></i> Dashboard
+                </a>
+                <a href="{{ url_for('admin_users') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-people me-2"></i> User Management
+                </a>
+                <a href="{{ url_for('admin_subscriptions') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-credit-card me-2"></i> Subscriptions
+                </a>
+                <a href="{{ url_for('admin_system') }}" class="list-group-item list-group-item-action active">
+                    <i class="bi bi-gear me-2"></i> System Settings
+                </a>
+            </div>
+        </div>
+        
+        <div class="col-md-9">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Email Settings</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('admin_update_email_settings') }}" method="post">
+                        {{ email_form.csrf_token }}
+                        <div class="mb-3">
+                            <label for="mail_server" class="form-label">Mail Server</label>
+                            {{ email_form.mail_server(class="form-control") }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="mail_port" class="form-label">Mail Port</label>
+                            {{ email_form.mail_port(class="form-control") }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="mail_username" class="form-label">Mail Username</label>
+                            {{ email_form.mail_username(class="form-control") }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="mail_password" class="form-label">Mail Password</label>
+                            {{ email_form.mail_password(class="form-control", type="password") }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="mail_use_tls" class="form-label">Security</label>
+                            <div>
+                                <div class="form-check form-check-inline">
+                                    {{ email_form.mail_use_tls(class="form-check-input") }}
+                                    <label class="form-check-label" for="mail_use_tls">Use TLS</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    {{ email_form.mail_use_ssl(class="form-check-input") }}
+                                    <label class="form-check-label" for="mail_use_ssl">Use SSL</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="mail_default_sender" class="form-label">Default Sender</label>
+                            {{ email_form.mail_default_sender(class="form-control") }}
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Email Settings</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">PesaPal Integration</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('admin_update_pesapal_settings') }}" method="post">
+                        {{ pesapal_form.csrf_token }}
+                        <div class="mb-3">
+                            <label for="pesapal_consumer_key" class="form-label">Consumer Key</label>
+                            {{ pesapal_form.pesapal_consumer_key(class="form-control") }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="pesapal_consumer_secret" class="form-label">Consumer Secret</label>
+                            {{ pesapal_form.pesapal_consumer_secret(class="form-control") }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="pesapal_ipn_id" class="form-label">IPN ID</label>
+                            {{ pesapal_form.pesapal_ipn_id(class="form-control") }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="pesapal_live_mode" class="form-label">Environment</label>
+                            <div class="form-check form-switch">
+                                {{ pesapal_form.pesapal_live_mode(class="form-check-input") }}
+                                <label class="form-check-label" for="pesapal_live_mode">
+                                    Live Mode
+                                    <small class="text-muted">(Turn off for sandbox/testing)</small>
+                                </label>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save PesaPal Settings</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Application Settings</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('admin_update_app_settings') }}" method="post">
+                        {{ app_form.csrf_token }}
+                        <div class="mb-3">
+                            <label for="app_name" class="form-label">Application Name</label>
+                            {{ app_form.app_name(class="form-control") }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="company_name" class="form-label">Company Name</label>
+                            {{ app_form.company_name(class="form-control") }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="company_logo" class="form-label">Company Logo URL</label>
+                            {{ app_form.company_logo(class="form-control") }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="timezone" class="form-label">Default Timezone</label>
+                            {{ app_form.timezone(class="form-select") }}
+                        </div>
+                        <div class="mb-3">
+                            <label for="date_format" class="form-label">Date Format</label>
+                            {{ app_form.date_format(class="form-select") }}
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Application Settings</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">System Maintenance</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title">Database Backup</h6>
+                                    <p class="card-text">Create a backup of the application database.</p>
+                                    <form action="{{ url_for('admin_backup_database') }}" method="post">
+                                        <button type="submit" class="btn btn-primary">Create Backup</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-title">Clear Cache</h6>
+                                    <p class="card-text">Clear the application cache to free up memory.</p>
+                                    <form action="{{ url_for('admin_clear_cache') }}" method="post">
+                                        <button type="submit" class="btn btn-warning">Clear Cache</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

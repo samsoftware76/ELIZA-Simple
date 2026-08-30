@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+
+{% block title %}Overdue Tasks Report{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('reports') }}">Reports</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Overdue Tasks</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Overdue Tasks Report</h1>
+        <div class="report-controls">
+            <a href="{{ url_for('export_overdue_tasks_report') }}" class="btn btn-outline-primary">
+                <i class="fas fa-download"></i> Export CSV
+            </a>
+        </div>
+    </div>
+
+    <div class="alert alert-danger">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <strong>{{ overdue_tasks|length }}</strong> overdue tasks found across <strong>{{ projects_with_overdue|length }}</strong> projects.
+    </div>
+
+    {% for project_id, project_data in projects_with_overdue.items() %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">
+                <a href="{{ url_for('project_detail', project_id=project_id) }}">
+                    {{ project_data.project.title }}
+                </a>
+            </h5>
+            <span class="badge bg-danger">{{ project_data.tasks|length }} Overdue Tasks</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Task</th>
+                            <th>Assignee</th>
+                            <th>Due Date</th>
+                            <th>Days Overdue</th>
+                            <th>Status</th>
+                            <th>Priority</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for task in project_data.tasks|sort(attribute='due_date') %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('task_detail', task_id=task.id) }}">
+                                    {{ task.title }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if task.assignee_id %}
+                                {{ task.assigned_to.username }}
+                                {% else %}
+                                <span class="text-muted">Unassigned</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ task.due_date.strftime('%b %d, %Y') }}</td>
+                            <td>
+                                <span class="badge bg-danger">
+                                    {{ (now.date() - task.due_date).days }} days
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ task.status|status_badge }}">
+                                    {{ task.status.value }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if task.priority == 3 %}
+                                <span class="badge bg-danger">High</span>
+                                {% elif task.priority == 2 %}
+                                <span class="badge bg-warning text-dark">Medium</span>
+                                {% else %}
+                                <span class="badge bg-info text-dark">Low</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{{ url_for('task_detail', task_id=task.id) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('task_edit', task_id=task.id) }}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-success">
+        <i class="fas fa-check-circle me-2"></i>
+        No overdue tasks found. Great job!
+    </div>
+    {% endfor %}
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Overdue Tasks by Assignee</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="assigneeChart"></canvas>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="chart-container" style="position: relative; height:300px;">
+                        <canvas id="priorityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Recommendations</h5>
+        </div>
+        <div class="card-body">
+            <h6 class="fw-bold">High Priority Actions</h6>
+            <ul>
+                {% set high_priority_tasks = overdue_tasks|selectattr('priority', 'equalto', 3)|list %}
+                {% if high_priority_tasks %}
+                {% for task in high_priority_tasks[:5] %}
+                <li>
+                    <a href="{{ url_for('task_detail', task_id=task.id) }}">{{ task.title }}</a>
+                    - Due {{ task.due_date.strftime('%b %d, %Y') }} 
+                    ({{ (now.date() - task.due_date).days }} days overdue)
+                    {% if not task.assignee_id %}
+                    <span class="badge bg-warning text-dark">Needs Assignment</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+                {% if high_priority_tasks|length > 5 %}
+                <li>... and {{ high_priority_tasks|length - 5 }} more high priority tasks</li>
+                {% endif %}
+                {% else %}
+                <li>No high priority overdue tasks.</li>
+                {% endif %}
+            </ul>
+
+            <h6 class="fw-bold">Unassigned Tasks</h6>
+            <ul>
+                {% set unassigned_tasks = overdue_tasks|rejectattr('assignee_id')|list %}
+                {% if unassigned_tasks %}
+                {% for task in unassigned_tasks[:5] %}
+                <li>
+                    <a href="{{ url_for('task_detail', task_id=task.id) }}">{{ task.title }}</a>
+                    - Due {{ task.due_date.strftime('%b %d, %Y') }}
+                    ({{ (now.date() - task.due_date).days }} days overdue)
+                </li>
+                {% endfor %}
+                {% if unassigned_tasks|length > 5 %}
+                <li>... and {{ unassigned_tasks|length - 5 }} more unassigned tasks</li>
+                {% endif %}
+                {% else %}
+                <li>No unassigned overdue tasks.</li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get pre-processed data from server
+    const assigneeChartData = JSON.parse('{{ assignee_chart_data|tojson|safe }}');
+    const priorityChartData = JSON.parse('{{ priority_chart_data|tojson|safe }}');
+    
+    // Assignee Chart
+    const assigneeCtx = document.getElementById('assigneeChart').getContext('2d');
+    new Chart(assigneeCtx, {
+        type: 'pie',
+        data: {
+            labels: assigneeChartData.labels,
+            datasets: [{
+                data: assigneeChartData.values,
+                backgroundColor: [
+                    '#007bff', '#28a745', '#17a2b8', '#ffc107', '#dc3545', 
+                    '#6c757d', '#6610f2', '#fd7e14', '#20c997', '#e83e8c'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right'
+                },
+                title: {
+                    display: true,
+                    text: 'Overdue Tasks by Assignee'
+                }
+            }
+        }
+    });
+    
+    // Priority Chart
+    const priorityCtx = document.getElementById('priorityChart').getContext('2d');
+    new Chart(priorityCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Low', 'Medium', 'High'],
+            datasets: [{
+                label: 'Number of Tasks',
+                data: priorityChartData,
+                backgroundColor: [
+                    '#17a2b8', // Info - Low
+                    '#ffc107', // Warning - Medium
+                    '#dc3545'  // Danger - High
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            },
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Overdue Tasks by Priority'
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
