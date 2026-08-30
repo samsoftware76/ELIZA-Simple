@@ -6,21 +6,26 @@ from flask import render_template, current_app
 from flask_mail import Mail, Message
 import logging
 import os
-from threading import Thread
 
 logger = logging.getLogger(__name__)
 
 mail = Mail()
 
-def send_async_email(app, msg):
-    """Send email asynchronously to avoid blocking the main thread"""
-    with app.app_context():
-        mail.send(msg)
-
 def send_email(subject, recipients, text_body, html_body=None, sender=None):
     """
-    Send an email with the given parameters
-    
+    Send an email with the given parameters.
+
+    Sent synchronously, not via a background thread. A background Thread
+    works on a normal long-running server, but on Vercel (or any serverless
+    platform) the execution environment can be frozen the instant the HTTP
+    response is sent - the thread often never gets to finish before that
+    happens, so emails silently never go out. Sending inline is slightly
+    slower per request but is the only version that reliably completes.
+    A failure here is logged and swallowed rather than raised, so a broken
+    mail server doesn't turn into a 500 on the calling route (registration,
+    quote/invoice sending, etc. all call this and shouldn't hard-fail if
+    mail happens to be down).
+
     Args:
         subject (str): Email subject
         recipients (list): List of recipient email addresses
@@ -30,14 +35,16 @@ def send_email(subject, recipients, text_body, html_body=None, sender=None):
     """
     app = current_app._get_current_object()
     sender = sender or app.config['MAIL_DEFAULT_SENDER']
-    
+
     msg = Message(subject, sender=sender, recipients=recipients)
     msg.body = text_body
     if html_body:
         msg.html = html_body
-    
-    # Send email asynchronously
-    Thread(target=send_async_email, args=(app, msg)).start()
+
+    try:
+        mail.send(msg)
+    except Exception as e:
+        logger.error(f"Failed to send email '{subject}' to {recipients}: {str(e)}")
 
 def send_task_assignment_notification(task, user):
     """
