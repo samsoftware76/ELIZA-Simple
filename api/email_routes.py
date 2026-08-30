@@ -61,7 +61,7 @@ def unsubscribe():
     email = request.args.get('email')
     if not email:
         flash('Invalid unsubscribe request.', 'danger')
-        return redirect(url_for('index'))
+        return redirect(url_for('home'))
     
     # Find client with this email
     client = Client.query.filter_by(email=email).first()
@@ -72,4 +72,4 @@ def unsubscribe():
     else:
         flash('Email address not found.', 'danger')
     
-    return redirect(url_for('index'))
+    return redirect(url_for('home'))

@@ -1,21 +1,25 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_required, current_user
-from models.models import User, Client, Project, Task
+from models.models import User, Client, Project, Task, UserRole, ProjectStatus, TaskStatus
 from models.subscription import Subscription, SubscriptionPlan
-from forms import UserForm, SubscriptionPlanForm, SubscriptionForm
+from forms import UserForm, SubscriptionPlanForm, SubscriptionForm, EmailSettingsForm, PesapalSettingsForm, AppSettingsForm
 from models import db
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash
 import json
+import os
 
 admin_bp = Blueprint('admin', __name__)
 
 # Admin access decorator
 def admin_required(f):
     def decorated_function(*args, **kwargs):
-        if not current_user.is_authenticated or current_user.role != 'admin':
+        # current_user.role is a UserRole enum member (see models/models.py),
+        # never the string 'admin' - comparing it to a string is always
+        # True, so every user (including real admins) used to get bounced.
+        if not current_user.is_authenticated or current_user.role != UserRole.ADMIN:
             flash('You do not have permission to access this page.', 'danger')
-            return redirect(url_for('index'))
+            return redirect(url_for('home'))
         return f(*args, **kwargs)
     decorated_function.__name__ = f.__name__
     return decorated_function
@@ -27,31 +31,34 @@ def dashboard():
     # Count statistics
     user_count = User.query.count()
     client_count = Client.query.count()
-    active_project_count = Project.query.filter_by(status='in_progress').count()
-    
+    active_project_count = Project.query.filter_by(status=ProjectStatus.IN_PROGRESS).count()
+
     # Get task counts by status
-    todo_count = Task.query.filter_by(status='to_do').count()
-    in_progress_count = Task.query.filter_by(status='in_progress').count()
-    review_count = Task.query.filter_by(status='in_review').count()
-    completed_count = Task.query.filter_by(status='completed').count()
+    todo_count = Task.query.filter_by(status=TaskStatus.TODO).count()
+    in_progress_count = Task.query.filter_by(status=TaskStatus.IN_PROGRESS).count()
+    review_count = Task.query.filter_by(status=TaskStatus.REVIEW).count()
+    completed_count = Task.query.filter_by(status=TaskStatus.COMPLETED).count()
     
-    # Get subscription counts by plan
+    # Get subscription counts by plan.
+    # Subscription has no `status` column (only is_active/is_trial booleans -
+    # see models/subscription.py); the old `Subscription.status == 'active'`
+    # filters referenced a column that doesn't exist and crashed every call.
     basic_count = Subscription.query.join(SubscriptionPlan).filter(
-        SubscriptionPlan.name == 'Basic', 
-        Subscription.status == 'active'
+        SubscriptionPlan.name == 'Basic',
+        Subscription.is_active == True
     ).count()
-    
+
     professional_count = Subscription.query.join(SubscriptionPlan).filter(
-        SubscriptionPlan.name == 'Professional', 
-        Subscription.status == 'active'
+        SubscriptionPlan.name == 'Professional',
+        Subscription.is_active == True
     ).count()
-    
+
     enterprise_count = Subscription.query.join(SubscriptionPlan).filter(
-        SubscriptionPlan.name == 'Enterprise', 
-        Subscription.status == 'active'
+        SubscriptionPlan.name == 'Enterprise',
+        Subscription.is_active == True
     ).count()
-    
-    trial_count = Subscription.query.filter_by(status='trial').count()
+
+    trial_count = Subscription.query.filter_by(is_trial=True, is_active=True).count()
     
     # Get recent activities (placeholder - would need an Activity model)
     recent_activities = []
@@ -104,13 +111,19 @@ def add_user():
             flash('Username or email already exists.', 'danger')
             return redirect(url_for('admin.users'))
         
+        if not form.password.data:
+            flash('Password is required when creating a user.', 'danger')
+            return redirect(url_for('admin.users'))
+
         # Create new user
         new_user = User(
+            first_name=form.first_name.data,
+            last_name=form.last_name.data,
             username=form.username.data,
             email=form.email.data,
+            phone=form.phone.data,
             password_hash=generate_password_hash(form.password.data),
-            role=form.role.data,
-            is_active=True
+            role=UserRole[form.role.data],
         )
         
         db.session.add(new_user)
@@ -145,11 +158,13 @@ def edit_user():
             return redirect(url_for('admin.users'))
         
         # Update user details
+        user.first_name = form.first_name.data
+        user.last_name = form.last_name.data
         user.username = form.username.data
         user.email = form.email.data
-        user.role = form.role.data
-        user.is_active = form.is_active.data
-        
+        user.phone = form.phone.data
+        user.role = UserRole[form.role.data]
+
         # Update password if provided
         if form.new_password.data:
             user.password_hash = generate_password_hash(form.new_password.data)
@@ -200,10 +215,11 @@ def subscriptions():
     
     edit_subscription_form = SubscriptionForm()
     cancel_subscription_form = SubscriptionForm()
-    
-    # Populate the client and plan choices for the subscription form
-    clients = Client.query.all()
-    edit_subscription_form.client_id.choices = [(c.id, c.name) for c in clients]
+
+    # A subscription belongs to a User (an ELIZA account holder), not a
+    # Client (that user's own customer) - populate accordingly.
+    users = User.query.all()
+    edit_subscription_form.user_id.choices = [(u.id, f"{u.get_full_name()} ({u.email})") for u in users]
     edit_subscription_form.plan_id.choices = [(p.id, p.name) for p in plans]
     
     return render_template('admin/subscriptions.html',
@@ -225,11 +241,16 @@ def add_plan():
         # Create new subscription plan
         new_plan = SubscriptionPlan(
             name=form.name.data,
-            price=form.price.data,
-            duration=form.duration.data,
-            features=form.features.data
+            description=form.description.data,
+            price_monthly=form.price_monthly.data,
+            price_yearly=form.price_yearly.data,
+            max_projects=form.max_projects.data or 0,
+            max_users=form.max_users.data or 0,
+            max_clients=form.max_clients.data or 0,
+            features=form.features.data,
+            is_active=form.is_active.data,
         )
-        
+
         db.session.add(new_plan)
         db.session.commit()
         
@@ -249,13 +270,18 @@ def edit_plan():
     
     if form.validate_on_submit():
         plan = SubscriptionPlan.query.get_or_404(form.plan_id.data)
-        
+
         # Update plan details
         plan.name = form.name.data
-        plan.price = form.price.data
-        plan.duration = form.duration.data
+        plan.description = form.description.data
+        plan.price_monthly = form.price_monthly.data
+        plan.price_yearly = form.price_yearly.data
+        plan.max_projects = form.max_projects.data or 0
+        plan.max_users = form.max_users.data or 0
+        plan.max_clients = form.max_clients.data or 0
         plan.features = form.features.data
-        
+        plan.is_active = form.is_active.data
+
         db.session.commit()
         
         flash(f'Subscription plan {plan.name} has been updated successfully.', 'success')
@@ -276,7 +302,7 @@ def delete_plan():
         plan = SubscriptionPlan.query.get_or_404(form.plan_id.data)
         
         # Check if plan is being used by any active subscriptions
-        active_subscriptions = Subscription.query.filter_by(plan_id=plan.id, status='active').count()
+        active_subscriptions = Subscription.query.filter_by(plan_id=plan.id, is_active=True).count()
         
         if active_subscriptions > 0:
             flash(f'Cannot delete plan {plan.name} as it has {active_subscriptions} active subscriptions.', 'danger')
@@ -295,23 +321,26 @@ def delete_plan():
 @admin_required
 def edit_subscription():
     form = SubscriptionForm()
-    
+
     # Populate the choices for validation
-    clients = Client.query.all()
+    users = User.query.all()
     plans = SubscriptionPlan.query.all()
-    form.client_id.choices = [(c.id, c.name) for c in clients]
+    form.user_id.choices = [(u.id, f"{u.get_full_name()} ({u.email})") for u in users]
     form.plan_id.choices = [(p.id, p.name) for p in plans]
-    
+
     if form.validate_on_submit():
         subscription = Subscription.query.get_or_404(form.subscription_id.data)
-        
-        # Update subscription details
-        subscription.user_id = form.client_id.data
+
+        # Update subscription details. There's no `status` column on
+        # Subscription - the form's status choice maps to is_active/is_trial.
+        subscription.user_id = form.user_id.data
         subscription.plan_id = form.plan_id.data
         subscription.start_date = form.start_date.data
         subscription.end_date = form.end_date.data
-        subscription.status = form.status.data
-        
+        subscription.billing_cycle = form.billing_cycle.data
+        subscription.is_active = form.status.data in ('active', 'trial')
+        subscription.is_trial = form.status.data == 'trial'
+
         db.session.commit()
         
         flash('Subscription has been updated successfully.', 'success')
@@ -326,29 +355,155 @@ def edit_subscription():
 @login_required
 @admin_required
 def cancel_subscription():
-    form = SubscriptionForm()
-    
-    if form.validate_on_submit():
-        subscription = Subscription.query.get_or_404(form.subscription_id.data)
-        
-        # Update subscription status to cancelled
-        subscription.status = 'cancelled'
-        subscription.cancellation_reason = form.cancellation_reason.data
-        subscription.cancelled_at = datetime.now()
-        
-        db.session.commit()
-        
-        # Get client and plan details for the flash message
-        client = Client.query.get(subscription.user_id)
-        plan = SubscriptionPlan.query.get(subscription.plan_id)
-        
-        flash(f'Subscription for {client.name} to the {plan.name} plan has been cancelled.', 'success')
-    
+    # The cancel modal only submits subscription_id (+ a reason we have
+    # nowhere to store - Subscription has no cancellation_reason column) -
+    # not the full user/plan/dates SubscriptionForm requires, so reusing
+    # that form here made validate_on_submit() always fail and this action
+    # silently do nothing. CSRF is still enforced globally by Flask-WTF.
+    subscription_id = request.form.get('subscription_id', type=int)
+    if not subscription_id:
+        flash('Invalid cancellation request.', 'danger')
+        return redirect(url_for('admin.subscriptions'))
+
+    subscription = Subscription.query.get_or_404(subscription_id)
+
+    # Subscription has no status/cancellation_reason/cancelled_at columns -
+    # cancelling just deactivates it.
+    subscription.is_active = False
+    subscription.is_trial = False
+
+    db.session.commit()
+
+    # A Subscription belongs to a User, not a Client - see SubscriptionForm's docstring.
+    subscriber = User.query.get(subscription.user_id)
+    plan = SubscriptionPlan.query.get(subscription.plan_id)
+
+    flash(f'Subscription for {subscriber.get_full_name()} to the {plan.name} plan has been cancelled.', 'success')
     return redirect(url_for('admin.subscriptions'))
 
 @admin_bp.route('/system')
 @login_required
 @admin_required
 def system():
-    # Placeholder for system settings page
-    return render_template('admin/system.html')
+    email_form = EmailSettingsForm()
+    pesapal_form = PesapalSettingsForm()
+    app_form = AppSettingsForm()
+
+    email_form.mail_server.data = os.environ.get('MAIL_SERVER', '')
+    email_form.mail_port.data = int(os.environ.get('MAIL_PORT', 587))
+    email_form.mail_username.data = os.environ.get('MAIL_USERNAME', '')
+    email_form.mail_use_tls.data = os.environ.get('MAIL_USE_TLS', 'True') == 'True'
+    email_form.mail_use_ssl.data = os.environ.get('MAIL_USE_SSL', 'False') == 'True'
+    email_form.mail_default_sender.data = os.environ.get('MAIL_DEFAULT_SENDER', '')
+
+    pesapal_form.pesapal_consumer_key.data = os.environ.get('PESAPAL_CONSUMER_KEY', '')
+    pesapal_form.pesapal_consumer_secret.data = os.environ.get('PESAPAL_CONSUMER_SECRET', '')
+    pesapal_form.pesapal_ipn_id.data = os.environ.get('PESAPAL_IPN_ID', '')
+    pesapal_form.pesapal_live_mode.data = os.environ.get('PESAPAL_LIVE_MODE', 'False') == 'True'
+
+    app_form.app_name.data = os.environ.get('APP_NAME', 'ELIZA Project Management')
+    app_form.company_name.data = os.environ.get('COMPANY_NAME', 'Your Company')
+    app_form.company_logo.data = os.environ.get('COMPANY_LOGO', '')
+    app_form.timezone.data = os.environ.get('TIMEZONE', 'Africa/Nairobi')
+    app_form.date_format.data = os.environ.get('DATE_FORMAT', '%Y-%m-%d')
+
+    return render_template('admin/system.html', email_form=email_form, pesapal_form=pesapal_form, app_form=app_form)
+
+
+# These settings are environment-variable-driven (see config.py / api/index.py)
+# and there's no settings table to persist edits to - these routes exist so the
+# forms don't 500, but they're honest about not persisting across a restart
+# rather than silently discarding the admin's input or faking success.
+_SETTINGS_NOTE = 'saved for this running process only - update your .env (or hosting provider env vars) and restart to make this permanent.'
+
+
+@admin_bp.route('/system/email', methods=['POST'])
+@login_required
+@admin_required
+def update_email_settings():
+    form = EmailSettingsForm()
+    if form.validate_on_submit():
+        # Flask-Mail reads current_app.config (set once at startup from
+        # os.environ) at send time, not os.environ directly - updating only
+        # the environment variable would silently do nothing for the rest
+        # of this process, so both must be updated for the change to apply.
+        os.environ['MAIL_SERVER'] = form.mail_server.data
+        os.environ['MAIL_PORT'] = str(form.mail_port.data)
+        os.environ['MAIL_USERNAME'] = form.mail_username.data
+        if form.mail_password.data:
+            os.environ['MAIL_PASSWORD'] = form.mail_password.data
+        os.environ['MAIL_USE_TLS'] = str(form.mail_use_tls.data)
+        os.environ['MAIL_USE_SSL'] = str(form.mail_use_ssl.data)
+        os.environ['MAIL_DEFAULT_SENDER'] = form.mail_default_sender.data
+
+        current_app.config['MAIL_SERVER'] = form.mail_server.data
+        current_app.config['MAIL_PORT'] = form.mail_port.data
+        current_app.config['MAIL_USERNAME'] = form.mail_username.data
+        if form.mail_password.data:
+            current_app.config['MAIL_PASSWORD'] = form.mail_password.data
+        current_app.config['MAIL_USE_TLS'] = form.mail_use_tls.data
+        current_app.config['MAIL_USE_SSL'] = form.mail_use_ssl.data
+        current_app.config['MAIL_DEFAULT_SENDER'] = form.mail_default_sender.data
+
+        flash(f'Email settings updated ({_SETTINGS_NOTE})', 'success')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{field}: {error}', 'danger')
+    return redirect(url_for('admin.system'))
+
+
+@admin_bp.route('/system/pesapal', methods=['POST'])
+@login_required
+@admin_required
+def update_pesapal_settings():
+    form = PesapalSettingsForm()
+    if form.validate_on_submit():
+        # Note: api/payment.py reads these into module-level constants at
+        # import time, so changing os.environ here won't affect an
+        # already-running PesaPal client until the process restarts.
+        os.environ['PESAPAL_CONSUMER_KEY'] = form.pesapal_consumer_key.data
+        os.environ['PESAPAL_CONSUMER_SECRET'] = form.pesapal_consumer_secret.data
+        os.environ['PESAPAL_IPN_ID'] = form.pesapal_ipn_id.data
+        os.environ['PESAPAL_LIVE_MODE'] = str(form.pesapal_live_mode.data)
+        flash(f'PesaPal settings updated ({_SETTINGS_NOTE}) A restart is required for payment requests to use the new credentials.', 'success')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{field}: {error}', 'danger')
+    return redirect(url_for('admin.system'))
+
+
+@admin_bp.route('/system/app', methods=['POST'])
+@login_required
+@admin_required
+def update_app_settings():
+    form = AppSettingsForm()
+    if form.validate_on_submit():
+        os.environ['APP_NAME'] = form.app_name.data
+        os.environ['COMPANY_NAME'] = form.company_name.data
+        os.environ['COMPANY_LOGO'] = form.company_logo.data or ''
+        os.environ['TIMEZONE'] = form.timezone.data
+        os.environ['DATE_FORMAT'] = form.date_format.data
+        flash(f'Application settings updated ({_SETTINGS_NOTE})', 'success')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{field}: {error}', 'danger')
+    return redirect(url_for('admin.system'))
+
+
+@admin_bp.route('/system/backup', methods=['POST'])
+@login_required
+@admin_required
+def backup_database():
+    flash('Database backup is not implemented in this build. For Neon Postgres, use the Neon console\'s branch/backup feature instead.', 'info')
+    return redirect(url_for('admin.system'))
+
+
+@admin_bp.route('/system/clear-cache', methods=['POST'])
+@login_required
+@admin_required
+def clear_cache():
+    flash('This app has no server-side cache layer to clear yet - nothing to do.', 'info')
+    return redirect(url_for('admin.system'))

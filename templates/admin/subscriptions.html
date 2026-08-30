@@ -5,25 +5,36 @@
 {% block content %}
 <div class="container mt-4">
     <h1 class="mb-4">Subscription Management</h1>
-    
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
     <div class="row">
         <div class="col-md-3">
             <div class="list-group">
-                <a href="{{ url_for('admin_dashboard') }}" class="list-group-item list-group-item-action">
+                <a href="{{ url_for('admin.dashboard') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-speedometer2 me-2"></i> Dashboard
                 </a>
-                <a href="{{ url_for('admin_users') }}" class="list-group-item list-group-item-action">
+                <a href="{{ url_for('admin.users') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-people me-2"></i> User Management
                 </a>
-                <a href="{{ url_for('admin_subscriptions') }}" class="list-group-item list-group-item-action active">
+                <a href="{{ url_for('admin.subscriptions') }}" class="list-group-item list-group-item-action active">
                     <i class="bi bi-credit-card me-2"></i> Subscriptions
                 </a>
-                <a href="{{ url_for('admin_system') }}" class="list-group-item list-group-item-action">
+                <a href="{{ url_for('admin.system') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-gear me-2"></i> System Settings
                 </a>
             </div>
         </div>
-        
+
         <div class="col-md-9">
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -39,8 +50,10 @@
                                 <tr>
                                     <th>ID</th>
                                     <th>Name</th>
-                                    <th>Price</th>
-                                    <th>Duration</th>
+                                    <th>Monthly</th>
+                                    <th>Yearly</th>
+                                    <th>Limits</th>
+                                    <th>Status</th>
                                     <th>Features</th>
                                     <th>Actions</th>
                                 </tr>
@@ -50,8 +63,16 @@
                                 <tr>
                                     <td>{{ plan.id }}</td>
                                     <td>{{ plan.name }}</td>
-                                    <td>${{ plan.price }}</td>
-                                    <td>{{ plan.duration }} days</td>
+                                    <td>${{ '%.2f'|format(plan.price_monthly) }}</td>
+                                    <td>${{ '%.2f'|format(plan.price_yearly) }}</td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ plan.max_projects or 'Unlimited' }} projects,
+                                            {{ plan.max_users or 'Unlimited' }} users,
+                                            {{ plan.max_clients or 'Unlimited' }} clients
+                                        </small>
+                                    </td>
+                                    <td><span class="badge {% if plan.is_active %}bg-success{% else %}bg-secondary{% endif %}">{% if plan.is_active %}Active{% else %}Inactive{% endif %}</span></td>
                                     <td>
                                         <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#features{{ plan.id }}" aria-expanded="false">
                                             View Features
@@ -59,8 +80,10 @@
                                         <div class="collapse mt-2" id="features{{ plan.id }}">
                                             <div class="card card-body">
                                                 <ul class="list-unstyled mb-0">
-                                                    {% for feature in plan.features.split(',') %}
+                                                    {% for feature in (plan.features or '').split(',') %}
+                                                    {% if feature.strip() %}
                                                     <li><i class="bi bi-check-circle-fill text-success me-2"></i>{{ feature.strip() }}</li>
+                                                    {% endif %}
                                                     {% endfor %}
                                                 </ul>
                                             </div>
@@ -68,18 +91,23 @@
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button type="button" class="btn btn-outline-primary" 
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#editPlanModal" 
+                                            <button type="button" class="btn btn-outline-primary"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#editPlanModal"
                                                     data-plan-id="{{ plan.id }}"
                                                     data-plan-name="{{ plan.name }}"
-                                                    data-plan-price="{{ plan.price }}"
-                                                    data-plan-duration="{{ plan.duration }}"
-                                                    data-plan-features="{{ plan.features }}">
+                                                    data-plan-description="{{ plan.description or '' }}"
+                                                    data-plan-price-monthly="{{ plan.price_monthly }}"
+                                                    data-plan-price-yearly="{{ plan.price_yearly }}"
+                                                    data-plan-max-projects="{{ plan.max_projects }}"
+                                                    data-plan-max-users="{{ plan.max_users }}"
+                                                    data-plan-max-clients="{{ plan.max_clients }}"
+                                                    data-plan-features="{{ plan.features }}"
+                                                    data-plan-active="{{ plan.is_active }}">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
-                                            <button type="button" class="btn btn-outline-danger" 
-                                                    data-bs-toggle="modal" 
+                                            <button type="button" class="btn btn-outline-danger"
+                                                    data-bs-toggle="modal"
                                                     data-bs-target="#deletePlanModal"
                                                     data-plan-id="{{ plan.id }}"
                                                     data-plan-name="{{ plan.name }}">
@@ -90,7 +118,7 @@
                                 </tr>
                                 {% else %}
                                 <tr>
-                                    <td colspan="6" class="text-center">No subscription plans found</td>
+                                    <td colspan="8" class="text-center">No subscription plans found</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -98,10 +126,10 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">Active Subscriptions</h5>
+                    <h5 class="mb-0">Subscriptions</h5>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
@@ -109,7 +137,7 @@
                             <thead>
                                 <tr>
                                     <th>ID</th>
-                                    <th>Client</th>
+                                    <th>User</th>
                                     <th>Plan</th>
                                     <th>Start Date</th>
                                     <th>End Date</th>
@@ -121,45 +149,49 @@
                                 {% for subscription in subscriptions %}
                                 <tr>
                                     <td>{{ subscription.id }}</td>
-                                    <td>
-                                        {{ subscription.user.username }}
-                                        <!-- User profile link would go here if needed -->
-                                    </td>
+                                    <td>{{ subscription.user.get_full_name() }} <small class="text-muted">({{ subscription.user.email }})</small></td>
                                     <td>{{ subscription.plan.name }}</td>
                                     <td>{{ subscription.start_date.strftime('%Y-%m-%d') }}</td>
-                                    <td>{{ subscription.end_date.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ subscription.end_date.strftime('%Y-%m-%d') if subscription.end_date else '—' }}</td>
                                     <td>
-                                        <span class="badge {% if subscription.status == 'active' %}bg-success{% elif subscription.status == 'expired' %}bg-danger{% elif subscription.status == 'pending' %}bg-warning{% else %}bg-secondary{% endif %}">
-                                            {{ subscription.status|title }}
-                                        </span>
+                                        {% if not subscription.is_active %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                        {% elif subscription.is_trial %}
+                                        <span class="badge bg-warning text-dark">Trial</span>
+                                        {% else %}
+                                        <span class="badge bg-success">Active</span>
+                                        {% endif %}
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button type="button" class="btn btn-outline-primary" 
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#editSubscriptionModal" 
+                                            <button type="button" class="btn btn-outline-primary"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#editSubscriptionModal"
                                                     data-subscription-id="{{ subscription.id }}"
-                                                    data-client-id="{{ subscription.client.id }}"
+                                                    data-user-id="{{ subscription.user.id }}"
                                                     data-plan-id="{{ subscription.plan.id }}"
                                                     data-start-date="{{ subscription.start_date.strftime('%Y-%m-%d') }}"
-                                                    data-end-date="{{ subscription.end_date.strftime('%Y-%m-%d') }}"
-                                                    data-status="{{ subscription.status }}">
+                                                    data-end-date="{{ subscription.end_date.strftime('%Y-%m-%d') if subscription.end_date else '' }}"
+                                                    data-billing-cycle="{{ subscription.billing_cycle }}"
+                                                    data-status="{{ 'inactive' if not subscription.is_active else ('trial' if subscription.is_trial else 'active') }}">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
-                                            <button type="button" class="btn btn-outline-danger" 
-                                                    data-bs-toggle="modal" 
+                                            {% if subscription.is_active %}
+                                            <button type="button" class="btn btn-outline-danger"
+                                                    data-bs-toggle="modal"
                                                     data-bs-target="#cancelSubscriptionModal"
                                                     data-subscription-id="{{ subscription.id }}"
-                                                    data-client-name="{{ subscription.client.name }}"
+                                                    data-user-name="{{ subscription.user.get_full_name() }}"
                                                     data-plan-name="{{ subscription.plan.name }}">
                                                 <i class="bi bi-x-circle"></i>
                                             </button>
+                                            {% endif %}
                                         </div>
                                     </td>
                                 </tr>
                                 {% else %}
                                 <tr>
-                                    <td colspan="7" class="text-center">No active subscriptions found</td>
+                                    <td colspan="7" class="text-center">No subscriptions found</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -175,7 +207,7 @@
 <div class="modal fade" id="addPlanModal" tabindex="-1" aria-labelledby="addPlanModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form action="{{ url_for('admin_add_plan') }}" method="post">
+            <form action="{{ url_for('admin.add_plan') }}" method="post">
                 {{ add_plan_form.csrf_token }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="addPlanModalLabel">Add New Subscription Plan</h5>
@@ -183,20 +215,45 @@
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="name" class="form-label">Plan Name</label>
+                        <label class="form-label">Plan Name</label>
                         {{ add_plan_form.name(class="form-control", placeholder="Enter plan name") }}
                     </div>
                     <div class="mb-3">
-                        <label for="price" class="form-label">Price ($)</label>
-                        {{ add_plan_form.price(class="form-control", placeholder="Enter price") }}
+                        <label class="form-label">Description</label>
+                        {{ add_plan_form.description(class="form-control", placeholder="Optional") }}
                     </div>
-                    <div class="mb-3">
-                        <label for="duration" class="form-label">Duration (days)</label>
-                        {{ add_plan_form.duration(class="form-control", placeholder="Enter duration in days") }}
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Monthly Price ($)</label>
+                            {{ add_plan_form.price_monthly(class="form-control") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Yearly Price ($)</label>
+                            {{ add_plan_form.price_yearly(class="form-control") }}
+                        </div>
                     </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Max Projects</label>
+                            {{ add_plan_form.max_projects(class="form-control") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Max Team Members</label>
+                            {{ add_plan_form.max_users(class="form-control") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Max Clients</label>
+                            {{ add_plan_form.max_clients(class="form-control") }}
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mb-3">Leave a limit at 0 for unlimited.</small>
                     <div class="mb-3">
-                        <label for="features" class="form-label">Features (comma separated)</label>
+                        <label class="form-label">Features (comma separated)</label>
                         {{ add_plan_form.features(class="form-control", placeholder="Enter features separated by commas") }}
+                    </div>
+                    <div class="mb-3 form-check">
+                        {{ add_plan_form.is_active(class="form-check-input") }}
+                        <label class="form-check-label">Active</label>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -212,7 +269,7 @@
 <div class="modal fade" id="editPlanModal" tabindex="-1" aria-labelledby="editPlanModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form action="{{ url_for('admin_edit_plan') }}" method="post">
+            <form action="{{ url_for('admin.edit_plan') }}" method="post">
                 {{ edit_plan_form.csrf_token }}
                 {{ edit_plan_form.plan_id }}
                 <div class="modal-header">
@@ -221,20 +278,44 @@
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="name" class="form-label">Plan Name</label>
+                        <label class="form-label">Plan Name</label>
                         {{ edit_plan_form.name(class="form-control") }}
                     </div>
                     <div class="mb-3">
-                        <label for="price" class="form-label">Price ($)</label>
-                        {{ edit_plan_form.price(class="form-control") }}
+                        <label class="form-label">Description</label>
+                        {{ edit_plan_form.description(class="form-control") }}
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Monthly Price ($)</label>
+                            {{ edit_plan_form.price_monthly(class="form-control") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Yearly Price ($)</label>
+                            {{ edit_plan_form.price_yearly(class="form-control") }}
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Max Projects</label>
+                            {{ edit_plan_form.max_projects(class="form-control") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Max Team Members</label>
+                            {{ edit_plan_form.max_users(class="form-control") }}
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Max Clients</label>
+                            {{ edit_plan_form.max_clients(class="form-control") }}
+                        </div>
                     </div>
                     <div class="mb-3">
-                        <label for="duration" class="form-label">Duration (days)</label>
-                        {{ edit_plan_form.duration(class="form-control") }}
-                    </div>
-                    <div class="mb-3">
-                        <label for="features" class="form-label">Features (comma separated)</label>
+                        <label class="form-label">Features (comma separated)</label>
                         {{ edit_plan_form.features(class="form-control") }}
+                    </div>
+                    <div class="mb-3 form-check">
+                        {{ edit_plan_form.is_active(class="form-check-input") }}
+                        <label class="form-check-label">Active</label>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -250,7 +331,7 @@
 <div class="modal fade" id="deletePlanModal" tabindex="-1" aria-labelledby="deletePlanModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form action="{{ url_for('admin_delete_plan') }}" method="post">
+            <form action="{{ url_for('admin.delete_plan') }}" method="post">
                 {{ delete_plan_form.csrf_token }}
                 {{ delete_plan_form.plan_id }}
                 <div class="modal-header">
@@ -274,7 +355,7 @@
 <div class="modal fade" id="editSubscriptionModal" tabindex="-1" aria-labelledby="editSubscriptionModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form action="{{ url_for('admin_edit_subscription') }}" method="post">
+            <form action="{{ url_for('admin.edit_subscription') }}" method="post">
                 {{ edit_subscription_form.csrf_token }}
                 {{ edit_subscription_form.subscription_id }}
                 <div class="modal-header">
@@ -283,23 +364,27 @@
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="client_id" class="form-label">Client</label>
-                        {{ edit_subscription_form.client_id(class="form-select") }}
+                        <label class="form-label">User</label>
+                        {{ edit_subscription_form.user_id(class="form-select") }}
                     </div>
                     <div class="mb-3">
-                        <label for="plan_id" class="form-label">Plan</label>
+                        <label class="form-label">Plan</label>
                         {{ edit_subscription_form.plan_id(class="form-select") }}
                     </div>
                     <div class="mb-3">
-                        <label for="start_date" class="form-label">Start Date</label>
+                        <label class="form-label">Billing Cycle</label>
+                        {{ edit_subscription_form.billing_cycle(class="form-select") }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Start Date</label>
                         {{ edit_subscription_form.start_date(class="form-control", type="date") }}
                     </div>
                     <div class="mb-3">
-                        <label for="end_date" class="form-label">End Date</label>
+                        <label class="form-label">End Date</label>
                         {{ edit_subscription_form.end_date(class="form-control", type="date") }}
                     </div>
                     <div class="mb-3">
-                        <label for="status" class="form-label">Status</label>
+                        <label class="form-label">Status</label>
                         {{ edit_subscription_form.status(class="form-select") }}
                     </div>
                 </div>
@@ -316,19 +401,15 @@
 <div class="modal fade" id="cancelSubscriptionModal" tabindex="-1" aria-labelledby="cancelSubscriptionModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form action="{{ url_for('admin_cancel_subscription') }}" method="post">
-                {{ cancel_subscription_form.csrf_token }}
-                {{ cancel_subscription_form.subscription_id }}
+            <form action="{{ url_for('admin.cancel_subscription') }}" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="subscription_id" value="">
                 <div class="modal-header">
                     <h5 class="modal-title" id="cancelSubscriptionModalLabel">Confirm Cancellation</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Are you sure you want to cancel the subscription for <strong id="cancelClientName"></strong> to the <strong id="cancelPlanName"></strong> plan?</p>
-                    <div class="mb-3">
-                        <label for="cancellation_reason" class="form-label">Reason for Cancellation</label>
-                        {{ cancel_subscription_form.cancellation_reason(class="form-control", placeholder="Enter reason for cancellation") }}
-                    </div>
+                    <p>Are you sure you want to cancel the subscription for <strong id="cancelUserName"></strong> to the <strong id="cancelPlanName"></strong> plan?</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -348,86 +429,52 @@
         if (editPlanModal) {
             editPlanModal.addEventListener('show.bs.modal', function(event) {
                 const button = event.relatedTarget;
-                const planId = button.getAttribute('data-plan-id');
-                const name = button.getAttribute('data-plan-name');
-                const price = button.getAttribute('data-plan-price');
-                const duration = button.getAttribute('data-plan-duration');
-                const features = button.getAttribute('data-plan-features');
-                
-                const planIdInput = editPlanModal.querySelector('input[name="plan_id"]');
-                const nameInput = editPlanModal.querySelector('input[name="name"]');
-                const priceInput = editPlanModal.querySelector('input[name="price"]');
-                const durationInput = editPlanModal.querySelector('input[name="duration"]');
-                const featuresInput = editPlanModal.querySelector('textarea[name="features"]');
-                
-                planIdInput.value = planId;
-                nameInput.value = name;
-                priceInput.value = price;
-                durationInput.value = duration;
-                featuresInput.value = features;
+                editPlanModal.querySelector('input[name="plan_id"]').value = button.getAttribute('data-plan-id');
+                editPlanModal.querySelector('input[name="name"]').value = button.getAttribute('data-plan-name');
+                editPlanModal.querySelector('input[name="description"]').value = button.getAttribute('data-plan-description');
+                editPlanModal.querySelector('input[name="price_monthly"]').value = button.getAttribute('data-plan-price-monthly');
+                editPlanModal.querySelector('input[name="price_yearly"]').value = button.getAttribute('data-plan-price-yearly');
+                editPlanModal.querySelector('input[name="max_projects"]').value = button.getAttribute('data-plan-max-projects');
+                editPlanModal.querySelector('input[name="max_users"]').value = button.getAttribute('data-plan-max-users');
+                editPlanModal.querySelector('input[name="max_clients"]').value = button.getAttribute('data-plan-max-clients');
+                editPlanModal.querySelector('textarea[name="features"]').value = button.getAttribute('data-plan-features');
+                editPlanModal.querySelector('input[name="is_active"]').checked = button.getAttribute('data-plan-active') === 'True';
             });
         }
-        
+
         // Delete Plan Modal
         const deletePlanModal = document.getElementById('deletePlanModal');
         if (deletePlanModal) {
             deletePlanModal.addEventListener('show.bs.modal', function(event) {
                 const button = event.relatedTarget;
-                const planId = button.getAttribute('data-plan-id');
-                const planName = button.getAttribute('data-plan-name');
-                
-                const planIdInput = deletePlanModal.querySelector('input[name="plan_id"]');
-                const planNameSpan = deletePlanModal.querySelector('#deletePlanName');
-                
-                planIdInput.value = planId;
-                planNameSpan.textContent = planName;
+                deletePlanModal.querySelector('input[name="plan_id"]').value = button.getAttribute('data-plan-id');
+                deletePlanModal.querySelector('#deletePlanName').textContent = button.getAttribute('data-plan-name');
             });
         }
-        
+
         // Edit Subscription Modal
         const editSubscriptionModal = document.getElementById('editSubscriptionModal');
         if (editSubscriptionModal) {
             editSubscriptionModal.addEventListener('show.bs.modal', function(event) {
                 const button = event.relatedTarget;
-                const subscriptionId = button.getAttribute('data-subscription-id');
-                const clientId = button.getAttribute('data-client-id');
-                const planId = button.getAttribute('data-plan-id');
-                const startDate = button.getAttribute('data-start-date');
-                const endDate = button.getAttribute('data-end-date');
-                const status = button.getAttribute('data-status');
-                
-                const subscriptionIdInput = editSubscriptionModal.querySelector('input[name="subscription_id"]');
-                const clientSelect = editSubscriptionModal.querySelector('select[name="client_id"]');
-                const planSelect = editSubscriptionModal.querySelector('select[name="plan_id"]');
-                const startDateInput = editSubscriptionModal.querySelector('input[name="start_date"]');
-                const endDateInput = editSubscriptionModal.querySelector('input[name="end_date"]');
-                const statusSelect = editSubscriptionModal.querySelector('select[name="status"]');
-                
-                subscriptionIdInput.value = subscriptionId;
-                clientSelect.value = clientId;
-                planSelect.value = planId;
-                startDateInput.value = startDate;
-                endDateInput.value = endDate;
-                statusSelect.value = status;
+                editSubscriptionModal.querySelector('input[name="subscription_id"]').value = button.getAttribute('data-subscription-id');
+                editSubscriptionModal.querySelector('select[name="user_id"]').value = button.getAttribute('data-user-id');
+                editSubscriptionModal.querySelector('select[name="plan_id"]').value = button.getAttribute('data-plan-id');
+                editSubscriptionModal.querySelector('input[name="start_date"]').value = button.getAttribute('data-start-date');
+                editSubscriptionModal.querySelector('input[name="end_date"]').value = button.getAttribute('data-end-date');
+                editSubscriptionModal.querySelector('select[name="billing_cycle"]').value = button.getAttribute('data-billing-cycle');
+                editSubscriptionModal.querySelector('select[name="status"]').value = button.getAttribute('data-status');
             });
         }
-        
+
         // Cancel Subscription Modal
         const cancelSubscriptionModal = document.getElementById('cancelSubscriptionModal');
         if (cancelSubscriptionModal) {
             cancelSubscriptionModal.addEventListener('show.bs.modal', function(event) {
                 const button = event.relatedTarget;
-                const subscriptionId = button.getAttribute('data-subscription-id');
-                const clientName = button.getAttribute('data-client-name');
-                const planName = button.getAttribute('data-plan-name');
-                
-                const subscriptionIdInput = cancelSubscriptionModal.querySelector('input[name="subscription_id"]');
-                const clientNameSpan = cancelSubscriptionModal.querySelector('#cancelClientName');
-                const planNameSpan = cancelSubscriptionModal.querySelector('#cancelPlanName');
-                
-                subscriptionIdInput.value = subscriptionId;
-                clientNameSpan.textContent = clientName;
-                planNameSpan.textContent = planName;
+                cancelSubscriptionModal.querySelector('input[name="subscription_id"]').value = button.getAttribute('data-subscription-id');
+                cancelSubscriptionModal.querySelector('#cancelUserName').textContent = button.getAttribute('data-user-name');
+                cancelSubscriptionModal.querySelector('#cancelPlanName').textContent = button.getAttribute('data-plan-name');
             });
         }
     });

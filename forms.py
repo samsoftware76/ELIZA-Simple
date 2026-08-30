@@ -241,47 +241,68 @@ class TimeEntryForm(FlaskForm):
 
 # Admin Forms
 class UserForm(FlaskForm):
-    """Form for managing users in the admin panel"""
+    """Form for managing users in the admin panel.
+
+    Role choices are the real UserRole enum *names* (models/models.py) -
+    the Postgres column stores names like 'ADMIN', not values like 'admin',
+    so the choice values must match exactly or assigning user.role crashes.
+    first_name/last_name are required here because User.first_name/last_name
+    are NOT NULL columns; there's no is_active column on User (is_active is
+    a read-only Flask-Login property, always True), so no toggle for it.
+    """
     user_id = HiddenField('User ID')
+    first_name = StringField('First Name', validators=[DataRequired(), Length(max=50)])
+    last_name = StringField('Last Name', validators=[DataRequired(), Length(max=50)])
     username = StringField('Username', validators=[DataRequired(), Length(min=3, max=80)])
     email = StringField('Email', validators=[DataRequired(), Email(), Length(max=120)])
+    phone = StringField('Phone', validators=[Optional(), Length(max=20)])
     password = PasswordField('Password', validators=[Optional(), Length(min=8)])
     new_password = PasswordField('New Password', validators=[Optional(), Length(min=8)])
     role = SelectField('Role', choices=[
-        ('admin', 'Administrator'),
-        ('manager', 'Project Manager'),
-        ('developer', 'Developer'),
-        ('client', 'Client')
+        ('ADMIN', 'Administrator'),
+        ('PROJECT_MANAGER', 'Project Manager'),
+        ('DEVELOPER', 'Developer'),
+        ('SECRETARY', 'Secretary'),
+        ('CLIENT', 'Client'),
     ], validators=[DataRequired()])
-    is_active = BooleanField('Active', default=True)
     submit = SubmitField('Save')
 
 
 class SubscriptionPlanForm(FlaskForm):
-    """Form for managing subscription plans"""
+    """Form for managing subscription plans - fields match SubscriptionPlan
+    (models/subscription.py) exactly: there is no flat price/duration column,
+    billing is monthly/yearly, and limits are 0 = unlimited."""
     plan_id = HiddenField('Plan ID')
     name = StringField('Plan Name', validators=[DataRequired(), Length(max=50)])
-    price = FloatField('Price', validators=[DataRequired(), NumberRange(min=0)])
-    duration = IntegerField('Duration (days)', validators=[DataRequired(), NumberRange(min=1)])
+    description = StringField('Description', validators=[Optional(), Length(max=255)])
+    price_monthly = FloatField('Monthly Price', validators=[DataRequired(), NumberRange(min=0)])
+    price_yearly = FloatField('Yearly Price', validators=[DataRequired(), NumberRange(min=0)])
+    max_projects = IntegerField('Max Projects (0 = unlimited)', validators=[Optional(), NumberRange(min=0)], default=0)
+    max_users = IntegerField('Max Team Members (0 = unlimited)', validators=[Optional(), NumberRange(min=0)], default=0)
+    max_clients = IntegerField('Max Clients (0 = unlimited)', validators=[Optional(), NumberRange(min=0)], default=0)
     features = TextAreaField('Features', validators=[DataRequired()])
+    is_active = BooleanField('Active', default=True)
     submit = SubmitField('Save')
 
 
 class SubscriptionForm(FlaskForm):
-    """Form for managing subscriptions"""
+    """Form for managing subscriptions - matches the real Subscription model:
+    a subscription belongs to a User (an ELIZA account holder paying for the
+    app), not a Client (that user's own customer) - the two were mixed up in
+    the original version of this form. There's no status/cancellation_reason
+    column; "status" here is a UI-only choice mapped to is_active/is_trial
+    in the route handler."""
     subscription_id = HiddenField('Subscription ID')
-    client_id = SelectField('Client', coerce=int, validators=[DataRequired()])
+    user_id = SelectField('User', coerce=int, validators=[DataRequired()])
     plan_id = SelectField('Plan', coerce=int, validators=[DataRequired()])
     start_date = DateField('Start Date', validators=[DataRequired()], format='%Y-%m-%d')
     end_date = DateField('End Date', validators=[DataRequired()], format='%Y-%m-%d')
+    billing_cycle = SelectField('Billing Cycle', choices=[('monthly', 'Monthly'), ('yearly', 'Yearly')], validators=[DataRequired()])
     status = SelectField('Status', choices=[
         ('active', 'Active'),
-        ('pending', 'Pending'),
-        ('expired', 'Expired'),
-        ('cancelled', 'Cancelled'),
-        ('trial', 'Free Trial')
+        ('trial', 'Free Trial'),
+        ('inactive', 'Inactive/Cancelled'),
     ], validators=[DataRequired()])
-    cancellation_reason = TextAreaField('Cancellation Reason', validators=[Optional()])
     submit = SubmitField('Save')
 
     def validate_end_date(self, end_date):

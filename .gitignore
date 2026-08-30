@@ -18,3 +18,6 @@ uploads/
 .DS_Store
 .vscode/
 .idea/
+
+# Local debugging screenshots (not part of the app)
+/isssues/

@@ -5,25 +5,36 @@
 {% block content %}
 <div class="container mt-4">
     <h1 class="mb-4">User Management</h1>
-    
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
     <div class="row">
         <div class="col-md-3">
             <div class="list-group">
-                <a href="{{ url_for('admin_dashboard') }}" class="list-group-item list-group-item-action">
+                <a href="{{ url_for('admin.dashboard') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-speedometer2 me-2"></i> Dashboard
                 </a>
-                <a href="{{ url_for('admin_users') }}" class="list-group-item list-group-item-action active">
+                <a href="{{ url_for('admin.users') }}" class="list-group-item list-group-item-action active">
                     <i class="bi bi-people me-2"></i> User Management
                 </a>
-                <a href="{{ url_for('admin_subscriptions') }}" class="list-group-item list-group-item-action">
+                <a href="{{ url_for('admin.subscriptions') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-credit-card me-2"></i> Subscriptions
                 </a>
-                <a href="{{ url_for('admin_system') }}" class="list-group-item list-group-item-action">
+                <a href="{{ url_for('admin.system') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-gear me-2"></i> System Settings
                 </a>
             </div>
         </div>
-        
+
         <div class="col-md-9">
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -38,10 +49,10 @@
                             <thead>
                                 <tr>
                                     <th>ID</th>
+                                    <th>Name</th>
                                     <th>Username</th>
                                     <th>Email</th>
                                     <th>Role</th>
-                                    <th>Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -49,32 +60,30 @@
                                 {% for user in users %}
                                 <tr>
                                     <td>{{ user.id }}</td>
+                                    <td>{{ user.get_full_name() }}</td>
                                     <td>{{ user.username }}</td>
                                     <td>{{ user.email }}</td>
                                     <td>
-                                        <span class="badge {% if user.role == 'admin' %}bg-danger{% elif user.role == 'manager' %}bg-warning{% else %}bg-info{% endif %}">
-                                            {{ user.role|title }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span class="badge {% if user.is_active %}bg-success{% else %}bg-secondary{% endif %}">
-                                            {% if user.is_active %}Active{% else %}Inactive{% endif %}
+                                        <span class="badge {% if user.role.name == 'ADMIN' %}bg-danger{% elif user.role.name == 'PROJECT_MANAGER' %}bg-warning{% else %}bg-info{% endif %}">
+                                            {{ user.role.value|title }}
                                         </span>
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button type="button" class="btn btn-outline-primary" 
-                                                    data-bs-toggle="modal" 
-                                                    data-bs-target="#editUserModal" 
+                                            <button type="button" class="btn btn-outline-primary"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#editUserModal"
                                                     data-user-id="{{ user.id }}"
                                                     data-user-username="{{ user.username }}"
                                                     data-user-email="{{ user.email }}"
-                                                    data-user-role="{{ user.role }}"
-                                                    data-user-active="{{ user.is_active }}">
+                                                    data-user-first-name="{{ user.first_name }}"
+                                                    data-user-last-name="{{ user.last_name }}"
+                                                    data-user-phone="{{ user.phone or '' }}"
+                                                    data-user-role="{{ user.role.name }}">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
-                                            <button type="button" class="btn btn-outline-danger" 
-                                                    data-bs-toggle="modal" 
+                                            <button type="button" class="btn btn-outline-danger"
+                                                    data-bs-toggle="modal"
                                                     data-bs-target="#deleteUserModal"
                                                     data-user-id="{{ user.id }}"
                                                     data-user-username="{{ user.username }}">
@@ -101,13 +110,23 @@
 <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form action="{{ url_for('admin_add_user') }}" method="post">
+            <form action="{{ url_for('admin.add_user') }}" method="post">
                 {{ add_form.csrf_token }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="addUserModalLabel">Add New User</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="first_name" class="form-label">First Name</label>
+                            {{ add_form.first_name(class="form-control", placeholder="First name") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="last_name" class="form-label">Last Name</label>
+                            {{ add_form.last_name(class="form-control", placeholder="Last name") }}
+                        </div>
+                    </div>
                     <div class="mb-3">
                         <label for="username" class="form-label">Username</label>
                         {{ add_form.username(class="form-control", placeholder="Enter username") }}
@@ -115,6 +134,10 @@
                     <div class="mb-3">
                         <label for="email" class="form-label">Email</label>
                         {{ add_form.email(class="form-control", placeholder="Enter email") }}
+                    </div>
+                    <div class="mb-3">
+                        <label for="phone" class="form-label">Phone</label>
+                        {{ add_form.phone(class="form-control", placeholder="Optional") }}
                     </div>
                     <div class="mb-3">
                         <label for="password" class="form-label">Password</label>
@@ -138,7 +161,7 @@
 <div class="modal fade" id="editUserModal" tabindex="-1" aria-labelledby="editUserModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form action="{{ url_for('admin_edit_user') }}" method="post">
+            <form action="{{ url_for('admin.edit_user') }}" method="post">
                 {{ edit_form.csrf_token }}
                 {{ edit_form.user_id }}
                 <div class="modal-header">
@@ -146,6 +169,16 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="first_name" class="form-label">First Name</label>
+                            {{ edit_form.first_name(class="form-control") }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="last_name" class="form-label">Last Name</label>
+                            {{ edit_form.last_name(class="form-control") }}
+                        </div>
+                    </div>
                     <div class="mb-3">
                         <label for="username" class="form-label">Username</label>
                         {{ edit_form.username(class="form-control") }}
@@ -155,16 +188,16 @@
                         {{ edit_form.email(class="form-control") }}
                     </div>
                     <div class="mb-3">
+                        <label for="phone" class="form-label">Phone</label>
+                        {{ edit_form.phone(class="form-control") }}
+                    </div>
+                    <div class="mb-3">
                         <label for="new_password" class="form-label">New Password (leave blank to keep current)</label>
                         {{ edit_form.new_password(class="form-control", placeholder="Enter new password") }}
                     </div>
                     <div class="mb-3">
                         <label for="role" class="form-label">Role</label>
                         {{ edit_form.role(class="form-select") }}
-                    </div>
-                    <div class="mb-3 form-check">
-                        {{ edit_form.is_active(class="form-check-input") }}
-                        <label class="form-check-label" for="is_active">Active</label>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -180,7 +213,7 @@
 <div class="modal fade" id="deleteUserModal" tabindex="-1" aria-labelledby="deleteUserModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form action="{{ url_for('admin_delete_user') }}" method="post">
+            <form action="{{ url_for('admin.delete_user') }}" method="post">
                 {{ delete_form.csrf_token }}
                 {{ delete_form.user_id }}
                 <div class="modal-header">
@@ -212,23 +245,21 @@
                 const userId = button.getAttribute('data-user-id');
                 const username = button.getAttribute('data-user-username');
                 const email = button.getAttribute('data-user-email');
+                const firstName = button.getAttribute('data-user-first-name');
+                const lastName = button.getAttribute('data-user-last-name');
+                const phone = button.getAttribute('data-user-phone');
                 const role = button.getAttribute('data-user-role');
-                const isActive = button.getAttribute('data-user-active') === 'True';
-                
-                const userIdInput = editUserModal.querySelector('input[name="user_id"]');
-                const usernameInput = editUserModal.querySelector('input[name="username"]');
-                const emailInput = editUserModal.querySelector('input[name="email"]');
-                const roleSelect = editUserModal.querySelector('select[name="role"]');
-                const isActiveCheckbox = editUserModal.querySelector('input[name="is_active"]');
-                
-                userIdInput.value = userId;
-                usernameInput.value = username;
-                emailInput.value = email;
-                roleSelect.value = role;
-                isActiveCheckbox.checked = isActive;
+
+                editUserModal.querySelector('input[name="user_id"]').value = userId;
+                editUserModal.querySelector('input[name="username"]').value = username;
+                editUserModal.querySelector('input[name="email"]').value = email;
+                editUserModal.querySelector('input[name="first_name"]').value = firstName;
+                editUserModal.querySelector('input[name="last_name"]').value = lastName;
+                editUserModal.querySelector('input[name="phone"]').value = phone;
+                editUserModal.querySelector('select[name="role"]').value = role;
             });
         }
-        
+
         // Delete User Modal
         const deleteUserModal = document.getElementById('deleteUserModal');
         if (deleteUserModal) {
@@ -236,10 +267,10 @@
                 const button = event.relatedTarget;
                 const userId = button.getAttribute('data-user-id');
                 const username = button.getAttribute('data-user-username');
-                
+
                 const userIdInput = deleteUserModal.querySelector('input[name="user_id"]');
                 const usernameSpan = deleteUserModal.querySelector('#deleteUsername');
-                
+
                 userIdInput.value = userId;
                 usernameSpan.textContent = username;
             });

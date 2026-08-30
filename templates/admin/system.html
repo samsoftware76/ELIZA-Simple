@@ -5,20 +5,31 @@
 {% block content %}
 <div class="container mt-4">
     <h1 class="mb-4">System Settings</h1>
-    
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
     <div class="row">
         <div class="col-md-3">
             <div class="list-group">
-                <a href="{{ url_for('admin_dashboard') }}" class="list-group-item list-group-item-action">
+                <a href="{{ url_for('admin.dashboard') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-speedometer2 me-2"></i> Dashboard
                 </a>
-                <a href="{{ url_for('admin_users') }}" class="list-group-item list-group-item-action">
+                <a href="{{ url_for('admin.users') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-people me-2"></i> User Management
                 </a>
-                <a href="{{ url_for('admin_subscriptions') }}" class="list-group-item list-group-item-action">
+                <a href="{{ url_for('admin.subscriptions') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-credit-card me-2"></i> Subscriptions
                 </a>
-                <a href="{{ url_for('admin_system') }}" class="list-group-item list-group-item-action active">
+                <a href="{{ url_for('admin.system') }}" class="list-group-item list-group-item-action active">
                     <i class="bi bi-gear me-2"></i> System Settings
                 </a>
             </div>
@@ -30,7 +41,7 @@
                     <h5 class="mb-0">Email Settings</h5>
                 </div>
                 <div class="card-body">
-                    <form action="{{ url_for('admin_update_email_settings') }}" method="post">
+                    <form action="{{ url_for('admin.update_email_settings') }}" method="post">
                         {{ email_form.csrf_token }}
                         <div class="mb-3">
                             <label for="mail_server" class="form-label">Mail Server</label>
@@ -75,7 +86,7 @@
                     <h5 class="mb-0">PesaPal Integration</h5>
                 </div>
                 <div class="card-body">
-                    <form action="{{ url_for('admin_update_pesapal_settings') }}" method="post">
+                    <form action="{{ url_for('admin.update_pesapal_settings') }}" method="post">
                         {{ pesapal_form.csrf_token }}
                         <div class="mb-3">
                             <label for="pesapal_consumer_key" class="form-label">Consumer Key</label>
@@ -109,7 +120,7 @@
                     <h5 class="mb-0">Application Settings</h5>
                 </div>
                 <div class="card-body">
-                    <form action="{{ url_for('admin_update_app_settings') }}" method="post">
+                    <form action="{{ url_for('admin.update_app_settings') }}" method="post">
                         {{ app_form.csrf_token }}
                         <div class="mb-3">
                             <label for="app_name" class="form-label">Application Name</label>
@@ -147,7 +158,8 @@
                                 <div class="card-body">
                                     <h6 class="card-title">Database Backup</h6>
                                     <p class="card-text">Create a backup of the application database.</p>
-                                    <form action="{{ url_for('admin_backup_database') }}" method="post">
+                                    <form action="{{ url_for('admin.backup_database') }}" method="post">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-primary">Create Backup</button>
                                     </form>
                                 </div>
@@ -159,7 +171,8 @@
                                 <div class="card-body">
                                     <h6 class="card-title">Clear Cache</h6>
                                     <p class="card-text">Clear the application cache to free up memory.</p>
-                                    <form action="{{ url_for('admin_clear_cache') }}" method="post">
+                                    <form action="{{ url_for('admin.clear_cache') }}" method="post">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-warning">Clear Cache</button>
                                     </form>
                                 </div>
