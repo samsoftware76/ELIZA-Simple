@@ -85,7 +85,7 @@ csrf = CSRFProtect(app)
 
 # Import and register blueprints
 from api.subscription import subscription_bp
-from api.email import email_bp
+from api.email_routes import email_bp
 from api.admin import admin_bp
 
 app.register_blueprint(subscription_bp)
