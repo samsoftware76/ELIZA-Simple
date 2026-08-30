@@ -9,13 +9,15 @@ Deployed on Vercel with a Neon (PostgreSQL) database.
 - **Client management** — create, view, edit, delete clients
 - **Project management** — create, view, edit, delete projects; assign/remove team members
 - **Task management** — create, view, edit, delete tasks; comments on tasks; time tracking (start/stop/manual entry) per task
+- **Quotes** — create quotes with line items, send to a client, client accepts/declines via a tokenized no-login portal link, convert an accepted quote into a draft invoice
+- **Invoices** — create invoices with line items (or from a converted quote), send to a client, client pays via **PesaPal** through the same portal link, or mark paid manually for cash/bank-transfer payments
+- **Client portal** (`/portal/quote/<token>`, `/portal/invoice/<token>`) — no login required; the client reaches it via an emailed, unguessable link. Payment confirmation is looked up by that link's own token, not by session, so it works even if the client completes payment on a different device
 - **Reports & analytics** — project status, task distribution, time tracking, project timeline, overdue tasks; each report can be exported (chart images rendered with matplotlib, data via pandas)
 - **Subscriptions & billing** — subscription plans, trial sign-up, payment via **PesaPal**, payment callback handling, cancel subscription, subscription status
-- **Email** — bulk email sending, unsubscribe, automatic notifications for task assignment, task updates, and task comments
+- **Email** — bulk email sending, unsubscribe, automatic notifications for task assignment/updates/comments, quote/invoice delivery, and staff notification when a client responds to a quote
 - **Admin panel** — admin dashboard, user management (add/edit/delete), subscription plan management, system settings
 - **CSRF protection** on all forms (Flask-WTF)
-
-> `security.py` also implements HTTPS-forcing security headers via Flask-Talisman (CSP, HSTS, secure cookies, clickjacking/MIME-sniffing protection), but it isn't wired into `api/index.py` yet — worth enabling before a public production launch.
+- **Security headers** via Flask-Talisman (`security.py`, wired into `api/index.py`) — CSP, HSTS, secure cookies, clickjacking/MIME-sniffing protection; HTTPS-forcing and secure-cookie behavior only activate when `FLASK_ENV=production` or `VERCEL=1`, so local `http://` dev still works
 
 ## Tech Stack
 
@@ -25,7 +27,7 @@ Deployed on Vercel with a Neon (PostgreSQL) database.
 - **Flask-Login** — session/auth management
 - **Flask-WTF / WTForms** — forms and CSRF protection
 - **Flask-Mail** — transactional and notification email
-- **PesaPal** — payment gateway for subscriptions
+- **PesaPal** — payment gateway for subscriptions and client invoices
 - **pandas / matplotlib** — report data processing and chart generation
 - **PyJWT** — token handling (e.g. password reset)
 - **Vercel** — hosting (`api/index.py` is the serverless entry point)
@@ -40,20 +42,24 @@ ELIZA_App/
 │   ├── subscription.py    # Subscription plan + PesaPal payment routes
 │   ├── payment.py         # PesaPal integration
 │   ├── admin.py           # Admin panel routes
-│   └── email.py           # Bulk email + unsubscribe routes
+│   ├── email_routes.py    # Bulk email + unsubscribe routes
+│   ├── billing.py         # Staff-facing quote/invoice CRUD, send, convert quote→invoice
+│   └── portal.py          # Public client portal: view/accept/decline quotes, view/pay invoices
 ├── models/
 │   ├── models.py          # User, Client, Project, Task, Comment, TimeEntry, ProjectMember, ActivityLog
-│   └── subscription.py    # Subscription, SubscriptionPlan, Payment
+│   ├── subscription.py    # Subscription, SubscriptionPlan, Payment
+│   └── billing.py         # Quote, QuoteItem, Invoice, InvoiceItem (each with a public_token for the portal)
 ├── services/               # Business logic services
 ├── utils/
 │   ├── db_utils.py        # DB pool config, retry/safe query helpers
 │   └── email_utils.py     # Email sending + notification templates
 ├── forms.py                # WTForms form definitions
 ├── filters.py               # Custom Jinja filters
-├── security.py              # Talisman security headers (not yet wired in)
+├── security.py              # Talisman security headers, wired into api/index.py
 ├── config.py                 # App configuration
 ├── migrations/               # Manual DB migration scripts
-├── templates/                # Jinja templates (auth, clients, projects, tasks, reports, subscription, admin, emails)
+├── templates/                # Jinja templates (auth, clients, projects, tasks, quotes, invoices, reports, subscription, admin, emails)
+│   └── portal/                # Client-facing portal templates (separate branded layout, no internal nav/login)
 ├── static/                    # CSS, images, robots.txt, sitemap.xml
 ├── vercel.json                 # Vercel build/routing config
 └── requirements.txt
@@ -116,5 +122,6 @@ ELIZA_App/
 
 ## Known Gaps
 
-- `security.py`'s Talisman security headers are written but not yet applied in `api/index.py`.
 - No automated test suite yet.
+- No PDF export or e-signature for quotes/invoices — the client portal is web-only.
+- No automatic invoice reminders for approaching/passed due dates (currently manual re-send).
