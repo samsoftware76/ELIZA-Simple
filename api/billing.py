@@ -13,6 +13,7 @@ from models.models import Client, Project
 from models.billing import Quote, QuoteItem, Invoice, InvoiceItem, QuoteStatus, InvoiceStatus
 from forms import QuoteForm, InvoiceForm
 from utils.email_utils import send_quote_email, send_invoice_email
+from utils.document_print import build_print_context
 
 billing_bp = Blueprint('billing', __name__)
 
@@ -102,6 +103,14 @@ def quote_detail(quote_id):
     quote = Quote.query.get_or_404(quote_id)
     portal_url = url_for('portal.view_quote', token=quote.public_token, _external=True)
     return render_template('quotes/detail.html', quote=quote, portal_url=portal_url)
+
+
+@billing_bp.route('/quotes/<int:quote_id>/print')
+@login_required
+def quote_print(quote_id):
+    """Standalone printable/PDF view of a quote (staff view)"""
+    quote = Quote.query.get_or_404(quote_id)
+    return render_template('print/document.html', **build_print_context(quote, 'Quote'))
 
 
 @billing_bp.route('/quotes/<int:quote_id>/edit', methods=['GET', 'POST'])
@@ -289,6 +298,14 @@ def invoice_detail(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     portal_url = url_for('portal.view_invoice', token=invoice.public_token, _external=True)
     return render_template('invoices/detail.html', invoice=invoice, portal_url=portal_url)
+
+
+@billing_bp.route('/invoices/<int:invoice_id>/print')
+@login_required
+def invoice_print(invoice_id):
+    """Standalone printable/PDF view of an invoice (staff view)"""
+    invoice = Invoice.query.get_or_404(invoice_id)
+    return render_template('print/document.html', **build_print_context(invoice, 'Invoice'))
 
 
 @billing_bp.route('/invoices/<int:invoice_id>/edit', methods=['GET', 'POST'])

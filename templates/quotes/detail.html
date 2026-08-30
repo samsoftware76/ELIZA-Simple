@@ -49,6 +49,7 @@
                     <button type="submit" class="btn btn-success"><i class="fas fa-file-invoice-dollar"></i> Convert to Invoice</button>
                 </form>
             {% endif %}
+            <a href="{{ url_for('billing.quote_print', quote_id=quote.id) }}" class="btn btn-outline-secondary" target="_blank"><i class="fas fa-file-pdf"></i> Print / Download PDF</a>
             <a href="{{ url_for('billing.quote_delete', quote_id=quote.id) }}" class="btn btn-outline-danger"
                onclick="return confirm('Delete this quote? This cannot be undone.')"><i class="fas fa-trash"></i> Delete</a>
         </div>

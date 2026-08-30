@@ -51,6 +51,7 @@
                     <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Mark as Paid</button>
                 </form>
             {% endif %}
+            <a href="{{ url_for('billing.invoice_print', invoice_id=invoice.id) }}" class="btn btn-outline-secondary" target="_blank"><i class="fas fa-file-pdf"></i> Print / Download PDF</a>
             <a href="{{ url_for('billing.invoice_delete', invoice_id=invoice.id) }}" class="btn btn-outline-danger"
                onclick="return confirm('Delete this invoice? This cannot be undone.')"><i class="fas fa-trash"></i> Delete</a>
         </div>

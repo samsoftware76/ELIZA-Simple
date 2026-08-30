@@ -17,6 +17,7 @@ from models import db
 from models.billing import Quote, Invoice, QuoteStatus, InvoiceStatus
 from api.payment import PesaPalPayment
 from utils.email_utils import send_quote_response_notification
+from utils.document_print import build_print_context
 
 portal_bp = Blueprint('portal', __name__, url_prefix='/portal')
 
@@ -50,6 +51,13 @@ def view_quote(token):
     """Client-facing quote view: accept or decline"""
     quote = Quote.query.filter_by(public_token=token).first_or_404()
     return render_template('portal/quote.html', quote=quote, **_brand_context(quote.created_by))
+
+
+@portal_bp.route('/quote/<token>/print')
+def print_quote(token):
+    """Standalone printable/PDF view of a quote (client view, no login required)"""
+    quote = Quote.query.filter_by(public_token=token).first_or_404()
+    return render_template('print/document.html', **build_print_context(quote, 'Quote'))
 
 
 @portal_bp.route('/quote/<token>/accept', methods=['POST'])
@@ -108,6 +116,13 @@ def view_invoice(token):
     pesapal_configured = bool(pesapal.consumer_key and pesapal.consumer_secret)
     return render_template('portal/invoice.html', invoice=invoice, pesapal_configured=pesapal_configured,
                             **_brand_context(invoice.created_by))
+
+
+@portal_bp.route('/invoice/<token>/print')
+def print_invoice(token):
+    """Standalone printable/PDF view of an invoice (client view, no login required)"""
+    invoice = Invoice.query.filter_by(public_token=token).first_or_404()
+    return render_template('print/document.html', **build_print_context(invoice, 'Invoice'))
 
 
 @portal_bp.route('/invoice/<token>/pay', methods=['POST'])

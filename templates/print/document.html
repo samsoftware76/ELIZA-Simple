@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ doc_type }} {{ doc_number }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #2952e3;
+            --ink: #1a1d29;
+            --muted: #6b7280;
+            --line: #e5e7eb;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, Segoe UI, Arial, sans-serif;
+            color: var(--ink);
+            margin: 0;
+            background: #f4f6f9;
+        }
+        .toolbar {
+            background: #212529;
+            padding: 14px 0;
+            text-align: center;
+        }
+        .toolbar button {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .toolbar button:hover { background: #1e3fc4; }
+        .toolbar .hint { color: #aab; font-size: 12px; margin-top: 6px; }
+
+        .sheet {
+            max-width: 800px;
+            margin: 32px auto;
+            background: #fff;
+            padding: 56px 64px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+            border-radius: 4px;
+        }
+
+        .doc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 3px solid var(--accent);
+            padding-bottom: 24px;
+            margin-bottom: 32px;
+        }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand img { height: 44px; }
+        .brand-name { font-size: 22px; font-weight: 700; }
+        .doc-type {
+            text-align: right;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .doc-number { text-align: right; color: var(--muted); font-size: 14px; margin-top: 2px; }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 32px;
+            margin-bottom: 36px;
+        }
+        .meta-block h6 {
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0 0 6px;
+            font-weight: 600;
+        }
+        .meta-block .name { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
+        .meta-block .sub { color: var(--muted); font-size: 13px; line-height: 1.5; }
+        .dates { text-align: right; }
+        .dates div { margin-bottom: 8px; }
+        .dates .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .dates .value { font-weight: 600; font-size: 14px; }
+
+        .status-pill {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-paid, .status-accepted { background: #dcfce7; color: #166534; }
+        .status-sent { background: #fef3c7; color: #92400e; }
+        .status-declined, .status-cancelled { background: #fee2e2; color: #991b1b; }
+
+        table.items { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+        table.items th {
+            text-align: left;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--muted);
+            border-bottom: 2px solid var(--line);
+            padding: 10px 8px;
+        }
+        table.items td {
+            padding: 12px 8px;
+            border-bottom: 1px solid var(--line);
+            font-size: 14px;
+        }
+        table.items th.num, table.items td.num { text-align: right; }
+
+        .totals { display: flex; justify-content: flex-end; margin-bottom: 32px; }
+        .totals table { width: 280px; }
+        .totals td { padding: 6px 8px; font-size: 14px; }
+        .totals td.label { color: var(--muted); }
+        .totals td.num { text-align: right; }
+        .totals tr.grand td { border-top: 2px solid var(--ink); font-weight: 700; font-size: 18px; padding-top: 12px; }
+        .totals tr.grand td.num { color: var(--accent); }
+
+        .notes-box {
+            background: #f9fafb;
+            border-left: 3px solid var(--accent);
+            padding: 16px 20px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #374151;
+            white-space: pre-wrap;
+            margin-bottom: 24px;
+        }
+        .notes-box h6 {
+            margin: 0 0 8px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--muted);
+        }
+
+        .doc-footer {
+            text-align: center;
+            color: var(--muted);
+            font-size: 12px;
+            padding-top: 24px;
+            border-top: 1px solid var(--line);
+        }
+
+        @media print {
+            body { background: #fff; }
+            .toolbar { display: none; }
+            .sheet { box-shadow: none; margin: 0; padding: 0.4in; max-width: 100%; border-radius: 0; }
+            @page { margin: 0.5in; }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button onclick="window.print()">Download PDF / Print</button>
+        <div class="hint">Use your browser's "Save as PDF" option in the print dialog</div>
+    </div>
+
+    <div class="sheet">
+        <div class="doc-header">
+            <div class="brand">
+                {% if brand_logo_url %}<img src="{{ brand_logo_url }}" alt="{{ brand_name }}">{% endif %}
+                <span class="brand-name">{{ brand_name }}</span>
+            </div>
+            <div>
+                <div class="doc-type">{{ doc_type }}</div>
+                <div class="doc-number">{{ doc_number }}</div>
+            </div>
+        </div>
+
+        <div class="meta-row">
+            <div class="meta-block">
+                <h6>From</h6>
+                <div class="name">{{ brand_name }}</div>
+                <div class="sub">{{ from_name }}{% if from_email %}<br>{{ from_email }}{% endif %}{% if from_phone %}<br>{{ from_phone }}{% endif %}</div>
+            </div>
+            <div class="meta-block">
+                <h6>{{ 'Prepared For' if doc_type == 'Quote' else 'Billed To' }}</h6>
+                <div class="name">{{ client_name }}</div>
+                <div class="sub">{% if client_contact %}{{ client_contact }}<br>{% endif %}{% if client_email %}{{ client_email }}<br>{% endif %}{% if client_phone %}{{ client_phone }}{% endif %}</div>
+            </div>
+            <div class="dates">
+                <div><span class="label">Date</span><br><span class="value">{{ issue_date }}</span></div>
+                {% if due_date %}<div><span class="label">{{ 'Valid Until' if doc_type == 'Quote' else 'Due Date' }}</span><br><span class="value">{{ due_date }}</span></div>{% endif %}
+                <div><span class="status-pill status-{{ status }}">{{ status_label }}</span></div>
+            </div>
+        </div>
+
+        {% if title %}<h3 style="margin-bottom: 20px;">{{ title }}</h3>{% endif %}
+
+        <table class="items">
+            <thead>
+                <tr><th>Description</th><th class="num">Qty</th><th class="num">Unit Price</th><th class="num">Amount</th></tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.description }}</td>
+                    <td class="num">{{ item.quantity }}</td>
+                    <td class="num">{{ '%.2f'|format(item.unit_price) }}</td>
+                    <td class="num">{{ '%.2f'|format(item.total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="totals">
+            <table>
+                <tr><td class="label">Subtotal</td><td class="num">{{ '%.2f'|format(subtotal) }} {{ currency }}</td></tr>
+                {% if tax_rate %}<tr><td class="label">Tax ({{ tax_rate|round(2) }}%)</td><td class="num">{{ '%.2f'|format(tax_amount) }} {{ currency }}</td></tr>{% endif %}
+                <tr class="grand"><td>{{ 'Total' if doc_type == 'Quote' else 'Amount Due' }}</td><td class="num">{{ '%.2f'|format(total) }} {{ currency }}</td></tr>
+            </table>
+        </div>
+
+        {% if notes %}
+        <div class="notes-box">
+            <h6>{{ 'Terms' if doc_type == 'Quote' else 'Notes & Payment Instructions' }}</h6>
+            {{ notes }}
+        </div>
+        {% endif %}
+
+        <div class="doc-footer">
+            {{ brand_name }} &middot; {{ doc_type }} {{ doc_number }}
+        </div>
+    </div>
+</body>
+</html>

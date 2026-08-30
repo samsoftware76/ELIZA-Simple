@@ -31,6 +31,12 @@
         <p class="mb-1"><strong>Prepared for:</strong> {{ quote.client.name }}</p>
         {% if quote.project %}<p class="mb-3"><strong>Project:</strong> {{ quote.project.title }}</p>{% endif %}
 
+        <div class="text-right mb-2">
+            <a href="{{ url_for('portal.print_quote', token=quote.public_token) }}" class="btn btn-sm btn-outline-secondary" target="_blank">
+                <i class="fas fa-file-pdf"></i> Print / Download PDF
+            </a>
+        </div>
+
         <div class="table-responsive mt-4">
             <table class="table">
                 <thead class="table-light">
