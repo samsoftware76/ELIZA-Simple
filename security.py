@@ -21,12 +21,30 @@ def configure_security(app):
         or os.environ.get('VERCEL') == '1'
     )
 
-    # Configure Content Security Policy
+    # Configure Content Security Policy.
+    # Hosts here must match every CDN actually referenced in templates/ -
+    # stackpath.bootstrapcdn.com (Bootstrap) and cdnjs.cloudflare.com
+    # (Font Awesome, used on nearly every page) are the two that matter
+    # most: leaving either out silently breaks the whole app's layout,
+    # since the browser drops the blocked stylesheet/script with no
+    # visible error - only a CSP violation in the browser console.
     csp = {
         'default-src': "'self'",
-        'script-src': ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://code.jquery.com"],
-        'style-src': ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://fonts.googleapis.com"],
-        'font-src': ["'self'", "https://cdn.jsdelivr.net", "https://fonts.gstatic.com"],
+        'script-src': [
+            "'self'", "'unsafe-inline'",
+            "https://cdn.jsdelivr.net", "https://code.jquery.com",
+            "https://stackpath.bootstrapcdn.com", "https://cdnjs.cloudflare.com",
+        ],
+        'style-src': [
+            "'self'", "'unsafe-inline'",
+            "https://cdn.jsdelivr.net", "https://fonts.googleapis.com",
+            "https://stackpath.bootstrapcdn.com", "https://cdnjs.cloudflare.com",
+        ],
+        'font-src': [
+            "'self'",
+            "https://cdn.jsdelivr.net", "https://fonts.gstatic.com",
+            "https://stackpath.bootstrapcdn.com", "https://cdnjs.cloudflare.com",
+        ],
         'img-src': ["'self'", "data:", "https:"],
         'connect-src': ["'self'", "https://pay.pesapal.com"],
         'frame-src': ["'self'", "https://pay.pesapal.com"]
