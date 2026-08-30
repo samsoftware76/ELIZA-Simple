@@ -29,6 +29,7 @@ load_dotenv(dotenv_path)
 from models import db
 from models.models import User, Client, Project, Task, Comment, TimeEntry, ProjectMember, ActivityLog
 from models.subscription import Subscription, SubscriptionPlan
+from models.billing import Quote, QuoteItem, Invoice, InvoiceItem
 
 # Import database utilities for improved connection handling
 from utils.db_utils import configure_db_pool, retry_operation, safe_commit, safe_query
@@ -91,10 +92,14 @@ configure_security(app)
 from api.subscription import subscription_bp
 from api.email_routes import email_bp
 from api.admin import admin_bp
+from api.billing import billing_bp
+from api.portal import portal_bp
 
 app.register_blueprint(subscription_bp)
 app.register_blueprint(email_bp)
 app.register_blueprint(admin_bp, url_prefix='/admin')
+app.register_blueprint(billing_bp)
+app.register_blueprint(portal_bp)
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -280,10 +285,10 @@ def client_create():
         # Log the activity
         activity = ActivityLog(
             user_id=current_user.id,
-            action='created',
+            action_type='created',
             entity_type='client',
             entity_id=client.id,
-            details=f'Created client: {client.name}'
+            description=f'Created client: {client.name}'
         )
         db.session.add(activity)
         db.session.commit()
@@ -314,10 +319,10 @@ def client_edit(client_id):
         # Log the activity
         activity = ActivityLog(
             user_id=current_user.id,
-            action='updated',
+            action_type='updated',
             entity_type='client',
             entity_id=client.id,
-            details=f'Updated client: {client.name}'
+            description=f'Updated client: {client.name}'
         )
         db.session.add(activity)
         db.session.commit()
@@ -342,10 +347,10 @@ def client_delete(client_id):
     # Log the activity before deleting the client
     activity = ActivityLog(
         user_id=current_user.id,
-        action='deleted',
+        action_type='deleted',
         entity_type='client',
         entity_id=client.id,
-        details=f'Deleted client: {client.name}'
+        description=f'Deleted client: {client.name}'
     )
     db.session.add(activity)
     
@@ -393,10 +398,10 @@ def project_create():
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
-                action='created',
+                action_type='created',
                 entity_type='project',
                 entity_id=project.id,
-                details=f'Created project: {project.title}'
+                description=f'Created project: {project.title}'
             )
             db.session.add(activity)
             db.session.commit()
@@ -432,10 +437,10 @@ def project_edit(project_id):
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
-                action='updated',
+                action_type='updated',
                 entity_type='project',
                 entity_id=project.id,
-                details=f'Updated project: {project.title}'
+                description=f'Updated project: {project.title}'
             )
             db.session.add(activity)
             db.session.commit()
@@ -464,10 +469,10 @@ def project_delete(project_id):
         # Log the activity before deleting the project
         activity = ActivityLog(
             user_id=current_user.id,
-            action='deleted',
+            action_type='deleted',
             entity_type='project',
             entity_id=project.id,
-            details=f'Deleted project: {project.title}'
+            description=f'Deleted project: {project.title}'
         )
         db.session.add(activity)
         
@@ -518,10 +523,10 @@ def task_time_start(task_id):
         # Log the activity
         activity = ActivityLog(
             user_id=current_user.id,
-            action='started',
+            action_type='started',
             entity_type='time_entry',
             entity_id=time_entry.id,
-            details=f'Started time tracking for task: {task.title}'
+            description=f'Started time tracking for task: {task.title}'
         )
         db.session.add(activity)
         db.session.commit()
@@ -568,10 +573,10 @@ def task_time_stop(task_id):
         # Log the activity
         activity = ActivityLog(
             user_id=current_user.id,
-            action='stopped',
+            action_type='stopped',
             entity_type='time_entry',
             entity_id=active_entry.id,
-            details=f'Stopped time tracking for task: {task.title}. Duration: {active_entry.duration:.2f} hours'
+            description=f'Stopped time tracking for task: {task.title}. Duration: {active_entry.duration:.2f} hours'
         )
         db.session.add(activity)
         db.session.commit()
@@ -625,10 +630,10 @@ def task_time_add(task_id):
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
-                action='added',
+                action_type='added',
                 entity_type='time_entry',
                 entity_id=time_entry.id,
-                details=f'Added time entry for task: {task.title}. Duration: {time_entry.duration:.2f} hours'
+                description=f'Added time entry for task: {task.title}. Duration: {time_entry.duration:.2f} hours'
             )
             db.session.add(activity)
             db.session.commit()
@@ -657,10 +662,10 @@ def task_delete_comment(task_id, comment_id):
         # Log the activity before deleting the comment
         activity = ActivityLog(
             user_id=current_user.id,
-            action='deleted',
+            action_type='deleted',
             entity_type='comment',
             entity_id=comment.id,
-            details=f'Deleted comment on task: {task.title}'
+            description=f'Deleted comment on task: {task.title}'
         )
         db.session.add(activity)
         
@@ -714,10 +719,10 @@ def project_assign_user(project_id):
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
-                action='assigned',
+                action_type='assigned',
                 entity_type='project',
                 entity_id=project.id,
-                details=f'Added {user.username} to project as {role}'
+                description=f'Added {user.username} to project as {role}'
             )
             db.session.add(activity)
             db.session.commit()
@@ -752,10 +757,10 @@ def project_remove_user(project_id, user_id):
         # Log the activity before removing the team member
         activity = ActivityLog(
             user_id=current_user.id,
-            action='removed',
+            action_type='removed',
             entity_type='project',
             entity_id=project.id,
-            details=f'Removed {user.username} from project (was {team_member.role})'
+            description=f'Removed {user.username} from project (was {team_member.role})'
         )
         db.session.add(activity)
         
@@ -797,10 +802,10 @@ def task_create(project_id):
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
-                action='created',
+                action_type='created',
                 entity_type='task',
                 entity_id=task.id,
-                details=f'Created task: {task.title}'
+                description=f'Created task: {task.title}'
             )
             db.session.add(activity)
             
@@ -808,10 +813,10 @@ def task_create(project_id):
             if task.assignee_id:
                 assignment_activity = ActivityLog(
                     user_id=current_user.id,
-                    action='assigned',
+                    action_type='assigned',
                     entity_type='task',
                     entity_id=task.id,
-                    details=f'Assigned task to {task.assigned_to.username}'
+                    description=f'Assigned task to {task.assigned_to.username}'
                 )
                 db.session.add(assignment_activity)
             
@@ -874,10 +879,10 @@ def task_edit(task_id):
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
-                action='updated',
+                action_type='updated',
                 entity_type='task',
                 entity_id=task.id,
-                details=f'Updated task: {task.title}'
+                description=f'Updated task: {task.title}'
             )
             db.session.add(activity)
             
@@ -886,18 +891,18 @@ def task_edit(task_id):
                 if new_assignee_id:
                     assignment_activity = ActivityLog(
                         user_id=current_user.id,
-                        action='assigned',
+                        action_type='assigned',
                         entity_type='task',
                         entity_id=task.id,
-                        details=f'Assigned task to {task.assigned_to.username}'
+                        description=f'Assigned task to {task.assigned_to.username}'
                     )
                 else:
                     assignment_activity = ActivityLog(
                         user_id=current_user.id,
-                        action='unassigned',
+                        action_type='unassigned',
                         entity_type='task',
                         entity_id=task.id,
-                        details='Unassigned task'
+                        description='Unassigned task'
                     )
                 db.session.add(assignment_activity)
             
@@ -952,10 +957,10 @@ def task_delete(task_id):
         # Log the activity before deleting the task
         activity = ActivityLog(
             user_id=current_user.id,
-            action='deleted',
+            action_type='deleted',
             entity_type='task',
             entity_id=task.id,
-            details=f'Deleted task: {task.title}'
+            description=f'Deleted task: {task.title}'
         )
         db.session.add(activity)
         
@@ -993,10 +998,10 @@ def task_add_comment(task_id):
         # Log the activity
         activity = ActivityLog(
             user_id=current_user.id,
-            action='commented',
+            action_type='commented',
             entity_type='task',
             entity_id=task.id,
-            details=f'Added comment to task: {task.title}'
+            description=f'Added comment to task: {task.title}'
         )
         db.session.add(activity)
         db.session.commit()

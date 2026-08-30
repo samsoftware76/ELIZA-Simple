@@ -220,6 +220,105 @@ ELIZA Project Management System
     # Send email to all recipients
     send_email(subject, recipients, text_body, html_body)
 
+def send_quote_email(quote, portal_url):
+    """
+    Email a client a link to view and respond to a quote via the client portal.
+
+    Args:
+        quote: The Quote object
+        portal_url (str): Fully-qualified tokenized portal link to the quote
+    """
+    if not quote.client.email:
+        logger.warning(f"Cannot send quote {quote.quote_number}: client has no email address")
+        return
+
+    subject = f"[ELIZA] Quote {quote.quote_number}: {quote.title}"
+    recipients = [quote.client.email]
+
+    try:
+        text_body = (
+            f"Hello {quote.client.contact_person},\n\n"
+            f"{quote.created_by.get_full_name()} has sent you a quote: {quote.title}\n"
+            f"Quote number: {quote.quote_number}\n"
+            f"Total: {quote.total:.2f} {quote.currency}\n\n"
+            f"View and respond to this quote here:\n{portal_url}\n\n"
+            f"Thank you,\nELIZA Project Management Team"
+        )
+        html_body = render_template('emails/quote_notification.html', quote=quote, portal_url=portal_url)
+        send_email(subject, recipients, text_body, html_body)
+        logger.info(f"Quote {quote.quote_number} emailed to {quote.client.email}")
+    except Exception as e:
+        logger.error(f"Failed to send quote email for {quote.quote_number}: {str(e)}")
+
+
+def send_invoice_email(invoice, portal_url):
+    """
+    Email a client a link to view and pay an invoice via the client portal.
+
+    Args:
+        invoice: The Invoice object
+        portal_url (str): Fully-qualified tokenized portal link to the invoice
+    """
+    if not invoice.client.email:
+        logger.warning(f"Cannot send invoice {invoice.invoice_number}: client has no email address")
+        return
+
+    subject = f"[ELIZA] Invoice {invoice.invoice_number}: {invoice.title}"
+    recipients = [invoice.client.email]
+
+    try:
+        due = invoice.due_date.strftime('%B %d, %Y') if invoice.due_date else 'on receipt'
+        text_body = (
+            f"Hello {invoice.client.contact_person},\n\n"
+            f"{invoice.created_by.get_full_name()} has sent you an invoice: {invoice.title}\n"
+            f"Invoice number: {invoice.invoice_number}\n"
+            f"Amount due: {invoice.total:.2f} {invoice.currency}\n"
+            f"Due: {due}\n\n"
+            f"View and pay this invoice here:\n{portal_url}\n\n"
+            f"Thank you,\nELIZA Project Management Team"
+        )
+        html_body = render_template('emails/invoice_notification.html', invoice=invoice, portal_url=portal_url)
+        send_email(subject, recipients, text_body, html_body)
+        logger.info(f"Invoice {invoice.invoice_number} emailed to {invoice.client.email}")
+    except Exception as e:
+        logger.error(f"Failed to send invoice email for {invoice.invoice_number}: {str(e)}")
+
+
+def send_quote_response_notification(quote):
+    """
+    Notify the staff member who created a quote that the client has responded to it.
+
+    Args:
+        quote: The Quote object (status already updated to accepted/declined)
+    """
+    if not quote.created_by or not quote.created_by.email:
+        logger.warning(f"Cannot notify quote {quote.quote_number} response: no creator email")
+        return
+
+    accepted = quote.status == 'accepted'
+    subject = f"[ELIZA] Quote {quote.quote_number} {'Accepted' if accepted else 'Declined'} by {quote.client.name}"
+    recipients = [quote.created_by.email]
+
+    try:
+        text_body = (
+            f"Hello {quote.created_by.first_name},\n\n"
+            f"{quote.client.name} has {'accepted' if accepted else 'declined'} quote {quote.quote_number}: {quote.title}\n"
+            + (f"Reason given: {quote.decline_reason}\n" if not accepted and quote.decline_reason else "")
+            + f"\nView it here: {current_app.config['BASE_URL']}/quotes/{quote.id}\n\n"
+            f"Thank you,\nELIZA Project Management System"
+        )
+        html_body = render_template(
+            'emails/quote_response_notification.html',
+            quote=quote,
+            accepted=accepted,
+            base_url=current_app.config['BASE_URL'],
+        )
+        send_email(subject, recipients, text_body, html_body)
+        logger.info(f"Quote {quote.quote_number} response notification sent to {quote.created_by.email}")
+    except Exception as e:
+        logger.error(f"Failed to send quote response notification for {quote.quote_number}: {str(e)}")
+
+
 def send_task_comment_notification(task, comment, commented_by):
     """
     Send an email notification when a comment is added to a task

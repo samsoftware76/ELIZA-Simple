@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Invoices - ELIZA{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Invoices</h1>
+        <a href="{{ url_for('billing.invoice_create') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> New Invoice
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {% if invoices %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Invoice #</th>
+                        <th>Client</th>
+                        <th>Title</th>
+                        <th>Total</th>
+                        <th>Due</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invoice in invoices %}
+                        <tr>
+                            <td><a href="{{ url_for('billing.invoice_detail', invoice_id=invoice.id) }}">{{ invoice.invoice_number }}</a></td>
+                            <td>{{ invoice.client.name }}</td>
+                            <td>{{ invoice.title }}</td>
+                            <td>{{ '%.2f'|format(invoice.total) }} {{ invoice.currency }}</td>
+                            <td>
+                                {% if invoice.due_date %}
+                                    <span class="{% if invoice.is_overdue %}text-danger font-weight-bold{% endif %}">{{ invoice.due_date.strftime('%b %d, %Y') }}</span>
+                                {% else %}
+                                    <span class="text-muted">&mdash;</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge badge-{{ invoice.status|billing_status_badge }}">{{ invoice.status|capitalize }}</span>
+                                {% if invoice.is_overdue %}<span class="badge badge-danger">Overdue</span>{% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('billing.invoice_detail', invoice_id=invoice.id) }}" class="btn btn-sm btn-info" title="View">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% if invoice.status == 'draft' %}
+                                    <a href="{{ url_for('billing.invoice_edit', invoice_id=invoice.id) }}" class="btn btn-sm btn-warning" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    {% endif %}
+                                    <a href="{{ url_for('billing.invoice_delete', invoice_id=invoice.id) }}" class="btn btn-sm btn-danger" title="Delete"
+                                       onclick="return confirm('Are you sure you want to delete this invoice? This action cannot be undone.')">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            <p>No invoices yet. <a href="{{ url_for('billing.invoice_create') }}">Create your first invoice</a> to get started.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

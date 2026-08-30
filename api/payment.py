@@ -24,18 +24,11 @@ print(f"CONSUMER_KEY: {'Set' if PESAPAL_CONSUMER_KEY else 'Not set'}")
 print(f"CONSUMER_SECRET: {'Set' if PESAPAL_CONSUMER_SECRET else 'Not set'}")
 print(f"IPN_ID: {'Set' if PESAPAL_IPN_ID else 'Not set'}")
 
-# Fallback to hardcoded values if environment variables are not set
-if not PESAPAL_CONSUMER_KEY:
-    PESAPAL_CONSUMER_KEY = 'QnXX9TFya0Zy+I+7S5Er5rjp1xwJY8sv'
-    print(f"Using fallback CONSUMER_KEY")
-    
-if not PESAPAL_CONSUMER_SECRET:
-    PESAPAL_CONSUMER_SECRET = 'r7yO64EsF56cmQWEGo04GRrYvvI='
-    print(f"Using fallback CONSUMER_SECRET")
-    
-if not PESAPAL_IPN_ID:
-    PESAPAL_IPN_ID = 'fe052a3e-786b-4c55-9d24-8e28dd3f80b5'
-    print(f"Using fallback IPN_ID")
+# No hardcoded fallback credentials: PesaPal calls will simply fail fast
+# (get_auth_token returns None) until real PESAPAL_* env vars are set.
+if not (PESAPAL_CONSUMER_KEY and PESAPAL_CONSUMER_SECRET and PESAPAL_IPN_ID):
+    print("WARNING: PesaPal is not fully configured. Set PESAPAL_CONSUMER_KEY, "
+          "PESAPAL_CONSUMER_SECRET and PESAPAL_IPN_ID in the environment to enable payments.")
 
 class PesaPalPayment:
     """PesaPal payment integration class"""

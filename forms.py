@@ -152,6 +152,45 @@ class TaskForm(FlaskForm):
         if due_date.data and due_date.data < datetime.now().date():
             raise ValidationError('Due date cannot be in the past.')
 
+CURRENCY_CHOICES = [('USD', 'USD'), ('UGX', 'UGX'), ('EUR', 'EUR'), ('GBP', 'GBP'), ('KES', 'KES')]
+
+
+class QuoteForm(FlaskForm):
+    """Form for creating and editing quotes (line items are handled separately in the view)"""
+    client_id = SelectField('Client', coerce=int, validators=[DataRequired()])
+    project_id = SelectField('Project (optional)', coerce=int, validators=[Optional()])
+    title = StringField('Quote Title', validators=[DataRequired(), Length(max=150)])
+    currency = SelectField('Currency', choices=CURRENCY_CHOICES, validators=[DataRequired()])
+    tax_rate = FloatField('Tax Rate (%)', validators=[Optional(), NumberRange(min=0, max=100)], default=0)
+    valid_until = DateField('Valid Until', validators=[Optional()], format='%Y-%m-%d')
+    notes = TextAreaField('Notes / Terms', validators=[Optional(), Length(max=2000)])
+    submit = SubmitField('Save Quote')
+
+    def __init__(self, *args, **kwargs):
+        super(QuoteForm, self).__init__(*args, **kwargs)
+        self.client_id.choices = [(c.id, c.name) for c in Client.query.order_by(Client.name).all()]
+        self.project_id.choices = [(0, '— No project —')] + \
+            [(p.id, p.title) for p in Project.query.order_by(Project.title).all()]
+
+
+class InvoiceForm(FlaskForm):
+    """Form for creating and editing invoices (line items are handled separately in the view)"""
+    client_id = SelectField('Client', coerce=int, validators=[DataRequired()])
+    project_id = SelectField('Project (optional)', coerce=int, validators=[Optional()])
+    title = StringField('Invoice Title', validators=[DataRequired(), Length(max=150)])
+    currency = SelectField('Currency', choices=CURRENCY_CHOICES, validators=[DataRequired()])
+    tax_rate = FloatField('Tax Rate (%)', validators=[Optional(), NumberRange(min=0, max=100)], default=0)
+    due_date = DateField('Due Date', validators=[Optional()], format='%Y-%m-%d')
+    notes = TextAreaField('Notes / Payment Terms', validators=[Optional(), Length(max=2000)])
+    submit = SubmitField('Save Invoice')
+
+    def __init__(self, *args, **kwargs):
+        super(InvoiceForm, self).__init__(*args, **kwargs)
+        self.client_id.choices = [(c.id, c.name) for c in Client.query.order_by(Client.name).all()]
+        self.project_id.choices = [(0, '— No project —')] + \
+            [(p.id, p.title) for p in Project.query.order_by(Project.title).all()]
+
+
 class ProjectAssignmentForm(FlaskForm):
     """Form for assigning users to a project"""
     project_id = HiddenField('Project ID', validators=[DataRequired()])

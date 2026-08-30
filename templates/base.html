@@ -35,6 +35,12 @@
                         <li class="nav-item">
                             <a class="nav-link{% if request.endpoint == 'all_tasks' or request.endpoint == 'task_detail' or request.endpoint == 'create_task' %} active{% endif %}" href="{{ url_for('all_tasks') }}"><i class="fas fa-tasks mr-1"></i> Tasks</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link{% if request.endpoint and request.endpoint.startswith('billing.quote') %} active{% endif %}" href="{{ url_for('billing.quotes_list') }}"><i class="fas fa-file-alt mr-1"></i> Quotes</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link{% if request.endpoint and request.endpoint.startswith('billing.invoice') %} active{% endif %}" href="{{ url_for('billing.invoices_list') }}"><i class="fas fa-file-invoice-dollar mr-1"></i> Invoices</a>
+                        </li>
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="reportsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                                 <i class="fas fa-chart-bar mr-1"></i> Reports

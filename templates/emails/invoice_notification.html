@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Invoice</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #28a745; color: white; padding: 15px; border-radius: 5px 5px 0 0; }
+        .content { padding: 20px; border: 1px solid #ddd; border-top: none; border-radius: 0 0 5px 5px; }
+        .invoice-info { background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .total { font-size: 20px; font-weight: bold; color: #28a745; }
+        .due-date { color: #dc3545; font-weight: bold; }
+        .footer { margin-top: 30px; font-size: 12px; color: #777; text-align: center; }
+        .button { display: inline-block; background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin-top: 15px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>New Invoice</h2>
+    </div>
+    <div class="content">
+        <p>Hello {{ invoice.client.contact_person }},</p>
+
+        <p>{{ invoice.created_by.get_full_name() }} has sent you an invoice{% if invoice.project %} for <strong>{{ invoice.project.title }}</strong>{% endif %}:</p>
+
+        <div class="invoice-info">
+            <p><strong>Invoice:</strong> {{ invoice.invoice_number }} &mdash; {{ invoice.title }}</p>
+            <p><strong>Amount due:</strong> <span class="total">{{ '%.2f'|format(invoice.total) }} {{ invoice.currency }}</span></p>
+            {% if invoice.due_date %}
+            <p><strong>Due date:</strong> <span class="due-date">{{ invoice.due_date.strftime('%B %d, %Y') }}</span></p>
+            {% endif %}
+        </div>
+
+        <p>You can view the full breakdown and pay securely online:</p>
+
+        <a href="{{ portal_url }}" class="button">View &amp; Pay Invoice</a>
+
+        <p>Thank you,<br>{{ invoice.created_by.get_full_name() }}</p>
+    </div>
+    <div class="footer">
+        <p>This link is unique to you &mdash; please don't share it. If you weren't expecting this invoice, please contact us.</p>
+    </div>
+</body>
+</html>

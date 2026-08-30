@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Invoice {{ invoice.invoice_number }} - ELIZA{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('billing.invoices_list') }}">Invoices</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ invoice.invoice_number }}</li>
+        </ol>
+    </nav>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>{{ invoice.invoice_number }} <span class="badge badge-{{ invoice.status|billing_status_badge }}">{{ invoice.status|capitalize }}</span>
+            {% if invoice.is_overdue %}<span class="badge badge-danger">Overdue</span>{% endif %}</h1>
+            <p class="text-muted mb-0">{{ invoice.title }}</p>
+        </div>
+        <div class="btn-group">
+            {% if invoice.status == 'draft' %}
+                <a href="{{ url_for('billing.invoice_edit', invoice_id=invoice.id) }}" class="btn btn-outline-primary"><i class="fas fa-edit"></i> Edit</a>
+                <form method="POST" action="{{ url_for('billing.invoice_send', invoice_id=invoice.id) }}" class="d-inline"
+                      onsubmit="return confirm('Send this invoice to {{ invoice.client.email or "the client" }}?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send to Client</button>
+                </form>
+            {% elif invoice.status == 'sent' %}
+                <form method="POST" action="{{ url_for('billing.invoice_send', invoice_id=invoice.id) }}" class="d-inline"
+                      onsubmit="return confirm('Re-send this invoice to {{ invoice.client.email or "the client" }}?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-primary"><i class="fas fa-paper-plane"></i> Re-send</button>
+                </form>
+                <form method="POST" action="{{ url_for('billing.invoice_mark_paid', invoice_id=invoice.id) }}" class="d-inline"
+                      onsubmit="return confirm('Mark this invoice as paid manually (e.g. cash or bank transfer received)?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="payment_method" value="manual">
+                    <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Mark as Paid</button>
+                </form>
+            {% endif %}
+            <a href="{{ url_for('billing.invoice_delete', invoice_id=invoice.id) }}" class="btn btn-outline-danger"
+               onclick="return confirm('Delete this invoice? This cannot be undone.')"><i class="fas fa-trash"></i> Delete</a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h5 class="mb-0">Line Items</h5></div>
+                <div class="card-body p-0">
+                    <table class="table mb-0">
+                        <thead class="table-light">
+                            <tr><th>Description</th><th class="text-end">Qty</th><th class="text-end">Unit Price</th><th class="text-end">Total</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for item in invoice.items %}
+                            <tr>
+                                <td>{{ item.description }}</td>
+                                <td class="text-end">{{ item.quantity|round(2) }}</td>
+                                <td class="text-end">{{ '%.2f'|format(item.unit_price) }}</td>
+                                <td class="text-end">{{ '%.2f'|format(item.total) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr><td colspan="3" class="text-end">Subtotal</td><td class="text-end">{{ '%.2f'|format(invoice.subtotal) }}</td></tr>
+                            <tr><td colspan="3" class="text-end">Tax ({{ invoice.tax_rate|round(2) }}%)</td><td class="text-end">{{ '%.2f'|format(invoice.tax_amount) }}</td></tr>
+                            <tr class="font-weight-bold"><td colspan="3" class="text-end">Total</td><td class="text-end">{{ '%.2f'|format(invoice.total) }} {{ invoice.currency }}</td></tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            {% if invoice.notes %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h5 class="mb-0">Notes</h5></div>
+                <div class="card-body"><p class="mb-0">{{ invoice.notes|nl2br|safe }}</p></div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h5 class="mb-0">Details</h5></div>
+                <div class="card-body">
+                    <p><strong>Client:</strong> <a href="{{ url_for('client_detail', client_id=invoice.client.id) }}">{{ invoice.client.name }}</a></p>
+                    {% if invoice.project %}<p><strong>Project:</strong> <a href="{{ url_for('project_detail', project_id=invoice.project.id) }}">{{ invoice.project.title }}</a></p>{% endif %}
+                    {% if invoice.quote %}<p><strong>From quote:</strong> <a href="{{ url_for('billing.quote_detail', quote_id=invoice.quote.id) }}">{{ invoice.quote.quote_number }}</a></p>{% endif %}
+                    <p><strong>Created by:</strong> {{ invoice.created_by.get_full_name() }}</p>
+                    <p><strong>Created:</strong> {{ invoice.created_at.strftime('%b %d, %Y') }}</p>
+                    {% if invoice.sent_at %}<p><strong>Sent:</strong> {{ invoice.sent_at.strftime('%b %d, %Y %H:%M') }}</p>{% endif %}
+                    {% if invoice.due_date %}<p><strong>Due:</strong> {{ invoice.due_date.strftime('%b %d, %Y') }}</p>{% endif %}
+                    {% if invoice.paid_at %}<p><strong>Paid:</strong> {{ invoice.paid_at.strftime('%b %d, %Y %H:%M') }} {% if invoice.payment_method %}({{ invoice.payment_method }}){% endif %}</p>{% endif %}
+                </div>
+            </div>
+
+            {% if invoice.status != 'draft' %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h5 class="mb-0">Client Portal Link</h5></div>
+                <div class="card-body">
+                    <div class="input-group">
+                        <input type="text" class="form-control form-control-sm" id="portal-link" value="{{ portal_url }}" readonly>
+                        <div class="input-group-append">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" onclick="copyPortalLink()"><i class="fas fa-copy"></i></button>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-2">This is the link the client received by email &mdash; share it again if needed.</small>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function copyPortalLink() {
+        var el = document.getElementById('portal-link');
+        el.select();
+        el.setSelectionRange(0, 99999);
+        document.execCommand('copy');
+    }
+</script>
+{% endblock %}

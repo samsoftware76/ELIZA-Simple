@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Quotes - ELIZA{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Quotes</h1>
+        <a href="{{ url_for('billing.quote_create') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> New Quote
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    {% if quotes %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Quote #</th>
+                        <th>Client</th>
+                        <th>Title</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for quote in quotes %}
+                        <tr>
+                            <td><a href="{{ url_for('billing.quote_detail', quote_id=quote.id) }}">{{ quote.quote_number }}</a></td>
+                            <td>{{ quote.client.name }}</td>
+                            <td>{{ quote.title }}</td>
+                            <td>{{ '%.2f'|format(quote.total) }} {{ quote.currency }}</td>
+                            <td>
+                                <span class="badge badge-{{ quote.status|billing_status_badge }}">{{ quote.status|capitalize }}</span>
+                                {% if quote.is_expired %}<span class="badge badge-warning">Expired</span>{% endif %}
+                            </td>
+                            <td>{{ quote.created_at.strftime('%b %d, %Y') }}</td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('billing.quote_detail', quote_id=quote.id) }}" class="btn btn-sm btn-info" title="View">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    {% if quote.status == 'draft' %}
+                                    <a href="{{ url_for('billing.quote_edit', quote_id=quote.id) }}" class="btn btn-sm btn-warning" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    {% endif %}
+                                    <a href="{{ url_for('billing.quote_delete', quote_id=quote.id) }}" class="btn btn-sm btn-danger" title="Delete"
+                                       onclick="return confirm('Are you sure you want to delete this quote? This action cannot be undone.')">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            <p>No quotes yet. <a href="{{ url_for('billing.quote_create') }}">Create your first quote</a> to get started.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
