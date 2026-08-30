@@ -10,3 +10,5 @@ Flask-Mail
 pyjwt
 matplotlib
 pandas
+requests
+Flask-Talisman
