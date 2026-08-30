@@ -2,16 +2,25 @@
 Security configuration for ELIZA Project Management App
 Implements protection against common web vulnerabilities
 """
-from flask import Flask
+import os
 from flask_talisman import Talisman
-from flask_wtf.csrf import CSRFProtect
-import secrets
+
+# CSRF protection is initialized once in api/index.py (CSRFProtect(app)) —
+# not duplicated here to avoid double-registering the before_request hook.
+
 
 def configure_security(app):
-    """Configure security features for the Flask application"""
-    # Initialize CSRF protection
-    csrf = CSRFProtect(app)
-    
+    """Configure security headers (via Flask-Talisman) for the Flask application.
+
+    HTTPS-forcing and secure-cookie behavior only activate in production
+    (FLASK_ENV=production or when running on Vercel), so local development
+    over plain http:// still works.
+    """
+    is_production = (
+        os.environ.get('FLASK_ENV') == 'production'
+        or os.environ.get('VERCEL') == '1'
+    )
+
     # Configure Content Security Policy
     csp = {
         'default-src': "'self'",
@@ -22,17 +31,16 @@ def configure_security(app):
         'connect-src': ["'self'", "https://pay.pesapal.com"],
         'frame-src': ["'self'", "https://pay.pesapal.com"]
     }
-    
+
     # Initialize Talisman (security headers)
-    talisman = Talisman(
+    Talisman(
         app,
         content_security_policy=csp,
         content_security_policy_nonce_in=['script-src', 'style-src'],
-        force_https=True,  # Redirect HTTP to HTTPS
-        strict_transport_security=True,  # Enable HSTS
-        session_cookie_secure=True,  # Cookies only sent over HTTPS
-        session_cookie_httponly=True,  # Prevent JavaScript access to cookies
-        session_cookie_samesite='Lax',  # Prevent CSRF
+        force_https=is_production,  # Redirect HTTP to HTTPS in production only
+        strict_transport_security=is_production,  # Enable HSTS in production only
+        session_cookie_secure=is_production,  # Cookies only sent over HTTPS in production
+        session_cookie_http_only=True,  # Prevent JavaScript access to cookies
         feature_policy={  # Restrict browser features
             'geolocation': "'none'",
             'microphone': "'none'",
@@ -40,7 +48,7 @@ def configure_security(app):
             'payment': "'self'",
         }
     )
-    
+
     # Configure additional security settings
     @app.after_request
     def add_security_headers(response):
@@ -55,16 +63,19 @@ def configure_security(app):
         # Permissions policy (formerly Feature-Policy)
         response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
         return response
-    
+
     # Configure secure session
-    app.config['SESSION_COOKIE_SECURE'] = True
+    app.config['SESSION_COOKIE_SECURE'] = is_production
     app.config['SESSION_COOKIE_HTTPONLY'] = True
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # 1 hour session timeout
-    
-    # Generate a strong secret key if not set
-    if app.config.get('SECRET_KEY') == 'dev-secret-key':
-        app.config['SECRET_KEY'] = secrets.token_hex(32)
-        print("WARNING: Using auto-generated secret key. Set SECRET_KEY in your environment for production.")
-    
+
+    # Warn if still using a placeholder secret key
+    if app.config.get('SECRET_KEY') in (None, 'dev-secret-key', 'default-secret-key-for-dev'):
+        if is_production:
+            raise RuntimeError(
+                "SECRET_KEY is not set. Set a real SECRET_KEY environment variable before deploying to production."
+            )
+        print("WARNING: Using a placeholder SECRET_KEY. Set SECRET_KEY in your environment for production.")
+
     return app

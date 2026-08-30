@@ -83,6 +83,10 @@ mail.init_app(app)
 # Initialize CSRF protection
 csrf = CSRFProtect(app)
 
+# Initialize Talisman security headers (HTTPS/HSTS/secure cookies in production only)
+from security import configure_security
+configure_security(app)
+
 # Import and register blueprints
 from api.subscription import subscription_bp
 from api.email_routes import email_bp
