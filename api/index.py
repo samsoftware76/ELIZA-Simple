@@ -247,7 +247,13 @@ def reset_password_request():
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
         if user:
-            reset_url = url_for('reset_password', token=user.get_reset_token(), _external=True)
+            # Build from app.config['BASE_URL'] rather than url_for(_external=True):
+            # the latter's scheme-guessing produced an https:// link even on the
+            # plain-http local dev server (Talisman sets PREFERRED_URL_SCHEME to
+            # https), which the local server can't actually serve - ERR_SSL_PROTOCOL_ERROR.
+            # BASE_URL is explicit per-environment (see line ~73) and is the same
+            # pattern every other notification email in this app already uses.
+            reset_url = app.config['BASE_URL'].rstrip('/') + url_for('reset_password', token=user.get_reset_token())
             send_password_reset_email(user, reset_url)
         # Same message whether or not the account exists - don't let this
         # route be used to enumerate which emails are registered.
