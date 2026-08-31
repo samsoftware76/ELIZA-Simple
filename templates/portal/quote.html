@@ -76,7 +76,7 @@
                 <i class="fas fa-times"></i> Decline
             </button>
             <form method="POST" action="{{ url_for('portal.accept_quote', token=quote.public_token) }}"
-                  onsubmit="return confirm('Accept this quote for {{ '%.2f'|format(quote.total) }} {{ quote.currency }}?')">
+                  onsubmit="return confirmAndDisable(this, 'Accept this quote for {{ '%.2f'|format(quote.total) }} {{ quote.currency }}?')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Accept Quote</button>
             </form>
@@ -84,7 +84,8 @@
 
         <div class="modal fade" id="declineModal" tabindex="-1" role="dialog">
             <div class="modal-dialog" role="document">
-                <form method="POST" action="{{ url_for('portal.decline_quote', token=quote.public_token) }}">
+                <form method="POST" action="{{ url_for('portal.decline_quote', token=quote.public_token) }}"
+                      onsubmit="return confirmAndDisable(this)">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="modal-content">
                         <div class="modal-header">

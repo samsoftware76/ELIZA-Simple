@@ -112,6 +112,24 @@
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        // Emails (quote/invoice send, password reset, etc.) now send
+        // synchronously and can take 1-2 seconds with no visual feedback,
+        // which reads as "the button is dead" - inviting a second click
+        // that sends a real second email. This confirms, then immediately
+        // disables the button and shows "Sending..." so a second click
+        // is impossible rather than harmless.
+        function confirmAndDisable(form, message) {
+            if (message && !confirm(message)) return false;
+            var btn = form.querySelector('button[type="submit"]');
+            if (btn && !btn.disabled) {
+                btn.disabled = true;
+                btn.dataset.originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+            }
+            return true;
+        }
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -33,14 +33,14 @@
             {% if quote.status == 'draft' %}
                 <a href="{{ url_for('billing.quote_edit', quote_id=quote.id) }}" class="btn btn-outline-primary"><i class="fas fa-edit"></i> Edit</a>
                 <form method="POST" action="{{ url_for('billing.quote_send', quote_id=quote.id) }}" class="d-inline"
-                      onsubmit="return confirm('Send this quote to {{ quote.client.email or "the client" }}?')">
+                      onsubmit="return confirmAndDisable(this, 'Send this quote to {{ quote.client.email or "the client" }}?')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send to Client</button>
                 </form>
             {% elif quote.status == 'sent' %}
                 <a href="{{ url_for('billing.quote_edit', quote_id=quote.id) }}" class="btn btn-outline-primary"><i class="fas fa-edit"></i> Edit</a>
                 <form method="POST" action="{{ url_for('billing.quote_send', quote_id=quote.id) }}" class="d-inline"
-                      onsubmit="return confirm('Re-send this quote to {{ quote.client.email or "the client" }}?')">
+                      onsubmit="return confirmAndDisable(this, 'Re-send this quote to {{ quote.client.email or "the client" }}?')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-primary"><i class="fas fa-paper-plane"></i> Re-send</button>
                 </form>

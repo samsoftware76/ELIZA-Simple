@@ -72,7 +72,8 @@
         {% if invoice.is_payable %}
         <hr class="my-4">
         {% if pesapal_configured %}
-        <form method="POST" action="{{ url_for('portal.pay_invoice', token=invoice.public_token) }}" class="text-right">
+        <form method="POST" action="{{ url_for('portal.pay_invoice', token=invoice.public_token) }}" class="text-right"
+              onsubmit="return confirmAndDisable(this)">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-success btn-lg">
                 <i class="fas fa-lock mr-1"></i> Pay {{ '%.2f'|format(invoice.total) }} {{ invoice.currency }}
