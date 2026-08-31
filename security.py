@@ -46,15 +46,27 @@ def configure_security(app):
             "https://stackpath.bootstrapcdn.com", "https://cdnjs.cloudflare.com",
         ],
         'img-src': ["'self'", "data:", "https:"],
-        'connect-src': ["'self'", "https://pay.pesapal.com"],
+        # cdn.jsdelivr.net/stackpath.bootstrapcdn.com here aren't for the app
+        # itself - they're so the browser's devtools can fetch .map files for
+        # those CDN scripts/styles without a console warning. Harmless either
+        # way; only affects developers with devtools open.
+        'connect-src': ["'self'", "https://pay.pesapal.com", "https://cdn.jsdelivr.net", "https://stackpath.bootstrapcdn.com"],
         'frame-src': ["'self'", "https://pay.pesapal.com"]
     }
 
-    # Initialize Talisman (security headers)
+    # Initialize Talisman (security headers).
+    # nonce_in covers script-src only, not style-src: per the CSP spec, a
+    # nonce in a directive makes the browser ignore 'unsafe-inline' for that
+    # directive entirely. The nonce only ever attaches to <script>/<style>
+    # tags (Talisman rewrites those automatically) - it can't attach to an
+    # inline style="..." attribute on an ordinary element, and this app uses
+    # those throughout. Nonce-ing style-src as well silently broke every
+    # inline style in the app; scripts are the higher-value thing to lock
+    # down with a nonce anyway.
     Talisman(
         app,
         content_security_policy=csp,
-        content_security_policy_nonce_in=['script-src', 'style-src'],
+        content_security_policy_nonce_in=['script-src'],
         force_https=is_production,  # Redirect HTTP to HTTPS in production only
         strict_transport_security=is_production,  # Enable HSTS in production only
         session_cookie_secure=is_production,  # Cookies only sent over HTTPS in production
