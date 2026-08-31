@@ -101,7 +101,7 @@ def quote_create():
 def quote_detail(quote_id):
     """View a quote (staff view)"""
     quote = Quote.query.get_or_404(quote_id)
-    portal_url = url_for('portal.view_quote', token=quote.public_token, _external=True)
+    portal_url = current_app.config['BASE_URL'].rstrip('/') + url_for('portal.view_quote', token=quote.public_token)
     return render_template('quotes/detail.html', quote=quote, portal_url=portal_url)
 
 
@@ -171,7 +171,7 @@ def quote_send(quote_id):
         quote.sent_at = datetime.utcnow()
         db.session.commit()
 
-        portal_url = url_for('portal.view_quote', token=quote.public_token, _external=True)
+        portal_url = current_app.config['BASE_URL'].rstrip('/') + url_for('portal.view_quote', token=quote.public_token)
         send_quote_email(quote, portal_url)
         flash(f'Quote sent to {quote.client.email}.', 'success')
     except Exception as e:
@@ -298,7 +298,7 @@ def invoice_create():
 def invoice_detail(invoice_id):
     """View an invoice (staff view)"""
     invoice = Invoice.query.get_or_404(invoice_id)
-    portal_url = url_for('portal.view_invoice', token=invoice.public_token, _external=True)
+    portal_url = current_app.config['BASE_URL'].rstrip('/') + url_for('portal.view_invoice', token=invoice.public_token)
     return render_template('invoices/detail.html', invoice=invoice, portal_url=portal_url)
 
 
@@ -368,7 +368,7 @@ def invoice_send(invoice_id):
         invoice.sent_at = datetime.utcnow()
         db.session.commit()
 
-        portal_url = url_for('portal.view_invoice', token=invoice.public_token, _external=True)
+        portal_url = current_app.config['BASE_URL'].rstrip('/') + url_for('portal.view_invoice', token=invoice.public_token)
         send_invoice_email(invoice, portal_url)
         flash(f'Invoice sent to {invoice.client.email}.', 'success')
     except Exception as e:

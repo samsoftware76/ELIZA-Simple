@@ -136,7 +136,7 @@ def pay_invoice(token):
 
     client = invoice.client
     first_name, last_name = _split_name(client.contact_person)
-    callback_url = url_for('portal.invoice_payment_callback', token=token, _external=True)
+    callback_url = current_app.config['BASE_URL'].rstrip('/') + url_for('portal.invoice_payment_callback', token=token)
 
     try:
         payment_data = pesapal.create_payment_order(
