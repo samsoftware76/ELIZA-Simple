@@ -50,7 +50,7 @@ app = Flask(__name__, template_folder='../templates', static_folder='../static')
 
 # Configure the SQLAlchemy part of the app
 DATABASE_URL = os.getenv('DATABASE_URL')
-print(f"DEBUG - Database URL from env: {DATABASE_URL}")
+print(f"DEBUG - Database URL from env: {'set' if DATABASE_URL else 'not set'}")
 print(f"DEBUG - .env file path: {dotenv_path}")
 print(f"DEBUG - .env file exists: {os.path.exists(dotenv_path)}")
 

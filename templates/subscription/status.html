@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Subscription Status{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">Subscription Status</h3>
+                </div>
+                <div class="card-body">
+                    {% if subscription %}
+                        <div class="mb-4">
+                            <table class="table">
+                                <tr>
+                                    <th>Plan:</th>
+                                    <td>{{ subscription.plan.name }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Status:</th>
+                                    <td>
+                                        {% if subscription.is_trial %}
+                                            <span class="badge badge-info">Trial</span>
+                                        {% elif subscription.is_active %}
+                                            <span class="badge badge-success">Active</span>
+                                        {% else %}
+                                            <span class="badge badge-secondary">Cancelled</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Billing Cycle:</th>
+                                    <td>{{ subscription.billing_cycle|capitalize }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Start Date:</th>
+                                    <td>{{ subscription.start_date.strftime('%B %d, %Y') }}</td>
+                                </tr>
+                                {% if subscription.is_trial %}
+                                <tr>
+                                    <th>Trial End Date:</th>
+                                    <td>{{ subscription.get_trial_end_date().strftime('%B %d, %Y') }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Days Left in Trial:</th>
+                                    <td>{{ subscription.days_left_in_trial() }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <th>Renews / Expires:</th>
+                                    <td>{{ subscription.end_date.strftime('%B %d, %Y') if subscription.end_date else 'N/A' }}</td>
+                                </tr>
+                                {% endif %}
+                                <tr>
+                                    <th>Features:</th>
+                                    <td>{{ subscription.plan.features }}</td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex">
+                            {% if subscription.is_trial %}
+                                <a href="{{ url_for('subscription.trial_payment', subscription_id=subscription.id) }}" class="btn btn-primary">Complete Payment</a>
+                            {% endif %}
+                            {% if subscription.is_active %}
+                                <a href="{{ url_for('subscription.cancel_trial', subscription_id=subscription.id) }}" class="btn btn-outline-danger">Cancel Subscription</a>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <p class="mb-0">You don't have an active subscription.</p>
+                        </div>
+                        <a href="{{ url_for('subscription.plans') }}" class="btn btn-primary">View Plans</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
