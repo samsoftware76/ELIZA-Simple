@@ -526,7 +526,8 @@ def task_time_start(task_id):
     
     try:
         db.session.add(time_entry)
-        
+        db.session.commit()  # Commit first so time_entry.id is populated for the activity log below
+
         # Log the activity
         activity = ActivityLog(
             user_id=current_user.id,
@@ -537,7 +538,7 @@ def task_time_start(task_id):
         )
         db.session.add(activity)
         db.session.commit()
-        
+
         flash('Time tracking started successfully!', 'success')
     except Exception as e:
         db.session.rollback()
@@ -602,7 +603,7 @@ def task_time_add(task_id):
     task = Task.query.get_or_404(task_id)
     form = TimeEntryForm()
     form.task_id.data = task.id
-    
+
     if form.validate_on_submit():
         # Create a new time entry
         time_entry = TimeEntry(
@@ -633,24 +634,27 @@ def task_time_add(task_id):
         
         try:
             db.session.add(time_entry)
-            
+            db.session.commit()  # Commit first so time_entry.id is populated for the activity log below
+
+            duration_text = f'{time_entry.duration:.2f} hours' if time_entry.duration else 'not specified (timer still running)'
+
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
                 action_type='added',
                 entity_type='time_entry',
                 entity_id=time_entry.id,
-                description=f'Added time entry for task: {task.title}. Duration: {time_entry.duration:.2f} hours'
+                description=f'Added time entry for task: {task.title}. Duration: {duration_text}'
             )
             db.session.add(activity)
             db.session.commit()
-            
-            flash(f'Time entry added successfully. Duration: {time_entry.duration:.2f} hours.', 'success')
+
+            flash(f'Time entry added successfully. Duration: {duration_text}.', 'success')
             return redirect(url_for('task_detail', task_id=task.id))
         except Exception as e:
             db.session.rollback()
             flash(f'Error adding time entry: {str(e)}', 'danger')
-    
+
     return render_template('tasks/time_form.html', form=form, task=task)
 
 @app.route('/tasks/<int:task_id>/comment/delete/<int:comment_id>')
@@ -879,8 +883,20 @@ def task_edit(task_id):
             assignment_changed = old_assignee_id != new_assignee_id
             
             # Update task fields
-            form.populate_obj(task)
-            task.assignee_id = new_assignee_id
+            # Note: form.populate_obj(task) raises "'int' object has no attribute
+            # '_sa_instance_state'" here, because the "assigned_to" form field has the
+            # same name as the Task.assigned_to relationship (which expects a User
+            # object, not the raw user id the field holds). Assign each field
+            # explicitly instead, the same way task_create() already does.
+            task.title = form.title.data
+            task.description = form.description.data
+            task.project_id = form.project_id.data
+            task.status = form.status.data
+            task.priority = form.priority.data
+            task.due_date = form.due_date.data
+            task.estimated_hours = form.estimated_hours.data
+            task.is_billable = form.is_billable.data
+            task.assigned_to = User.query.get(new_assignee_id) if new_assignee_id else None
             db.session.commit()
             
             # Log the activity
@@ -1210,11 +1226,23 @@ def report_time_tracking():
 @login_required
 def report_project_timeline():
     """Project timeline report (Gantt chart)"""
-    projects = Project.query.all()
-    
+    # The template's "Filter" dropdown links here with ?project_id=<id> (or
+    # no param for "All Projects"), but this previously always queried every
+    # project regardless - the filter link changed the URL yet the page came
+    # back identical either way. all_projects stays unfiltered so the
+    # dropdown itself still lists every project to switch between; projects
+    # (used for the Gantt chart and both summary tables) is narrowed to the
+    # selected one when project_id is given.
+    all_projects = Project.query.order_by(Project.title).all()
+    project_id = request.args.get('project_id', type=int)
+    if project_id:
+        projects = [p for p in all_projects if p.id == project_id]
+    else:
+        projects = all_projects
+
     # Generate timeline data for projects and tasks
     timeline_data = []
-    
+
     for project in projects:
         # Add project to timeline
         timeline_data.append({
@@ -1242,8 +1270,10 @@ def report_project_timeline():
                     'assignee': task.assigned_to.username if task.assignee_id else 'Unassigned'
                 })
     
-    return render_template('reports/project_timeline.html', 
+    return render_template('reports/project_timeline.html',
                            projects=projects,
+                           all_projects=all_projects,
+                           selected_project_id=project_id,
                            timeline_data=timeline_data,
                            now=datetime.now())
 

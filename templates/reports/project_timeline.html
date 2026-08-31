@@ -20,13 +20,13 @@
             <h5 class="card-title mb-0">Project Gantt Chart</h5>
             <div class="btn-group">
                 <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                    Filter
+                    {% if selected_project_id %}Filter: {{ projects[0].title if projects else 'Unknown' }}{% else %}Filter{% endif %}
                 </button>
                 <ul class="dropdown-menu">
-                    <li><a class="dropdown-item" href="{{ url_for('report_project_timeline') }}">All Projects</a></li>
+                    <li><a class="dropdown-item{% if not selected_project_id %} active{% endif %}" href="{{ url_for('report_project_timeline') }}">All Projects</a></li>
                     <li><hr class="dropdown-divider"></li>
-                    {% for project in projects %}
-                    <li><a class="dropdown-item" href="{{ url_for('report_project_timeline', project_id=project.id) }}">{{ project.title }}</a></li>
+                    {% for project in all_projects %}
+                    <li><a class="dropdown-item{% if selected_project_id == project.id %} active{% endif %}" href="{{ url_for('report_project_timeline', project_id=project.id) }}">{{ project.title }}</a></li>
                     {% endfor %}
                 </ul>
             </div>

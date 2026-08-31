@@ -229,8 +229,13 @@ class TimeEntryForm(FlaskForm):
     description = TextAreaField('Description', validators=[Optional(), Length(max=500)])
     submit = SubmitField('Save Time Entry')
     
-    def validate(self):
-        if not super(TimeEntryForm, self).validate():
+    def validate(self, extra_validators=None):
+        # Flask-WTF's validate_on_submit() calls validate(extra_validators=...)
+        # (Flask-WTF 1.x / WTForms 3.x); this override previously took no
+        # arguments, so every submission of this form raised
+        # "TypeError: validate() got an unexpected keyword argument
+        # 'extra_validators'" - a 500 on every "add time entry" request.
+        if not super(TimeEntryForm, self).validate(extra_validators=extra_validators):
             return False
             
         # If both end_time and duration are provided, calculate end_time from duration
