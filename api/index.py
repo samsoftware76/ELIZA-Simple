@@ -1628,131 +1628,14 @@ def reset_db():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Admin routes
-@app.route('/admin/dashboard')
-@login_required
-def admin_dashboard():
-    if current_user.role != 'admin':
-        flash('You do not have permission to access the admin dashboard.', 'danger')
-        return redirect(url_for('index'))
-    
-    # Count statistics
-    user_count = User.query.count()
-    client_count = Client.query.count()
-    active_project_count = Project.query.filter_by(status='in_progress').count()
-    
-    # Get task counts by status
-    todo_count = Task.query.filter_by(status='to_do').count()
-    in_progress_count = Task.query.filter_by(status='in_progress').count()
-    review_count = Task.query.filter_by(status='in_review').count()
-    completed_count = Task.query.filter_by(status='completed').count()
-    
-    # Get subscription counts by plan (placeholder - would need actual subscription models)
-    basic_count = 0
-    professional_count = 0
-    enterprise_count = 0
-    trial_count = 0
-    
-    # Get recent activities (placeholder - would need an Activity model)
-    recent_activities = []
-    
-    return render_template('admin/dashboard.html',
-                          user_count=user_count,
-                          client_count=client_count,
-                          active_project_count=active_project_count,
-                          todo_count=todo_count,
-                          in_progress_count=in_progress_count,
-                          review_count=review_count,
-                          completed_count=completed_count,
-                          basic_count=basic_count,
-                          professional_count=professional_count,
-                          enterprise_count=enterprise_count,
-                          trial_count=trial_count,
-                          recent_activities=recent_activities)
-
-@app.route('/admin/users')
-@login_required
-def admin_users():
-    if current_user.role != 'admin':
-        flash('You do not have permission to access the admin dashboard.', 'danger')
-        return redirect(url_for('index'))
-    
-    users = User.query.all()
-    
-    # Create forms for the modals
-    add_form = UserForm()
-    edit_form = UserForm()
-    delete_form = UserForm()
-    
-    return render_template('admin/users.html', 
-                          users=users, 
-                          add_form=add_form, 
-                          edit_form=edit_form, 
-                          delete_form=delete_form)
-
-@app.route('/admin/subscriptions')
-@login_required
-def admin_subscriptions():
-    if current_user.role != 'admin':
-        flash('You do not have permission to access the admin dashboard.', 'danger')
-        return redirect(url_for('index'))
-    
-    # Placeholder - would need actual subscription models
-    plans = []
-    subscriptions = []
-    
-    # Create forms for the modals
-    add_plan_form = SubscriptionPlanForm()
-    edit_plan_form = SubscriptionPlanForm()
-    delete_plan_form = SubscriptionPlanForm()
-    
-    edit_subscription_form = SubscriptionForm()
-    cancel_subscription_form = SubscriptionForm()
-    
-    return render_template('admin/subscriptions.html',
-                          plans=plans,
-                          subscriptions=subscriptions,
-                          add_plan_form=add_plan_form,
-                          edit_plan_form=edit_plan_form,
-                          delete_plan_form=delete_plan_form,
-                          edit_subscription_form=edit_subscription_form,
-                          cancel_subscription_form=cancel_subscription_form)
-
-@app.route('/admin/system')
-@login_required
-def admin_system():
-    if current_user.role != 'admin':
-        flash('You do not have permission to access the admin dashboard.', 'danger')
-        return redirect(url_for('index'))
-    
-    # Create forms for the system settings
-    email_form = EmailSettingsForm()
-    pesapal_form = PesapalSettingsForm()
-    app_form = AppSettingsForm()
-    
-    # Populate form with current settings (placeholder)
-    email_form.mail_server.data = os.environ.get('MAIL_SERVER', '')
-    email_form.mail_port.data = int(os.environ.get('MAIL_PORT', 587))
-    email_form.mail_username.data = os.environ.get('MAIL_USERNAME', '')
-    email_form.mail_use_tls.data = os.environ.get('MAIL_USE_TLS', 'True') == 'True'
-    email_form.mail_use_ssl.data = os.environ.get('MAIL_USE_SSL', 'False') == 'True'
-    email_form.mail_default_sender.data = os.environ.get('MAIL_DEFAULT_SENDER', '')
-    
-    pesapal_form.pesapal_consumer_key.data = os.environ.get('PESAPAL_CONSUMER_KEY', '')
-    pesapal_form.pesapal_consumer_secret.data = os.environ.get('PESAPAL_CONSUMER_SECRET', '')
-    pesapal_form.pesapal_ipn_id.data = os.environ.get('PESAPAL_IPN_ID', '')
-    pesapal_form.pesapal_live_mode.data = os.environ.get('PESAPAL_LIVE_MODE', 'False') == 'True'
-    
-    app_form.app_name.data = os.environ.get('APP_NAME', 'ELIZA Project Management')
-    app_form.company_name.data = os.environ.get('COMPANY_NAME', 'Your Company')
-    app_form.company_logo.data = os.environ.get('COMPANY_LOGO', '')
-    app_form.timezone.data = os.environ.get('TIMEZONE', 'Africa/Nairobi')
-    app_form.date_format.data = os.environ.get('DATE_FORMAT', '%%Y-%%m-%%d')
-    
-    return render_template('admin/system.html',
-                          email_form=email_form,
-                          pesapal_form=pesapal_form,
-                          app_form=app_form)
+# NOTE: /admin/* is handled by admin_bp (api/admin.py, registered above) -
+# it has the real, working implementation (correct enum comparisons, real
+# subscription data, admin_required decorator). A duplicate, broken set of
+# /admin/dashboard, /admin/users, /admin/subscriptions, /admin/system routes
+# used to live here too (comparing current_user.role to the string 'admin',
+# which is always False since role is a UserRole enum - so every admin,
+# including real ones, was silently redirected away). Removed rather than
+# fixed in place, since admin_bp already does this correctly.
 
 if __name__ == '__main__':
     # This part is for local development only

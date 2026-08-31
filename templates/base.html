@@ -59,16 +59,16 @@
                         <li class="nav-item">
                             <a class="nav-link{% if request.endpoint == 'subscription.plans' %} active{% endif %}" href="{{ url_for('subscription.plans') }}"><i class="fas fa-credit-card mr-1"></i> Subscription Plans</a>
                         </li>
-                        {% if current_user.role == 'admin' %}
+                        {% if current_user.role.value == 'admin' %}
                             <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle{% if 'admin' in request.endpoint %} active{% endif %}" href="#" id="adminDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                <a class="nav-link dropdown-toggle{% if request.endpoint and request.endpoint.startswith('admin.') %} active{% endif %}" href="#" id="adminDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                                     <i class="fas fa-cogs mr-1"></i> Admin
                                 </a>
                                 <div class="dropdown-menu" aria-labelledby="adminDropdown">
-                                    <a class="dropdown-item" href="{{ url_for('admin_dashboard') }}">Dashboard</a>
-                                    <a class="dropdown-item" href="{{ url_for('admin_users') }}">User Management</a>
-                                    <a class="dropdown-item" href="{{ url_for('admin_subscriptions') }}">Subscriptions</a>
-                                    <a class="dropdown-item" href="{{ url_for('admin_system') }}">System Settings</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.dashboard') }}">Dashboard</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.users') }}">User Management</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.subscriptions') }}">Subscriptions</a>
+                                    <a class="dropdown-item" href="{{ url_for('admin.system') }}">System Settings</a>
                                 </div>
                             </li>
                         {% endif %}
