@@ -55,18 +55,24 @@ def configure_security(app):
     }
 
     # Initialize Talisman (security headers).
-    # nonce_in covers script-src only, not style-src: per the CSP spec, a
-    # nonce in a directive makes the browser ignore 'unsafe-inline' for that
-    # directive entirely. The nonce only ever attaches to <script>/<style>
-    # tags (Talisman rewrites those automatically) - it can't attach to an
-    # inline style="..." attribute on an ordinary element, and this app uses
-    # those throughout. Nonce-ing style-src as well silently broke every
-    # inline style in the app; scripts are the higher-value thing to lock
-    # down with a nonce anyway.
+    # No nonce_in at all: per the CSP spec, a nonce in a directive makes the
+    # browser ignore 'unsafe-inline' for that directive entirely. The nonce
+    # only ever attaches to <script>/<style> TAGS (Talisman rewrites those
+    # automatically) - it can't attach to an inline style="..." attribute or
+    # an inline onclick=/onsubmit="..." event handler on an ordinary element.
+    # This app uses both throughout (21 onclick/onsubmit handlers across 11
+    # templates, e.g. the portal's Accept Quote button and every delete
+    # confirmation in the app) - nonce-ing script-src broke every one of them
+    # silently, the same way nonce-ing style-src broke every inline style.
+    # curl-based testing never caught this because curl doesn't execute JS;
+    # the backend route was always fine, the browser-side handler just never
+    # ran. Trade-off: no nonce-based script hardening at all now, since this
+    # codebase isn't written in a nonce-compatible style (that would mean
+    # converting all 21+ inline handlers to addEventListener - a real
+    # refactor, not something to do silently inside a bug fix).
     Talisman(
         app,
         content_security_policy=csp,
-        content_security_policy_nonce_in=['script-src'],
         force_https=is_production,  # Redirect HTTP to HTTPS in production only
         strict_transport_security=is_production,  # Enable HSTS in production only
         session_cookie_secure=is_production,  # Cookies only sent over HTTPS in production
