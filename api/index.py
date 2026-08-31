@@ -162,23 +162,6 @@ def login():
             
             user = retry_operation(get_user)
             
-            # For debugging - check if the admin account exists
-            if form.email.data == 'smugabii22@gmail.com' and not user:
-                print(f"DEBUG: Admin user with email {form.email.data} not found in database")
-                # Try to create the admin account if it doesn't exist
-                admin_user = User(
-                    username='admin',
-                    email='smugabii22@gmail.com',
-                    password_hash=generate_password_hash('admin123'),
-                    first_name='Admin',
-                    last_name='User',
-                    role='admin'
-                )
-                db.session.add(admin_user)
-                db.session.commit()
-                user = admin_user
-                print("DEBUG: Created admin user account")
-            
             if user and user.check_password(form.password.data):
                 login_user(user, remember=form.remember_me.data)
                 next_page = request.args.get('next')
