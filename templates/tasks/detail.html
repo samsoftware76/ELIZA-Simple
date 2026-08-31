@@ -126,11 +126,11 @@
                         <li class="list-group-item">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <div>
-                                    <span class="fw-medium">{{ comment.user.username }}</span>
+                                    <span class="fw-medium">{{ comment.author.username }}</span>
                                     <small class="text-muted ms-2">{{ comment.created_at.strftime('%b %d, %Y %H:%M') }}</small>
                                 </div>
                                 {% if current_user.id == comment.user_id %}
-                                <a href="{{ url_for('task_delete_comment', comment_id=comment.id) }}" class="text-danger"
+                                <a href="{{ url_for('task_delete_comment', task_id=task.id, comment_id=comment.id) }}" class="text-danger"
                                    onclick="return confirm('Are you sure you want to delete this comment?')">
                                     <i class="fas fa-times"></i>
                                 </a>
@@ -171,8 +171,9 @@
                         <h6 class="fw-bold">Progress</h6>
                         {% set progress = (task.actual_hours / task.estimated_hours * 100)|int if task.actual_hours and task.estimated_hours else 0 %}
                         {% set progress_class = 'bg-success' if progress <= 100 else 'bg-warning' %}
+                        {% set progress_width = 100 if progress > 100 else progress %}
                         <div class="progress" style="height: 10px;">
-                            <div class="progress-bar {{ progress_class }}" role="progressbar" style="width: {{ min(progress, 100) }}%;" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+                            <div class="progress-bar {{ progress_class }}" role="progressbar" style="width: {{ progress_width }}%;" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100"></div>
                         </div>
                         <small class="text-muted mt-1 d-block">{{ progress }}% of estimated time used</small>
                     </div>
@@ -305,20 +306,20 @@
                         <li class="list-group-item">
                             <div class="d-flex">
                                 <div class="me-3">
-                                    {% if log.action == 'created' %}
+                                    {% if log.action_type == 'created' %}
                                     <i class="fas fa-plus-circle text-success"></i>
-                                    {% elif log.action == 'updated' %}
+                                    {% elif log.action_type == 'updated' %}
                                     <i class="fas fa-edit text-primary"></i>
-                                    {% elif log.action == 'deleted' %}
+                                    {% elif log.action_type == 'deleted' %}
                                     <i class="fas fa-trash text-danger"></i>
-                                    {% elif log.action == 'assigned' %}
+                                    {% elif log.action_type == 'assigned' %}
                                     <i class="fas fa-user-check text-info"></i>
                                     {% else %}
                                     <i class="fas fa-history text-secondary"></i>
                                     {% endif %}
                                 </div>
                                 <div>
-                                    <p class="mb-0">{{ log.details }}</p>
+                                    <p class="mb-0">{{ log.description }}</p>
                                     <small class="text-muted">
                                         {{ log.created_at.strftime('%b %d, %Y %H:%M') }} by {{ log.user.username }}
                                     </small>

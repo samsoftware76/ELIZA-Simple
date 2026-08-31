@@ -145,7 +145,7 @@ def send_task_update_notification(task, update_type, updated_by):
         recipients.append(task.assigned_to.email)
     
     # Add project team members who are not the updater
-    for member in task.project.team_members:
+    for member in task.project.project_members:
         if member.user_id != updated_by.id and member.user.email not in recipients:
             recipients.append(member.user.email)
     
@@ -408,7 +408,7 @@ def send_task_comment_notification(task, comment, commented_by):
         recipients.append(task.assigned_to.email)
     
     # Add project team members who are not the commenter
-    for member in task.project.team_members:
+    for member in task.project.project_members:
         if member.user_id != commented_by.id and member.user.email not in recipients:
             recipients.append(member.user.email)
     

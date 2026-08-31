@@ -180,7 +180,11 @@ class TimeEntry(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
-    task = db.relationship('Task', backref=db.backref('time_entries', lazy=True))
+    # cascade="all, delete-orphan" mirrors Task.comments below - without it,
+    # deleting a task with existing time entries fails with a NotNullViolation
+    # (SQLAlchemy tries to null out time_entries.task_id, which is NOT NULL)
+    # instead of deleting the entries along with the task.
+    task = db.relationship('Task', backref=db.backref('time_entries', lazy=True, cascade="all, delete-orphan"))
     user = db.relationship('User', backref=db.backref('time_entries', lazy=True))
     
     def __repr__(self):
