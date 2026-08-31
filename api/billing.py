@@ -116,10 +116,12 @@ def quote_print(quote_id):
 @billing_bp.route('/quotes/<int:quote_id>/edit', methods=['GET', 'POST'])
 @login_required
 def quote_edit(quote_id):
-    """Edit a quote. Only draft quotes can be edited."""
+    """Edit a quote. Allowed for draft and sent quotes (the client hasn't
+    responded yet) - blocked once the client has accepted/declined, since
+    silently changing terms after a response is misleading."""
     quote = Quote.query.get_or_404(quote_id)
-    if quote.status != QuoteStatus.DRAFT:
-        flash('Only draft quotes can be edited. Send a new quote instead.', 'warning')
+    if quote.status not in (QuoteStatus.DRAFT, QuoteStatus.SENT):
+        flash('This quote has already been responded to and can no longer be edited.', 'warning')
         return redirect(url_for('billing.quote_detail', quote_id=quote.id))
 
     form = QuoteForm(obj=quote)
@@ -311,10 +313,12 @@ def invoice_print(invoice_id):
 @billing_bp.route('/invoices/<int:invoice_id>/edit', methods=['GET', 'POST'])
 @login_required
 def invoice_edit(invoice_id):
-    """Edit an invoice. Only draft invoices can be edited."""
+    """Edit an invoice. Allowed for draft and sent invoices (not yet paid) -
+    blocked once paid or cancelled, since silently changing a paid invoice's
+    amount after the fact would be misleading."""
     invoice = Invoice.query.get_or_404(invoice_id)
-    if invoice.status not in (InvoiceStatus.DRAFT,):
-        flash('Only draft invoices can be edited.', 'warning')
+    if invoice.status not in (InvoiceStatus.DRAFT, InvoiceStatus.SENT):
+        flash('This invoice has already been paid or cancelled and can no longer be edited.', 'warning')
         return redirect(url_for('billing.invoice_detail', invoice_id=invoice.id))
 
     form = InvoiceForm(obj=invoice)
