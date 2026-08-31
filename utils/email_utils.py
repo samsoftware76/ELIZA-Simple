@@ -352,6 +352,45 @@ def send_quote_response_notification(quote):
         logger.error(f"Failed to send quote response notification for {quote.quote_number}: {str(e)}")
 
 
+def send_invoice_paid_notification(invoice):
+    """
+    Notify the staff member who created an invoice that the client has paid it.
+
+    This is the one notification that matters most in the whole app: a
+    client paying via the portal's PesaPal flow updates the database, but
+    nothing else tells the business owner money actually arrived unless
+    they happen to check the invoices list themselves.
+
+    Args:
+        invoice: The Invoice object (status already updated to paid)
+    """
+    if not invoice.created_by or not invoice.created_by.email:
+        logger.warning(f"Cannot notify invoice {invoice.invoice_number} payment: no creator email")
+        return
+
+    subject = f"[ELIZA] Payment received: Invoice {invoice.invoice_number} ({invoice.client.name})"
+    recipients = [invoice.created_by.email]
+
+    try:
+        text_body = (
+            f"Hello {invoice.created_by.first_name},\n\n"
+            f"Good news - {invoice.client.name} just paid invoice {invoice.invoice_number}: {invoice.title}\n"
+            f"Amount: {invoice.total:.2f} {invoice.currency}\n"
+            f"Method: {invoice.payment_method or 'pesapal'}\n\n"
+            f"View it here: {current_app.config['BASE_URL']}/invoices/{invoice.id}\n\n"
+            f"Thank you,\nELIZA Project Management System"
+        )
+        html_body = render_template(
+            'emails/invoice_paid_notification.html',
+            invoice=invoice,
+            base_url=current_app.config['BASE_URL'],
+        )
+        send_email(subject, recipients, text_body, html_body)
+        logger.info(f"Invoice {invoice.invoice_number} payment notification sent to {invoice.created_by.email}")
+    except Exception as e:
+        logger.error(f"Failed to send invoice payment notification for {invoice.invoice_number}: {str(e)}")
+
+
 def send_task_comment_notification(task, comment, commented_by):
     """
     Send an email notification when a comment is added to a task

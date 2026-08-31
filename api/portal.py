@@ -16,7 +16,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from models import db
 from models.billing import Quote, Invoice, QuoteStatus, InvoiceStatus
 from api.payment import PesaPalPayment
-from utils.email_utils import send_quote_response_notification
+from utils.email_utils import send_quote_response_notification, send_invoice_paid_notification
 from utils.document_print import build_print_context
 
 portal_bp = Blueprint('portal', __name__, url_prefix='/portal')
@@ -193,6 +193,10 @@ def invoice_payment_callback(token):
                 invoice.paid_at = datetime.utcnow()
                 invoice.payment_method = status.get('payment_method') or 'pesapal'
                 db.session.commit()
+                # This is the one notification that matters most: without it,
+                # the only way staff learns money arrived is by manually
+                # checking the invoices list.
+                send_invoice_paid_notification(invoice)
             flash('Payment received. Thank you!', 'success')
         elif pesapal_status in ('FAILED', 'INVALID'):
             flash(f'Payment was not successful (status: {pesapal_status}). Please try again.', 'danger')
