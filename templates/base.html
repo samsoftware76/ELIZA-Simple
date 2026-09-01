@@ -26,6 +26,7 @@
                         <a class="nav-link" href="{{ url_for('home') }}"><i class="fas fa-home mr-1"></i> Home</a>
                     </li>
                     {% if current_user.is_authenticated %}
+                      {% if current_user.role.value != 'client' %}
                         <li class="nav-item">
                             <a class="nav-link{% if request.endpoint == 'clients' or request.endpoint == 'client_detail' or request.endpoint == 'client_create' or request.endpoint == 'client_edit' %} active{% endif %}" href="{{ url_for('clients') }}"><i class="fas fa-users mr-1"></i> Clients</a>
                         </li>
@@ -76,6 +77,18 @@
                                 </div>
                             </li>
                         {% endif %}
+                      {% endif %}
+                      {% if current_user.role.value == 'client' %}
+                        {# Client-portal nav: the staff nav above is gated off for this
+                        role (see api/index.py's before_request gate - this is cosmetic,
+                        that hook is what actually enforces it). #}
+                        <li class="nav-item">
+                            <a class="nav-link{% if request.endpoint and request.endpoint.startswith('client_portal.') %} active{% endif %}" href="{{ url_for('client_portal.dashboard') }}"><i class="fas fa-tachometer-alt mr-1"></i> Dashboard</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt mr-1"></i> Logout</a>
+                        </li>
+                      {% endif %}
                     {% endif %}
                 </ul>
                 <ul class="navbar-nav">
@@ -85,8 +98,13 @@
                                 {{ current_user.username }}
                             </a>
                             <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdown">
+                                {% if current_user.role.value != 'client' %}
+                                {# /profile isn't in the client-portal allowlist (see api/index.py's
+                                before_request gate) - showing this link to a CLIENT login just
+                                bounces them back to their dashboard with nothing happening. #}
                                 <a class="dropdown-item" href="{{ url_for('profile') }}">Profile</a>
                                 <div class="dropdown-divider"></div>
+                                {% endif %}
                                 <a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a>
                             </div>
                         </li>
@@ -104,6 +122,30 @@
     </nav>
 
     <div class="container mt-4">
+        {# Flash messages, rendered here globally so every page gets them for
+           free. Previously several pages (e.g. redirect targets like
+           clients/detail.html) had to add their own copy of this block by
+           hand, and the client-portal pages never did - so a client
+           approving/rejecting a task, or posting a comment, saw the page
+           silently reload with zero feedback either way, even though the
+           flash() call on the server side was firing correctly. Since
+           get_flashed_messages() consumes the queued messages the first
+           time it's called, any page-level block added before this one
+           (like clients/detail.html's) just renders empty now rather than
+           duplicating - harmless, safe to leave as dead code rather than
+           hunt down and remove every one. #}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
         {% block content %}{% endblock %}
     </div>
 
@@ -133,6 +175,16 @@
             }
             return true;
         }
+
+        // Bootstrap 4 tooltips need this explicit opt-in call - unlike
+        // modal/dropdown/collapse, they don't auto-initialize from
+        // data-toggle="tooltip" alone (each one needs its own Popper
+        // instance, so BS4 makes it opt-in rather than always-on). Without
+        // this, every data-toggle="tooltip" element in the app just sits
+        // there doing nothing on hover.
+        $(function () {
+            $('[data-toggle="tooltip"]').tooltip();
+        });
     </script>
     {% block extra_js %}{% endblock %}
 </body>

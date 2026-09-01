@@ -182,6 +182,16 @@ class Client(db.Model):
     # rather than made NOT NULL - see that file for how the backfill owner
     # was chosen.
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    # The client's OWN login, if they've been invited (see ClientInvite
+    # below) and have accepted - a completely different relationship than
+    # owner_id above. owner_id points at the STAFF account that owns/manages
+    # this client record; user_id points at the CLIENT's own account, so
+    # exactly one User can sign in scoped to exactly this one Client record
+    # (not a whole tenant's data like owner_id, and not shared access like
+    # TeamMembership). Nullable - most clients have no portal login at all,
+    # only ones invited via ClientInvite. UNIQUE - one User login can be tied
+    # to at most one Client record.
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), unique=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -192,6 +202,12 @@ class Client(db.Model):
 
     # Relationships
     # Note: Project relationship is defined in the Project model
+    # Explicit foreign_keys= required: clients now has two FKs to users.id
+    # (owner_id and user_id) - same AmbiguousForeignKeysError class of bug as
+    # TeamMembership/ActivityLog above, so leaving this implicit would break
+    # every mapper in the registry on the first query, not just this one.
+    portal_user = db.relationship('User', foreign_keys=[user_id],
+                                   backref=db.backref('client_login', lazy=True, uselist=False))
 
     def __repr__(self):
         return f'<Client {self.name}>'
@@ -328,6 +344,63 @@ class TeamInvite(db.Model):
     def __repr__(self):
         return f'<TeamInvite {self.invitee_email} status={self.status}>'
 
+class ClientInvite(db.Model):
+    __tablename__ = 'client_invites'
+
+    id = db.Column(db.Integer, primary_key=True)
+    inviter_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # Which specific client record this invite grants a login for - unlike
+    # TeamInvite above (which grants access to the inviter's whole tenant),
+    # a client invite is scoped to exactly one Client row, matching
+    # Client.user_id.
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False)
+    # String, not a FK to users.id: the invited person usually doesn't have a
+    # User row yet - that's the whole point of an invite - so this has to be
+    # able to hold an email with no matching account until it's accepted.
+    invitee_email = db.Column(db.String(120), nullable=False)
+    status = db.Column(db.String(20), default='pending')  # pending / accepted / revoked
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    accepted_at = db.Column(db.DateTime, nullable=True)
+
+    inviter = db.relationship('User', foreign_keys=[inviter_id],
+                               backref=db.backref('client_invites_sent', lazy=True))
+    client = db.relationship('Client', foreign_keys=[client_id],
+                              backref=db.backref('invites', lazy=True))
+
+    def get_invite_token(self, expires_sec=604800):
+        """A signed, time-limited token for the accept-invite link (default 7
+        days - an invite should outlast a password reset's 30 minutes, since
+        the invitee isn't sitting at their inbox waiting for it)."""
+        from itsdangerous import URLSafeTimedSerializer
+        from flask import current_app
+        s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+        return s.dumps({'invite_id': self.id}, salt='client-invite')
+
+    @staticmethod
+    def verify_invite_token(token, expires_sec=604800):
+        """Returns the ClientInvite for a valid, unexpired token whose status
+        is still 'pending', or None.
+
+        The status=='pending' check is the important extra step beyond
+        User.verify_reset_token's version: a signature can still be valid
+        after the invite it points at was revoked or already accepted, so
+        the signature alone isn't enough to let someone (re)join through it.
+        """
+        from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+        from flask import current_app
+        s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+        try:
+            data = s.loads(token, salt='client-invite', max_age=expires_sec)
+        except (BadSignature, SignatureExpired):
+            return None
+        invite = ClientInvite.query.get(data.get('invite_id'))
+        if invite and invite.status == 'pending':
+            return invite
+        return None
+
+    def __repr__(self):
+        return f'<ClientInvite {self.invitee_email} status={self.status}>'
+
 class TimeEntry(db.Model):
     __tablename__ = 'time_entries'
     
@@ -368,9 +441,16 @@ class Task(db.Model):
     started_at = db.Column(db.DateTime)  # When work first started on the task
     completed_at = db.Column(db.DateTime)  # When the task was marked as completed
     is_billable = db.Column(db.Boolean, default=True)
+    # The actual client-facing approval flag - a real client login (see
+    # Client.user_id / ClientInvite above) can mark a task approved once it's
+    # REVIEW or COMPLETED. Distinct from Task.status above, which staff
+    # control: a client can sign off on a task without being able to move it
+    # through the staff workflow themselves.
+    client_approved = db.Column(db.Boolean, default=False, nullable=False)
+    client_approved_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     assigned_to = db.relationship('User', foreign_keys=[assignee_id], backref=db.backref('assigned_tasks', lazy=True))
     creator = db.relationship('User', foreign_keys=[creator_id], backref=db.backref('created_tasks', lazy=True))

@@ -72,22 +72,33 @@
                                     {{ project.title }}
                                 </a>
                             </td>
+                            {# sum(attribute=...) raises on the first None it hits - estimated_hours is
+                               Optional on TaskForm, so any project with an unestimated task used to 500
+                               this whole report. A plain {% set %} reassigned inside a {% for %} doesn't
+                               persist outside the loop in Jinja (each iteration re-reads the outer
+                               value), which also meant total_estimated/total_actual below were silently
+                               always 0 outside their own loops - and Efficiency (which reads both after
+                               their loops end) was therefore always wrong too, not just on the crashing
+                               case. namespace() is the correct fix for a value that needs to accumulate
+                               across iterations and survive past the loop. #}
+                            {% set totals = namespace(estimated=0, actual=0) %}
+                            {% for task in project.tasks %}
+                                {% if task.estimated_hours is not none %}
+                                    {% set totals.estimated = totals.estimated + task.estimated_hours %}
+                                {% endif %}
+                                {% if task.actual_hours is not none %}
+                                    {% set totals.actual = totals.actual + task.actual_hours %}
+                                {% endif %}
+                            {% endfor %}
                             <td>
-                                {% set total_estimated = project.tasks|sum(attribute='estimated_hours')|default(0) %}
-                                {{ total_estimated|round(1) }}
+                                {{ totals.estimated|round(1) }}
                             </td>
                             <td>
-                                {% set total_actual = 0 %}
-                                {% for task in project.tasks %}
-                                    {% if task.actual_hours is not none %}
-                                        {% set total_actual = total_actual + task.actual_hours %}
-                                    {% endif %}
-                                {% endfor %}
-                                {{ total_actual|round(1) }}
+                                {{ totals.actual|round(1) }}
                             </td>
                             <td>
-                                {% if total_estimated > 0 %}
-                                {% set efficiency = (total_estimated / total_actual * 100)|round if total_actual > 0 else 0 %}
+                                {% if totals.estimated > 0 %}
+                                {% set efficiency = (totals.estimated / totals.actual * 100)|round if totals.actual > 0 else 0 %}
                                 {% if efficiency > 100 %}
                                 <span class="text-success">{{ efficiency }}%</span>
                                 {% elif efficiency >= 80 %}

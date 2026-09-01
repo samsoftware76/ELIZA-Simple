@@ -42,7 +42,7 @@
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Subscription Plans</h5>
-                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addPlanModal">
+                    <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#addPlanModal">
                         <i class="bi bi-plus-circle me-1"></i> Add Plan
                     </button>
                 </div>
@@ -77,7 +77,7 @@
                                     </td>
                                     <td><span class="badge {% if plan.is_active %}bg-success{% else %}bg-secondary{% endif %}">{% if plan.is_active %}Active{% else %}Inactive{% endif %}</span></td>
                                     <td>
-                                        <button class="btn btn-sm btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#features{{ plan.id }}" aria-expanded="false">
+                                        <button class="btn btn-sm btn-outline-info" type="button" data-toggle="collapse" data-target="#features{{ plan.id }}" aria-expanded="false">
                                             View Features
                                         </button>
                                         <div class="collapse mt-2" id="features{{ plan.id }}">
@@ -95,8 +95,8 @@
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             <button type="button" class="btn btn-outline-primary"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#editPlanModal"
+                                                    data-toggle="modal"
+                                                    data-target="#editPlanModal"
                                                     data-plan-id="{{ plan.id }}"
                                                     data-plan-name="{{ plan.name }}"
                                                     data-plan-description="{{ plan.description or '' }}"
@@ -110,8 +110,8 @@
                                                 <i class="bi bi-pencil"></i>
                                             </button>
                                             <button type="button" class="btn btn-outline-danger"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#deletePlanModal"
+                                                    data-toggle="modal"
+                                                    data-target="#deletePlanModal"
                                                     data-plan-id="{{ plan.id }}"
                                                     data-plan-name="{{ plan.name }}">
                                                 <i class="bi bi-trash"></i>
@@ -168,8 +168,8 @@
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             <button type="button" class="btn btn-outline-primary"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#editSubscriptionModal"
+                                                    data-toggle="modal"
+                                                    data-target="#editSubscriptionModal"
                                                     data-subscription-id="{{ subscription.id }}"
                                                     data-user-id="{{ subscription.user.id }}"
                                                     data-plan-id="{{ subscription.plan.id }}"
@@ -181,8 +181,8 @@
                                             </button>
                                             {% if subscription.is_active %}
                                             <button type="button" class="btn btn-outline-danger"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#cancelSubscriptionModal"
+                                                    data-toggle="modal"
+                                                    data-target="#cancelSubscriptionModal"
                                                     data-subscription-id="{{ subscription.id }}"
                                                     data-user-name="{{ subscription.user.get_full_name() }}"
                                                     data-plan-name="{{ subscription.plan.name }}">
@@ -214,7 +214,7 @@
                 {{ add_plan_form.csrf_token }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="addPlanModalLabel">Add New Subscription Plan</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
@@ -260,7 +260,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Add Plan</button>
                 </div>
             </form>
@@ -277,7 +277,7 @@
                 {{ edit_plan_form.plan_id }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="editPlanModalLabel">Edit Subscription Plan</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
@@ -322,7 +322,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Changes</button>
                 </div>
             </form>
@@ -339,14 +339,14 @@
                 {{ delete_plan_form.plan_id }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="deletePlanModalLabel">Confirm Delete</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <p>Are you sure you want to delete the plan <strong id="deletePlanName"></strong>?</p>
                     <p class="text-danger">This action cannot be undone and may affect existing subscriptions.</p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-danger">Delete Plan</button>
                 </div>
             </form>
@@ -363,7 +363,7 @@
                 {{ edit_subscription_form.subscription_id }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="editSubscriptionModalLabel">Edit Subscription</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
@@ -392,7 +392,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Changes</button>
                 </div>
             </form>
@@ -409,13 +409,13 @@
                 <input type="hidden" name="subscription_id" value="">
                 <div class="modal-header">
                     <h5 class="modal-title" id="cancelSubscriptionModalLabel">Confirm Cancellation</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <p>Are you sure you want to cancel the subscription for <strong id="cancelUserName"></strong> to the <strong id="cancelPlanName"></strong> plan?</p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
                     <button type="submit" class="btn btn-danger">Cancel Subscription</button>
                 </div>
             </form>

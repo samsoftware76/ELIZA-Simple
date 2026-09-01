@@ -181,6 +181,7 @@
                             <th>Due Date</th>
                             <th>Completed</th>
                             <th>Status</th>
+                            <th>Client Approval</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -203,18 +204,25 @@
                                 <span class="badge bg-warning text-dark"><i class="fas fa-exclamation-circle"></i> Late</span>
                                 {% endif %}
                             </td>
+                            <td>
+                                {% if task_report.client_approved %}
+                                <span class="badge bg-success"><i class="fas fa-check"></i> Client Approved</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Pending</span>
+                                {% endif %}
+                            </td>
                             <td></td>
                         </tr>
                         {% if task_report.is_late %}
                         <tr class="table-warning">
-                            <td colspan="6" class="small">
+                            <td colspan="7" class="small">
                                 <i class="fas fa-user-clock me-1"></i>{{ task_report.accountability_sentence }}
                             </td>
                         </tr>
                         {% endif %}
                         {% if task_report.comments %}
                         <tr>
-                            <td colspan="6" class="bg-light">
+                            <td colspan="7" class="bg-light">
                                 <small class="text-muted fw-bold d-block mb-1">Comments</small>
                                 <ul class="list-unstyled mb-0 small">
                                     {% for comment in task_report.comments %}

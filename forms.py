@@ -109,6 +109,40 @@ class AcceptInviteForm(FlaskForm):
             raise ValidationError('Username already exists. Please choose a different one.')
 
 
+class ClientAcceptInviteForm(FlaskForm):
+    """Form for a newly-invited client to set up their portal login from a
+    ClientInvite. Mirrors AcceptInviteForm above field-for-field, for the
+    same reasoning:
+    - No role field - an accepted ClientInvite always creates a
+      UserRole.CLIENT login, never something a submitted field could override.
+    - No email field - the invitee's email is the invite's own
+      invitee_email (that's who was invited, and it's fixed to
+      Client.email at send time), not something to retype. The route
+      checks that email for a pre-existing account the same way
+      accept_invite() does for AcceptInviteForm, just against
+      invite.invitee_email here too.
+    """
+    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=50)])
+    first_name = StringField('First Name', validators=[DataRequired(), Length(max=50)])
+    last_name = StringField('Last Name', validators=[DataRequired(), Length(max=50)])
+    phone = StringField('Phone Number', validators=[Optional(), Length(max=20)])
+    password = PasswordField('Password', validators=[
+        DataRequired(),
+        Length(min=8, message='Password must be at least 8 characters long')
+    ])
+    confirm_password = PasswordField('Confirm Password', validators=[
+        DataRequired(),
+        EqualTo('password', message='Passwords must match')
+    ])
+    submit = SubmitField('Create Account')
+
+    def validate_username(self, username):
+        """Check if username already exists"""
+        user = User.query.filter_by(username=username.data).first()
+        if user:
+            raise ValidationError('Username already exists. Please choose a different one.')
+
+
 class PasswordResetRequestForm(FlaskForm):
     """Form for requesting password reset"""
     email = StringField('Email', validators=[DataRequired(), Email()])

@@ -85,6 +85,8 @@ def _build_task_report(task, today):
         'due_date': task.due_date,
         'completed_at': task.completed_at,
         'status': task.status,
+        'client_approved': task.client_approved,
+        'client_approved_at': task.client_approved_at,
         'is_late': is_late,
         'accountability_sentence': accountability_sentence,
         'comments': [

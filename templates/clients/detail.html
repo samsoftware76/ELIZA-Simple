@@ -40,6 +40,29 @@
 
     <div class="card shadow-sm mb-4">
         <div class="card-header">
+            <h5 class="card-title mb-0">Portal Access</h5>
+        </div>
+        <div class="card-body">
+            {% if client.user_id %}
+                <p class="text-success mb-0"><i class="fas fa-check-circle"></i> Portal access: active</p>
+            {% elif pending_invite %}
+                <p class="text-muted mb-0"><i class="fas fa-clock"></i> Invite sent, awaiting response.</p>
+            {% elif client.email %}
+                <form method="POST" action="{{ url_for('client_invite_portal', client_id=client.id) }}"
+                      onsubmit="return confirmAndDisable(this, 'Invite ' + '{{ client.email }}' + ' to the client portal?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane"></i> Invite to Portal
+                    </button>
+                </form>
+            {% else %}
+                <p class="text-muted mb-0">This client has no email address on file, so they can't be invited to the portal.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
             <h5 class="card-title mb-0">Send SMS</h5>
         </div>
         <div class="card-body">

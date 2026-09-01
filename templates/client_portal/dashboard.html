@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}My Projects{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Welcome, {{ client.name }}</h1>
+
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Your Projects</h5>
+        </div>
+        <div class="card-body p-0">
+            {% if projects %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Project</th>
+                            <th>Status</th>
+                            <th>Progress</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for project in projects %}
+                        {% set total_tasks = project.tasks|length %}
+                        {% set completed_tasks = project.tasks|selectattr('status.name', 'equalto', 'COMPLETED')|list|length %}
+                        {% set progress = (completed_tasks / total_tasks * 100)|int if total_tasks > 0 else 0 %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('client_portal.project_detail', project_id=project.id) }}" class="text-decoration-none fw-medium">
+                                    {{ project.title }}
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ project.status|status_badge }}">{{ project.status.value }}</span>
+                            </td>
+                            <td style="min-width: 180px;">
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ progress }}%;" aria-valuenow="{{ progress }}" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <small class="text-muted">{{ progress }}% complete ({{ completed_tasks }}/{{ total_tasks }} tasks)</small>
+                            </td>
+                            <td>{{ project.start_date.strftime('%b %d, %Y') }}</td>
+                            <td>{{ project.end_date.strftime('%b %d, %Y') if project.end_date else '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <p class="text-muted mb-0">No projects yet.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

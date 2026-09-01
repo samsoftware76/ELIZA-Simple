@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Accept Invite - ELIZA{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-form">
+        <h2>Set Up Your Portal Access</h2>
+        <p class="text-muted">You've been invited to view <strong>{{ invite.client.name }}</strong>'s project status on the client portal. Set up your account below.</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            {{ form.hidden_tag() }}
+
+            <div class="form-group">
+                {{ form.username.label }}
+                {{ form.username(class="form-control") }}
+                {% if form.username.errors %}
+                    <div class="error-message">
+                        {% for error in form.username.errors %}
+                            <span>{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    {{ form.first_name.label }}
+                    {{ form.first_name(class="form-control") }}
+                    {% if form.first_name.errors %}
+                        <div class="error-message">
+                            {% for error in form.first_name.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group col-md-6">
+                    {{ form.last_name.label }}
+                    {{ form.last_name(class="form-control") }}
+                    {% if form.last_name.errors %}
+                        <div class="error-message">
+                            {% for error in form.last_name.errors %}
+                                <span>{{ error }}</span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-group">
+                {{ form.phone.label }}
+                {{ form.phone(class="form-control") }}
+                {% if form.phone.errors %}
+                    <div class="error-message">
+                        {% for error in form.phone.errors %}
+                            <span>{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                {{ form.password.label }}
+                {{ form.password(class="form-control") }}
+                {% if form.password.errors %}
+                    <div class="error-message">
+                        {% for error in form.password.errors %}
+                            <span>{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                {{ form.confirm_password.label }}
+                {{ form.confirm_password(class="form-control") }}
+                {% if form.confirm_password.errors %}
+                    <div class="error-message">
+                        {% for error in form.confirm_password.errors %}
+                            <span>{{ error }}</span>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                {{ form.submit(class="btn btn-primary") }}
+            </div>
+        </form>
+
+        <div class="auth-links">
+            <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
+        </div>
+    </div>
+</div>
+{% endblock %}

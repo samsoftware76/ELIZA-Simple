@@ -42,7 +42,7 @@
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">Users</h5>
-                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                    <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#addUserModal">
                         <i class="bi bi-plus-circle me-1"></i> Add User
                     </button>
                 </div>
@@ -76,8 +76,8 @@
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             <button type="button" class="btn btn-outline-primary"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#editUserModal"
+                                                    data-toggle="modal"
+                                                    data-target="#editUserModal"
                                                     data-user-id="{{ user.id }}"
                                                     data-user-username="{{ user.username }}"
                                                     data-user-email="{{ user.email }}"
@@ -88,8 +88,8 @@
                                                 <i class="bi bi-pencil"></i>
                                             </button>
                                             <button type="button" class="btn btn-outline-danger"
-                                                    data-bs-toggle="modal"
-                                                    data-bs-target="#deleteUserModal"
+                                                    data-toggle="modal"
+                                                    data-target="#deleteUserModal"
                                                     data-user-id="{{ user.id }}"
                                                     data-user-username="{{ user.username }}">
                                                 <i class="bi bi-trash"></i>
@@ -119,7 +119,7 @@
                 {{ add_form.csrf_token }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="addUserModalLabel">Add New User</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="row">
@@ -154,7 +154,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Add User</button>
                 </div>
             </form>
@@ -171,7 +171,7 @@
                 {{ edit_form.user_id }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="editUserModalLabel">Edit User</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="row">
@@ -206,7 +206,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Changes</button>
                 </div>
             </form>
@@ -223,14 +223,14 @@
                 {{ delete_form.user_id }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="deleteUserModalLabel">Confirm Delete</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <p>Are you sure you want to delete the user <strong id="deleteUsername"></strong>?</p>
                     <p class="text-danger">This action cannot be undone.</p>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-danger">Delete User</button>
                 </div>
             </form>

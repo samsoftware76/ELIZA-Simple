@@ -106,6 +106,17 @@
             text-transform: uppercase;
         }
         .status-overdue { background: #fee2e2; color: #991b1b; }
+        .approval-pill {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 100px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+        .approval-approved { background: #dcfce7; color: #166534; }
+        .approval-pending { background: #f3f4f6; color: #6b7280; }
 
         table.tasks { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
         table.tasks th {
@@ -213,7 +224,7 @@
             {% if project_report.tasks %}
             <table class="tasks">
                 <thead>
-                    <tr><th>Task</th><th>Assignee</th><th>Due Date</th><th>Completed</th><th>Status</th></tr>
+                    <tr><th>Task</th><th>Assignee</th><th>Due Date</th><th>Completed</th><th>Status</th><th>Client Approval</th></tr>
                 </thead>
                 <tbody>
                     {% for task_report in project_report.tasks %}
@@ -223,13 +234,20 @@
                         <td>{{ task_report.due_date.strftime('%b %d, %Y') if task_report.due_date else 'N/A' }}</td>
                         <td>{{ task_report.completed_at.strftime('%b %d, %Y') if task_report.completed_at else '—' }}</td>
                         <td>{{ task_report.status.value|replace('_', ' ')|title }}{% if task_report.is_late %} &middot; Late{% endif %}</td>
+                        <td>
+                            {% if task_report.client_approved %}
+                            <span class="approval-pill approval-approved">Approved</span>
+                            {% else %}
+                            <span class="approval-pill approval-pending">Pending</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     {% if task_report.is_late %}
-                    <tr class="accountability-row"><td colspan="5">{{ task_report.accountability_sentence }}</td></tr>
+                    <tr class="accountability-row"><td colspan="6">{{ task_report.accountability_sentence }}</td></tr>
                     {% endif %}
                     {% if task_report.comments %}
                     <tr class="comments-row">
-                        <td colspan="5">
+                        <td colspan="6">
                             {% for comment in task_report.comments %}
                             <div><strong>{{ comment.author_name }}</strong> ({{ comment.created_at.strftime('%b %d, %Y %H:%M') }}): {{ comment.content }}</div>
                             {% endfor %}

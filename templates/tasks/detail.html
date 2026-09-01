@@ -24,6 +24,15 @@
                 </button>
             </form>
             {% endif %}
+            {% if task.status.name == 'REVIEW' %}
+            <form method="POST" action="{{ url_for('task_mark_complete', task_id=task.id) }}" class="d-inline"
+                  onsubmit="return confirmAndDisable(this, 'Mark \'' + '{{ task.title }}' + '\' as complete?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-success">
+                    <i class="fas fa-check-double"></i> Mark Complete
+                </button>
+            </form>
+            {% endif %}
             <a href="{{ url_for('task_edit', task_id=task.id) }}" class="btn btn-outline-primary ms-2">
                 <i class="fas fa-edit"></i> Edit
             </a>
@@ -111,7 +120,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">Comments</h5>
-                    <button class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" data-bs-target="#commentForm">
+                    <button class="btn btn-sm btn-outline-primary" data-toggle="collapse" data-target="#commentForm">
                         <i class="fas fa-plus"></i> Add Comment
                     </button>
                 </div>

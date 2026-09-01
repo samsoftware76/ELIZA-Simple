@@ -30,7 +30,7 @@ load_dotenv(dotenv_path)
 
 # Import database models
 from models import db
-from models.models import User, Client, Project, Task, Comment, TimeEntry, ProjectMember, ActivityLog, TeamMembership, TeamInvite
+from models.models import User, Client, Project, Task, Comment, TimeEntry, ProjectMember, ActivityLog, TeamMembership, TeamInvite, ClientInvite
 from models.subscription import Subscription, SubscriptionPlan
 from models.billing import Quote, QuoteItem, Invoice, InvoiceItem
 
@@ -42,13 +42,13 @@ from api.payment import PesaPalPayment
 from api.sms import send_sms
 
 # Import forms
-from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, ProjectAssignmentForm, BusinessProfileForm, AcceptInviteForm
+from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, ProjectAssignmentForm, BusinessProfileForm, AcceptInviteForm, ClientAcceptInviteForm
 
 # Import template filters
 from filters import register_filters
 
 # Import email utilities
-from utils.email_utils import mail, send_task_assignment_notification, send_task_update_notification, send_task_comment_notification, send_bulk_email, send_password_reset_email
+from utils.email_utils import mail, send_task_assignment_notification, send_task_update_notification, send_task_comment_notification, send_bulk_email, send_password_reset_email, send_client_invite_email
 
 # Import analytics - log_event() is unconditionally safe to call, never raises (see utils/analytics.py)
 from utils.analytics import log_event
@@ -112,6 +112,7 @@ from api.admin import admin_bp
 from api.billing import billing_bp
 from api.portal import portal_bp
 from api.team import team_bp
+from api.client_portal import client_portal_bp
 
 app.register_blueprint(subscription_bp)
 app.register_blueprint(email_bp)
@@ -119,6 +120,7 @@ app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(billing_bp)
 app.register_blueprint(portal_bp)
 app.register_blueprint(team_bp)
+app.register_blueprint(client_portal_bp)
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -136,6 +138,27 @@ def load_user(user_id):
     def get_user():
         return User.query.get(int(user_id))
     return retry_operation(get_user)
+
+@app.before_request
+def restrict_client_role_to_portal():
+    """The single unconditional gate keeping a CLIENT-role login (Client.portal_user,
+    see models/models.py) out of the staff app - deliberately here, not left to each
+    staff route to opt into individually, since a route that forgets to check would
+    otherwise leak every tenant's data to a client login.
+
+    request.endpoint is None on a path that doesn't match any route (e.g. an
+    unknown URL) - let that through so the normal 404 handling still applies
+    instead of us redirecting on top of it.
+    """
+    if not current_user.is_authenticated or current_user.role != UserRole.CLIENT:
+        return
+    if request.endpoint is None:
+        return
+    if request.endpoint == 'static' or request.endpoint == 'logout':
+        return
+    if request.endpoint.startswith('client_portal.'):
+        return
+    return redirect(url_for('client_portal.dashboard'))
 
 @app.route('/')
 def home():
@@ -190,8 +213,13 @@ def login():
             if user and user.check_password(form.password.data):
                 login_user(user, remember=form.remember_me.data)
                 log_event('user_login', user_id=user.id)
-                next_page = request.args.get('next')
                 flash('Login successful!', 'success')
+                if user.role == UserRole.CLIENT:
+                    # A CLIENT login has no destination among the staff routes,
+                    # so skip next_page (unlike every other role below) and send
+                    # them straight to their own portal dashboard.
+                    return redirect(url_for('client_portal.dashboard'))
+                next_page = request.args.get('next')
                 return redirect(next_page or url_for('home'))
             else:
                 print(f"DEBUG: Login failed for {form.email.data}. User exists: {user is not None}")
@@ -455,6 +483,65 @@ def accept_invite(token):
 
     return render_template('auth/accept_invite.html', title='Accept Invite', form=form, invite=invite)
 
+@app.route('/accept-client-invite/<token>', methods=['GET', 'POST'])
+def accept_client_invite(token):
+    """Public accept-invite landing page for a client-portal invite email -
+    mirrors accept_invite() above almost exactly (same "invalid or expired"
+    handling for a bad token, same race-condition re-check), except a
+    successful submit links the new User to the invite's Client row
+    (Client.user_id) instead of creating a TeamMembership, and lands the new
+    login on the client portal rather than home() - a CLIENT-role user
+    hitting home() immediately bounces via restrict_client_role_to_portal
+    above."""
+    if current_user.is_authenticated:
+        return redirect(url_for('home'))
+
+    invite = ClientInvite.verify_invite_token(token)
+    if not invite:
+        # Same generic message as accept_invite() - covers a tampered/expired
+        # token and one already accepted/revoked, without telling a caller
+        # which case it was.
+        flash('That invite link is invalid or has expired.', 'danger')
+        return redirect(url_for('login'))
+
+    form = ClientAcceptInviteForm()
+    if form.validate_on_submit():
+        # The invitee's email is the invite's own invitee_email, not a form
+        # field (see forms.ClientAcceptInviteForm) - checked here the same
+        # way accept_invite() checks AcceptInviteForm's submission.
+        if User.query.filter_by(email=invite.invitee_email).first():
+            flash('An account with this email already exists. Please log in instead.', 'danger')
+            return redirect(url_for('login'))
+
+        new_user = User(
+            username=form.username.data,
+            email=invite.invitee_email,
+            first_name=form.first_name.data,
+            last_name=form.last_name.data,
+            phone=form.phone.data,
+            role=UserRole.CLIENT
+        )
+        new_user.set_password(form.password.data)
+        db.session.add(new_user)
+        db.session.flush()  # assigns new_user.id without a separate round trip, needed below
+
+        # invite.client uses the relationship added in batch 1 - links this
+        # new login to the one Client record the invite was scoped to.
+        client = invite.client
+        client.user_id = new_user.id
+
+        invite.status = 'accepted'
+        invite.accepted_at = datetime.utcnow()
+
+        db.session.commit()
+        log_event('client_invite_accepted', user_id=new_user.id, inviter_id=invite.inviter_id)
+
+        login_user(new_user)
+        flash('Your account has been created!', 'success')
+        return redirect(url_for('client_portal.dashboard'))
+
+    return render_template('auth/accept_client_invite.html', title='Accept Invite', form=form, invite=invite)
+
 # Client Management Routes
 @app.route('/clients')
 @login_required
@@ -544,7 +631,62 @@ def client_detail(client_id):
     # and confirm another tenant's client id.
     if client.owner_id != current_user.get_owner_id():
         abort(404)
-    return render_template('clients/detail.html', client=client)
+    # Lets the template show "invite sent, awaiting response" instead of a
+    # second Invite to Portal button once one is already outstanding - see
+    # client_invite_portal below, which is the only place a pending row for
+    # this client_id can come from.
+    pending_invite = ClientInvite.query.filter_by(client_id=client.id, status='pending').first()
+    return render_template('clients/detail.html', client=client, pending_invite=pending_invite)
+
+@app.route('/clients/<int:client_id>/invite-portal', methods=['POST'])
+@login_required
+def client_invite_portal(client_id):
+    """Invite a client to the client portal - creates a ClientInvite and
+    emails the accept link, replacing the direct-ORM-insert workaround prior
+    batches used for testing."""
+    client = Client.query.get_or_404(client_id)
+    # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
+    # and confirm another tenant's client id.
+    if client.owner_id != current_user.get_owner_id():
+        abort(404)
+
+    # Guard against duplicates rather than creating a second invite/user for
+    # a client that already has one - both checks below no-op with a flash
+    # instead of raising, since this is reachable any time the page is open
+    # in two tabs or the button is double-submitted.
+    if client.user_id is not None:
+        flash(f'{client.name} already has portal access.', 'info')
+        return redirect(url_for('client_detail', client_id=client.id))
+
+    existing_invite = ClientInvite.query.filter_by(client_id=client.id, status='pending').first()
+    if existing_invite:
+        flash(f'An invite is already pending for {client.name}.', 'info')
+        return redirect(url_for('client_detail', client_id=client.id))
+
+    if not client.email:
+        flash(f'{client.name} has no email address on file - add one before inviting them to the portal.', 'danger')
+        return redirect(url_for('client_detail', client_id=client.id))
+
+    client_invite = ClientInvite(
+        inviter_id=current_user.id,
+        client_id=client.id,
+        invitee_email=client.email,
+        status='pending'
+    )
+    db.session.add(client_invite)
+    db.session.commit()
+
+    # Build from app.config['BASE_URL'] rather than url_for(_external=True) -
+    # same reasoning as reset_password_request() above and team.invite() in
+    # api/team.py: the latter's scheme-guessing produces an https:// link
+    # even on the plain-http local dev server (Talisman sets
+    # PREFERRED_URL_SCHEME to https there), which the local server can't
+    # actually serve.
+    accept_url = app.config['BASE_URL'].rstrip('/') + url_for('accept_client_invite', token=client_invite.get_invite_token())
+    send_client_invite_email(client_invite, accept_url)
+
+    flash(f'Portal invite sent to {client.email}.', 'success')
+    return redirect(url_for('client_detail', client_id=client.id))
 
 @app.route('/clients/<int:client_id>/send-sms', methods=['POST'])
 @login_required
@@ -1374,6 +1516,45 @@ def task_submit_review(task_id):
     flash(f'Task "{task.title}" has been submitted for review.', 'success')
     return redirect(url_for('task_detail', task_id=task.id))
 
+@app.route('/tasks/<int:task_id>/mark-complete', methods=['POST'])
+@login_required
+def task_mark_complete(task_id):
+    """Close the loop that task_submit_review opens: a REVIEW task otherwise
+    has no quick way to actually finish - only the full edit form's status
+    dropdown, which isn't obvious - so it can sit in REVIEW indefinitely even
+    after a client approves it via the client portal (client_approved just
+    flags approval, it never touches Task.status). This is that missing
+    action."""
+    task = Task.query.get_or_404(task_id)
+    # Task has no owner_id of its own - tenant isolation is via its parent
+    # project, same 404-not-403 pattern used on every other task route.
+    if task.project.owner_id != current_user.get_owner_id():
+        abort(404)
+
+    if task.status != TaskStatus.REVIEW:
+        flash(f'Task "{task.title}" must be in Review before it can be marked complete.', 'info')
+        return redirect(url_for('task_detail', task_id=task.id))
+
+    task.status = TaskStatus.COMPLETED
+    task.completed_at = datetime.utcnow()
+    db.session.commit()
+
+    # Log the activity - same paired user_id/owner_id pattern as every other
+    # status-affecting ActivityLog call in this file.
+    activity = ActivityLog(
+        user_id=current_user.id,
+        owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
+        action_type='status_changed',
+        entity_type='task',
+        entity_id=task.id,
+        description=f'Marked task as complete: {task.title}'
+    )
+    db.session.add(activity)
+    db.session.commit()
+
+    flash(f'Task "{task.title}" has been marked complete.', 'success')
+    return redirect(url_for('task_detail', task_id=task.id))
+
 @app.route('/tasks/<int:task_id>/delete')
 @login_required
 def task_delete(task_id):
@@ -2199,6 +2380,7 @@ def export_deliverables_report():
                 'Completed': t['completed_at'].strftime('%Y-%m-%d') if t['completed_at'] else '',
                 'Status': t['status'].value,
                 'Late': 'Yes' if t['is_late'] else 'No',
+                'Client Approved': 'Yes' if t['client_approved'] else 'No',
                 'Accountability Note': t['accountability_sentence'] or '',
             } for t in p['tasks']]
             if not data:
