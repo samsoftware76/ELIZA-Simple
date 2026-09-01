@@ -62,6 +62,23 @@ class User(db.Model, UserMixin):
     # HoneyBook "cannot remove logo" complaint this exists to avoid.
     business_name = db.Column(db.String(150))
     business_logo_url = db.Column(db.String(500))
+    # Manual "pay by bank transfer" details, shown to clients on the invoice
+    # portal as an alternative to the PesaPal button (see
+    # migrations/add_bank_transfer_fields.py). Tenant-level like business_name
+    # above - resolved via get_owner_id() wherever read/written, not
+    # necessarily current_user's own row. All nullable: bank transfer is
+    # opt-in, and the portal template only shows the section once bank_name
+    # is set. bank_transfer_fee is a flat amount in the invoice's own
+    # currency (e.g. 40.0 = "the receiving bank charges $40 on incoming
+    # wires", billed to the client on top of invoice.total) - there is no
+    # payment gateway involved, the client wires the money directly and the
+    # freelancer marks the invoice paid themselves via the existing
+    # invoice_mark_paid route once it lands.
+    bank_name = db.Column(db.String(150))
+    bank_account_name = db.Column(db.String(150))
+    bank_account_number = db.Column(db.String(50))
+    bank_swift_code = db.Column(db.String(20))
+    bank_transfer_fee = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

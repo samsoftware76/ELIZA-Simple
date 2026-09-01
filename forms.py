@@ -139,6 +139,18 @@ class BusinessProfileForm(FlaskForm):
                                  description="Shown to your clients instead of your personal name or 'ELIZA'")
     business_logo = FileField('Logo Image', validators=[FileAllowed(['png', 'jpg', 'jpeg', 'gif', 'webp'], 'Images only (png/jpg/jpeg/gif/webp).')],
                                description="Optional: upload a logo image (max 2MB). Leave blank to keep your current logo.")
+    # Manual "pay by bank transfer" details (see User.bank_name etc. in
+    # models/models.py) - all optional, shown to clients on the invoice
+    # portal only once bank_name is set. No new payment gateway: the client
+    # wires the money directly and the freelancer marks the invoice paid
+    # themselves via the existing invoice_mark_paid route.
+    bank_name = StringField('Bank Name', validators=[Optional(), Length(max=150)],
+                             description="Shown to clients who choose to pay by bank transfer")
+    bank_account_name = StringField('Account Name', validators=[Optional(), Length(max=150)])
+    bank_account_number = StringField('Account Number', validators=[Optional(), Length(max=50)])
+    bank_swift_code = StringField('SWIFT/BIC Code', validators=[Optional(), Length(max=20)])
+    bank_transfer_fee = FloatField('Bank transfer fee', validators=[Optional(), NumberRange(min=0)],
+                                    description="Flat amount added to invoices paid this way, e.g. to cover your bank's incoming wire charge")
     submit = SubmitField('Save')
 
 

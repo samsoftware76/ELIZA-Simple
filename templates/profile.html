@@ -4,28 +4,34 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="card" style="max-width: 600px; margin: 0 auto;">
-        <div class="card-header bg-primary text-white">
-            <h2 class="mb-0">Business Profile</h2>
-        </div>
-        <div class="card-body">
-            <p class="text-muted">This is what your clients see on the quote/invoice portal and in emails from you &mdash; not ELIZA's own name.</p>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" style="max-width: 600px; margin: 0 auto 1rem;" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
+    {# Single form wrapping both cards below - business_name/logo and the
+       bank_* fields are all fields on the one BusinessProfileForm, and
+       WTForms treats an Optional() field missing from the POST body as
+       blank, so splitting these into two separate <form> tags would wipe
+       out whichever card's fields weren't submitted on every save. #}
+    <form method="POST" enctype="multipart/form-data">
+        {{ form.hidden_tag() }}
 
-            <form method="POST" enctype="multipart/form-data">
-                {{ form.hidden_tag() }}
+        <div class="card" style="max-width: 600px; margin: 0 auto;">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0">Business Profile</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">This is what your clients see on the quote/invoice portal and in emails from you &mdash; not ELIZA's own name.</p>
+
                 <div class="form-group">
                     {{ form.business_name.label }}
                     {{ form.business_name(class="form-control", placeholder="e.g. Kampala Web Studio") }}
@@ -49,9 +55,47 @@
                     No business name set yet &mdash; your clients currently see "ELIZA" on your quote/invoice portal links. Set one below.
                 </div>
                 {% endif %}
-                {{ form.submit(class="btn btn-primary") }}
-            </form>
+            </div>
         </div>
-    </div>
+
+        <div class="card mt-4" style="max-width: 600px; margin: 0 auto;">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0">Bank Transfer Details (optional)</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">If set, clients see these on the invoice portal as an alternative to paying via PesaPal &mdash; they wire the money to this account directly, then you mark the invoice paid yourself once it lands.</p>
+
+                <div class="form-group">
+                    {{ form.bank_name.label }}
+                    {{ form.bank_name(class="form-control", placeholder="e.g. Stanbic Bank") }}
+                    <small class="form-text text-muted">{{ form.bank_name.description }}</small>
+                </div>
+                <div class="form-group">
+                    {{ form.bank_account_name.label }}
+                    {{ form.bank_account_name(class="form-control", placeholder="e.g. Kampala Web Studio Ltd") }}
+                </div>
+                <div class="form-group">
+                    {{ form.bank_account_number.label }}
+                    {{ form.bank_account_number(class="form-control") }}
+                </div>
+                <div class="form-group">
+                    {{ form.bank_swift_code.label }}
+                    {{ form.bank_swift_code(class="form-control") }}
+                </div>
+                <div class="form-group">
+                    {{ form.bank_transfer_fee.label }}
+                    {{ form.bank_transfer_fee(class="form-control") }}
+                    <small class="form-text text-muted">{{ form.bank_transfer_fee.description }}</small>
+                    {% for error in form.bank_transfer_fee.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div style="max-width: 600px; margin: 1rem auto 0;">
+            {{ form.submit(class="btn btn-primary") }}
+        </div>
+    </form>
 </div>
 {% endblock %}

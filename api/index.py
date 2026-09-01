@@ -329,6 +329,13 @@ def profile():
             if saved_path:
                 owner.business_logo_url = saved_path
         # else: no new file chosen - leave the existing logo alone.
+        # Bank transfer details - same owner-row pattern as business_name
+        # above, not current_user's own row.
+        owner.bank_name = form.bank_name.data
+        owner.bank_account_name = form.bank_account_name.data
+        owner.bank_account_number = form.bank_account_number.data
+        owner.bank_swift_code = form.bank_swift_code.data
+        owner.bank_transfer_fee = form.bank_transfer_fee.data
         db.session.add(owner)
         db.session.commit()
         flash('Business profile updated.', 'success')
