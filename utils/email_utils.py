@@ -253,6 +253,34 @@ def send_password_reset_email(user, reset_url):
         logger.error(f"Failed to send password reset email to {user.email}: {str(e)}")
 
 
+def send_team_invite_email(invite, accept_url):
+    """
+    Email an invited team member a link to accept a team invite.
+
+    Args:
+        invite: The TeamInvite object
+        accept_url (str): Fully-qualified, signed, time-limited accept-invite link
+    """
+    subject = "[ELIZA] You've been invited to join a team on ELIZA"
+    recipients = [invite.invitee_email]
+
+    try:
+        inviter_name = invite.inviter.business_name or invite.inviter.get_full_name()
+        text_body = (
+            f"Hello,\n\n"
+            f"{inviter_name} has invited you to join their team on ELIZA as a {invite.role.value.replace('_', ' ').title()}. "
+            f"This link expires in 7 days:\n"
+            f"{accept_url}\n\n"
+            f"If you weren't expecting this invite, you can ignore this email.\n\n"
+            f"Thank you,\nELIZA Project Management"
+        )
+        html_body = render_template('emails/team_invite.html', invite=invite, inviter_name=inviter_name, accept_url=accept_url)
+        send_email(subject, recipients, text_body, html_body)
+        logger.info(f"Team invite email sent to {invite.invitee_email}")
+    except Exception as e:
+        logger.error(f"Failed to send team invite email to {invite.invitee_email}: {str(e)}")
+
+
 def send_quote_email(quote, portal_url):
     """
     Email a client a link to view and respond to a quote via the client portal.

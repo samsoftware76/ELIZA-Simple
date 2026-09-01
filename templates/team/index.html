@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Team - ELIZA{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Team</h1>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h2 class="mb-0 h5">Team Members</h2>
+        </div>
+        <div class="card-body">
+            {% if memberships %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for membership in memberships %}
+                                <tr>
+                                    <td>{{ membership.member.get_full_name() }}</td>
+                                    <td>{{ membership.member.email }}</td>
+                                    <td>{{ membership.role.value.replace('_', ' ')|title }}</td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('team.remove_member', membership_id=membership.id) }}" class="d-inline"
+                                              onsubmit="return confirmAndDisable(this, 'Remove ' + '{{ membership.member.get_full_name() }}' + ' from your team?')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-danger" title="Remove">
+                                                <i class="fas fa-user-minus"></i> Remove
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No team members yet - invite one below.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h2 class="mb-0 h5">Pending Invites</h2>
+        </div>
+        <div class="card-body">
+            {% if pending_invites %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="thead-dark">
+                            <tr>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Sent</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for invite in pending_invites %}
+                                <tr>
+                                    <td>{{ invite.invitee_email }}</td>
+                                    <td>{{ invite.role.value.replace('_', ' ')|title }}</td>
+                                    <td>{{ invite.created_at.strftime('%b %d, %Y') if invite.created_at else '—' }}</td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('team.revoke_invite', invite_id=invite.id) }}" class="d-inline"
+                                              onsubmit="return confirmAndDisable(this, 'Revoke the invite to ' + '{{ invite.invitee_email }}' + '?')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Revoke">
+                                                <i class="fas fa-times"></i> Revoke
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="text-muted mb-0">No pending invites.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h2 class="mb-0 h5">Invite a Team Member</h2>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('team.invite') }}">
+                {{ form.hidden_tag() }}
+
+                <div class="form-row">
+                    <div class="form-group col-md-8">
+                        {{ form.email.label }}
+                        {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), placeholder="teammate@example.com") }}
+                        {% if form.email.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.email.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="form-group col-md-4">
+                        {{ form.role.label }}
+                        {{ form.role(class="form-control" + (" is-invalid" if form.role.errors else "")) }}
+                        {% if form.role.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.role.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {{ form.submit(class="btn btn-primary") }}
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+{% endblock %}

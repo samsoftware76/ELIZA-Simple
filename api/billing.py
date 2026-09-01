@@ -54,7 +54,7 @@ def quotes_list():
     # Paginated so the page doesn't load every quote row on every visit.
     page = request.args.get('page', 1, type=int)
     # Quote has no owner_id of its own - scope through its required client_id.
-    pagination = Quote.query.join(Client).filter(Client.owner_id == current_user.id) \
+    pagination = Quote.query.join(Client).filter(Client.owner_id == current_user.get_owner_id()) \
         .order_by(Quote.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
     return render_template('quotes/index.html', quotes=pagination.items, pagination=pagination)
 
@@ -64,7 +64,7 @@ def quotes_list():
 def quote_create():
     """Create a new quote"""
     # owner_id scopes the client_id/project_id dropdowns to this user's own records.
-    form = QuoteForm(owner_id=current_user.id)
+    form = QuoteForm(owner_id=current_user.get_owner_id())
 
     if form.validate_on_submit():
         items = parse_line_items(request.form)
@@ -75,7 +75,7 @@ def quote_create():
         project = Project.query.get(form.project_id.data) if form.project_id.data else None
         if not items:
             flash('Add at least one line item before saving the quote.', 'danger')
-        elif not client or client.owner_id != current_user.id or (project and project.owner_id != current_user.id):
+        elif not client or client.owner_id != current_user.get_owner_id() or (project and project.owner_id != current_user.get_owner_id()):
             flash('Invalid client or project selected.', 'danger')
         else:
             try:
@@ -114,7 +114,7 @@ def quote_detail(quote_id):
     """View a quote (staff view)"""
     quote = Quote.query.get_or_404(quote_id)
     # Quote has no owner_id of its own - ownership is via its required client.
-    if quote.client.owner_id != current_user.id:
+    if quote.client.owner_id != current_user.get_owner_id():
         abort(404)
     portal_url = current_app.config['BASE_URL'].rstrip('/') + url_for('portal.view_quote', token=quote.public_token)
     return render_template('quotes/detail.html', quote=quote, portal_url=portal_url)
@@ -126,7 +126,7 @@ def quote_print(quote_id):
     """Standalone printable/PDF view of a quote (staff view)"""
     quote = Quote.query.get_or_404(quote_id)
     # Quote has no owner_id of its own - ownership is via its required client.
-    if quote.client.owner_id != current_user.id:
+    if quote.client.owner_id != current_user.get_owner_id():
         abort(404)
     return render_template('print/document.html', **build_print_context(quote, 'Quote'))
 
@@ -139,14 +139,14 @@ def quote_edit(quote_id):
     silently changing terms after a response is misleading."""
     quote = Quote.query.get_or_404(quote_id)
     # Quote has no owner_id of its own - ownership is via its required client.
-    if quote.client.owner_id != current_user.id:
+    if quote.client.owner_id != current_user.get_owner_id():
         abort(404)
     if quote.status not in (QuoteStatus.DRAFT, QuoteStatus.SENT):
         flash('This quote has already been responded to and can no longer be edited.', 'warning')
         return redirect(url_for('billing.quote_detail', quote_id=quote.id))
 
     # owner_id scopes the client_id/project_id dropdowns to this user's own records.
-    form = QuoteForm(obj=quote, owner_id=current_user.id)
+    form = QuoteForm(obj=quote, owner_id=current_user.get_owner_id())
 
     if form.validate_on_submit():
         items = parse_line_items(request.form)
@@ -185,7 +185,7 @@ def quote_send(quote_id):
     """Email the client a portal link to view and respond to this quote"""
     quote = Quote.query.get_or_404(quote_id)
     # Quote has no owner_id of its own - ownership is via its required client.
-    if quote.client.owner_id != current_user.id:
+    if quote.client.owner_id != current_user.get_owner_id():
         abort(404)
     if not quote.client.email:
         flash('This client has no email address on file. Add one before sending.', 'danger')
@@ -213,7 +213,7 @@ def quote_delete(quote_id):
     """Delete a quote"""
     quote = Quote.query.get_or_404(quote_id)
     # Quote has no owner_id of its own - ownership is via its required client.
-    if quote.client.owner_id != current_user.id:
+    if quote.client.owner_id != current_user.get_owner_id():
         abort(404)
     try:
         db.session.delete(quote)
@@ -231,7 +231,7 @@ def quote_convert_to_invoice(quote_id):
     """Create a draft invoice pre-filled from an accepted quote"""
     quote = Quote.query.get_or_404(quote_id)
     # Quote has no owner_id of its own - ownership is via its required client.
-    if quote.client.owner_id != current_user.id:
+    if quote.client.owner_id != current_user.get_owner_id():
         abort(404)
     if quote.status != QuoteStatus.ACCEPTED:
         flash('Only accepted quotes can be converted to an invoice.', 'warning')
@@ -282,7 +282,7 @@ def invoices_list():
     # Paginated so the page doesn't load every invoice row on every visit.
     page = request.args.get('page', 1, type=int)
     # Invoice has no owner_id of its own - scope through its required client_id.
-    pagination = Invoice.query.join(Client).filter(Client.owner_id == current_user.id) \
+    pagination = Invoice.query.join(Client).filter(Client.owner_id == current_user.get_owner_id()) \
         .order_by(Invoice.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
     return render_template('invoices/index.html', invoices=pagination.items, pagination=pagination)
 
@@ -292,7 +292,7 @@ def invoices_list():
 def invoice_create():
     """Create a new invoice"""
     # owner_id scopes the client_id/project_id dropdowns to this user's own records.
-    form = InvoiceForm(owner_id=current_user.id)
+    form = InvoiceForm(owner_id=current_user.get_owner_id())
 
     if form.validate_on_submit():
         items = parse_line_items(request.form)
@@ -303,7 +303,7 @@ def invoice_create():
         project = Project.query.get(form.project_id.data) if form.project_id.data else None
         if not items:
             flash('Add at least one line item before saving the invoice.', 'danger')
-        elif not client or client.owner_id != current_user.id or (project and project.owner_id != current_user.id):
+        elif not client or client.owner_id != current_user.get_owner_id() or (project and project.owner_id != current_user.get_owner_id()):
             flash('Invalid client or project selected.', 'danger')
         else:
             try:
@@ -342,7 +342,7 @@ def invoice_detail(invoice_id):
     """View an invoice (staff view)"""
     invoice = Invoice.query.get_or_404(invoice_id)
     # Invoice has no owner_id of its own - ownership is via its required client.
-    if invoice.client.owner_id != current_user.id:
+    if invoice.client.owner_id != current_user.get_owner_id():
         abort(404)
     portal_url = current_app.config['BASE_URL'].rstrip('/') + url_for('portal.view_invoice', token=invoice.public_token)
     return render_template('invoices/detail.html', invoice=invoice, portal_url=portal_url)
@@ -354,7 +354,7 @@ def invoice_print(invoice_id):
     """Standalone printable/PDF view of an invoice (staff view)"""
     invoice = Invoice.query.get_or_404(invoice_id)
     # Invoice has no owner_id of its own - ownership is via its required client.
-    if invoice.client.owner_id != current_user.id:
+    if invoice.client.owner_id != current_user.get_owner_id():
         abort(404)
     return render_template('print/document.html', **build_print_context(invoice, 'Invoice'))
 
@@ -367,14 +367,14 @@ def invoice_edit(invoice_id):
     amount after the fact would be misleading."""
     invoice = Invoice.query.get_or_404(invoice_id)
     # Invoice has no owner_id of its own - ownership is via its required client.
-    if invoice.client.owner_id != current_user.id:
+    if invoice.client.owner_id != current_user.get_owner_id():
         abort(404)
     if invoice.status not in (InvoiceStatus.DRAFT, InvoiceStatus.SENT):
         flash('This invoice has already been paid or cancelled and can no longer be edited.', 'warning')
         return redirect(url_for('billing.invoice_detail', invoice_id=invoice.id))
 
     # owner_id scopes the client_id/project_id dropdowns to this user's own records.
-    form = InvoiceForm(obj=invoice, owner_id=current_user.id)
+    form = InvoiceForm(obj=invoice, owner_id=current_user.get_owner_id())
 
     if form.validate_on_submit():
         items = parse_line_items(request.form)
@@ -413,7 +413,7 @@ def invoice_send(invoice_id):
     """Email the client a portal link to view and pay this invoice"""
     invoice = Invoice.query.get_or_404(invoice_id)
     # Invoice has no owner_id of its own - ownership is via its required client.
-    if invoice.client.owner_id != current_user.id:
+    if invoice.client.owner_id != current_user.get_owner_id():
         abort(404)
     if not invoice.client.email:
         flash('This client has no email address on file. Add one before sending.', 'danger')
@@ -441,7 +441,7 @@ def invoice_mark_paid(invoice_id):
     """Manually mark an invoice as paid (e.g. cash or bank transfer received offline)"""
     invoice = Invoice.query.get_or_404(invoice_id)
     # Invoice has no owner_id of its own - ownership is via its required client.
-    if invoice.client.owner_id != current_user.id:
+    if invoice.client.owner_id != current_user.get_owner_id():
         abort(404)
     try:
         invoice.status = InvoiceStatus.PAID
@@ -461,7 +461,7 @@ def invoice_delete(invoice_id):
     """Delete an invoice"""
     invoice = Invoice.query.get_or_404(invoice_id)
     # Invoice has no owner_id of its own - ownership is via its required client.
-    if invoice.client.owner_id != current_user.id:
+    if invoice.client.owner_id != current_user.get_owner_id():
         abort(404)
     try:
         db.session.delete(invoice)

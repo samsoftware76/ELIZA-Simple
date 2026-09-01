@@ -59,6 +59,9 @@
                         <li class="nav-item">
                             <a class="nav-link{% if request.endpoint == 'subscription.plans' %} active{% endif %}" href="{{ url_for('subscription.plans') }}"><i class="fas fa-credit-card mr-1"></i> Subscription Plans</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link{% if request.endpoint and request.endpoint.startswith('team.') %} active{% endif %}" href="{{ url_for('team.dashboard') }}"><i class="fas fa-user-friends mr-1"></i> Team</a>
+                        </li>
                         {% if current_user.role.value == 'admin' %}
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle{% if request.endpoint and request.endpoint.startswith('admin.') %} active{% endif %}" href="#" id="adminDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">

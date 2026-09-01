@@ -122,6 +122,19 @@ class User(db.Model, UserMixin):
             return self.role.name == role
         return self.role == role
 
+    def get_owner_id(self):
+        """The tenant id whose data this user should see.
+
+        Team members share the inviting account's data, so current_user.id
+        alone is no longer always the right value for owner_id-scoped
+        queries (Client.owner_id, Project.owner_id, ...) once a user can be
+        someone else's team member. Falls back to self.id for everyone else
+        (including an account owner themselves), so this is a drop-in
+        replacement wherever current_user.id was used as the tenant id.
+        """
+        membership = TeamMembership.query.filter_by(member_user_id=self.id, is_active=True).first()
+        return membership.account_owner_id if membership else self.id
+
 class Client(db.Model):
     __tablename__ = 'clients'
     
@@ -207,6 +220,89 @@ class Project(db.Model):
     
     def __repr__(self):
         return f'<Project {self.title}>'
+
+class TeamMembership(db.Model):
+    __tablename__ = 'team_memberships'
+
+    id = db.Column(db.Integer, primary_key=True)
+    account_owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # unique=True: a member's data has to resolve to exactly one owner account
+    # (see User.get_owner_id below) - if a user could be an active member of
+    # two owners at once, owner_id-scoped queries would have no single answer
+    # for which account's clients/projects to show them.
+    member_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
+    role = db.Column(db.Enum(UserRole), nullable=False, default=UserRole.DEVELOPER)
+    # Soft-revoke flag: kept instead of deleting the row so a removed member's
+    # history (who invited them, when) isn't lost, matching this codebase's
+    # general preference for auditable soft state over hard deletes.
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Two FKs to users.id on this table - foreign_keys= required on both
+    # relationships below or SQLAlchemy can't tell which column each join
+    # uses and raises AmbiguousForeignKeysError on the first query touching
+    # any mapper in the registry (i.e. it breaks the entire app, not just
+    # this model). Same issue as ActivityLog.user_id/owner_id above.
+    account_owner = db.relationship('User', foreign_keys=[account_owner_id],
+                                     backref=db.backref('team_memberships_owned', lazy=True))
+    # uselist=False: member_user_id is unique above, so a user has at most
+    # one membership row to look back at, not a list.
+    member = db.relationship('User', foreign_keys=[member_user_id],
+                              backref=db.backref('team_membership', lazy=True, uselist=False))
+
+    def __repr__(self):
+        return f'<TeamMembership member={self.member_user_id} owner={self.account_owner_id}>'
+
+class TeamInvite(db.Model):
+    __tablename__ = 'team_invites'
+
+    id = db.Column(db.Integer, primary_key=True)
+    inviter_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # String, not a FK to users.id: the invited person usually doesn't have a
+    # User row yet - that's the whole point of an invite - so this has to be
+    # able to hold an email with no matching account until it's accepted.
+    invitee_email = db.Column(db.String(120), nullable=False)
+    role = db.Column(db.Enum(UserRole), nullable=False, default=UserRole.DEVELOPER)
+    status = db.Column(db.String(20), default='pending')  # pending / accepted / revoked
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    accepted_at = db.Column(db.DateTime, nullable=True)
+
+    inviter = db.relationship('User', foreign_keys=[inviter_id],
+                               backref=db.backref('team_invites_sent', lazy=True))
+
+    def get_invite_token(self, expires_sec=604800):
+        """A signed, time-limited token for the accept-invite link (default 7
+        days - an invite should outlast a password reset's 30 minutes, since
+        the invitee isn't sitting at their inbox waiting for it)."""
+        from itsdangerous import URLSafeTimedSerializer
+        from flask import current_app
+        s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+        return s.dumps({'invite_id': self.id}, salt='team-invite')
+
+    @staticmethod
+    def verify_invite_token(token, expires_sec=604800):
+        """Returns the TeamInvite for a valid, unexpired token whose status is
+        still 'pending', or None.
+
+        The status=='pending' check is the important extra step beyond
+        User.verify_reset_token's version: a signature can still be valid
+        after the invite it points at was revoked or already accepted, so
+        the signature alone isn't enough to let someone (re)join through it.
+        """
+        from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+        from flask import current_app
+        s = URLSafeTimedSerializer(current_app.config['SECRET_KEY'])
+        try:
+            data = s.loads(token, salt='team-invite', max_age=expires_sec)
+        except (BadSignature, SignatureExpired):
+            return None
+        invite = TeamInvite.query.get(data.get('invite_id'))
+        if invite and invite.status == 'pending':
+            return invite
+        return None
+
+    def __repr__(self):
+        return f'<TeamInvite {self.invitee_email} status={self.status}>'
 
 class TimeEntry(db.Model):
     __tablename__ = 'time_entries'

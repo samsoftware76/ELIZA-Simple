@@ -54,6 +54,61 @@ class RegistrationForm(FlaskForm):
         if user:
             raise ValidationError('Email already registered. Please use a different one or reset your password.')
 
+class TeamInviteForm(FlaskForm):
+    """Form for an account owner to invite a team member."""
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    # Administrator is deliberately excluded here for the same reason it's
+    # excluded from RegistrationForm.role above: UserRole.ADMIN is the exact
+    # enum value api/admin.py's admin_required decorator checks for
+    # platform-wide super-admin access across every tenant, not "admin of my
+    # own team". Letting an account owner grant that to an invitee would let
+    # them (or anyone whose email they typed) see every other customer's
+    # data, not just their own.
+    role = SelectField('Role', choices=[
+        (UserRole.PROJECT_MANAGER.name, 'Project Manager'),
+        (UserRole.DEVELOPER.name, 'Developer'),
+        (UserRole.SECRETARY.name, 'Secretary')
+    ], validators=[DataRequired()])
+    submit = SubmitField('Send Invite')
+
+
+class AcceptInviteForm(FlaskForm):
+    """Form for a new team member to set up their account from an invite.
+
+    Mirrors RegistrationForm's fields/validators, with two fields deliberately
+    missing rather than just restricted:
+    - No role field at all - not even a restricted dropdown like
+      TeamInviteForm's above. The role for an accepted invite always comes
+      from the TeamInvite row (set by the owner when they sent it), never
+      from what the invitee submits, so there's nothing here for a crafted
+      POST to override.
+    - No email field either - the invitee's email is the invite's own
+      invitee_email (that's who was invited), not something to retype. The
+      route checks that email for a pre-existing account the same way
+      RegistrationForm.validate_email does below, it's just done against
+      invite.invitee_email in api/index.py rather than a form field here.
+    """
+    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=50)])
+    first_name = StringField('First Name', validators=[DataRequired(), Length(max=50)])
+    last_name = StringField('Last Name', validators=[DataRequired(), Length(max=50)])
+    phone = StringField('Phone Number', validators=[Optional(), Length(max=20)])
+    password = PasswordField('Password', validators=[
+        DataRequired(),
+        Length(min=8, message='Password must be at least 8 characters long')
+    ])
+    confirm_password = PasswordField('Confirm Password', validators=[
+        DataRequired(),
+        EqualTo('password', message='Passwords must match')
+    ])
+    submit = SubmitField('Create Account')
+
+    def validate_username(self, username):
+        """Check if username already exists"""
+        user = User.query.filter_by(username=username.data).first()
+        if user:
+            raise ValidationError('Username already exists. Please choose a different one.')
+
+
 class PasswordResetRequestForm(FlaskForm):
     """Form for requesting password reset"""
     email = StringField('Email', validators=[DataRequired(), Email()])
@@ -191,12 +246,18 @@ class TaskForm(FlaskForm):
         if self.project:
             self.project_id.data = self.project.id
             self.project_id.render_kw = {'readonly': True}
-        # Tenant isolation: only offer this user's own projects, otherwise a
-        # task could be filed against another tenant's project. No user
-        # passed in => no tenant context => empty dropdown, not "every
+        # Tenant isolation: only offer this user's own account's projects,
+        # otherwise a task could be filed against another tenant's project.
+        # Uses get_owner_id(), not .id directly - for an invited team member
+        # these differ (the member's own id vs the account they were
+        # invited into), and using .id here left every team member unable
+        # to create or edit a task on any shared project at all (the
+        # dropdown was empty while the submitted project id was still
+        # forced in, so WTForms rejected it as "Not a valid choice"). No
+        # user passed in => no tenant context => empty dropdown, not "every
         # project on the platform".
         if self.user is not None:
-            self.project_id.choices = [(p.id, p.title) for p in Project.query.filter_by(owner_id=self.user.id).order_by(Project.title).all()]
+            self.project_id.choices = [(p.id, p.title) for p in Project.query.filter_by(owner_id=self.user.get_owner_id()).order_by(Project.title).all()]
         else:
             self.project_id.choices = []
 

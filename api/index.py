@@ -29,7 +29,7 @@ load_dotenv(dotenv_path)
 
 # Import database models
 from models import db
-from models.models import User, Client, Project, Task, Comment, TimeEntry, ProjectMember, ActivityLog
+from models.models import User, Client, Project, Task, Comment, TimeEntry, ProjectMember, ActivityLog, TeamMembership, TeamInvite
 from models.subscription import Subscription, SubscriptionPlan
 from models.billing import Quote, QuoteItem, Invoice, InvoiceItem
 
@@ -41,7 +41,7 @@ from api.payment import PesaPalPayment
 from api.sms import send_sms
 
 # Import forms
-from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, ProjectAssignmentForm, BusinessProfileForm
+from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, ProjectAssignmentForm, BusinessProfileForm, AcceptInviteForm
 
 # Import template filters
 from filters import register_filters
@@ -103,12 +103,14 @@ from api.email_routes import email_bp
 from api.admin import admin_bp
 from api.billing import billing_bp
 from api.portal import portal_bp
+from api.team import team_bp
 
 app.register_blueprint(subscription_bp)
 app.register_blueprint(email_bp)
 app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(billing_bp)
 app.register_blueprint(portal_bp)
+app.register_blueprint(team_bp)
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -134,7 +136,9 @@ def home():
     if current_user.is_authenticated:
         # Use our retry logic for more robust database connections
         def get_subscription():
-            return Subscription.query.filter_by(user_id=current_user.id, is_active=True).first()
+            # tenant isolation: an invited team member must see the owner
+            # account's subscription/plan, not "no plan" for their own row.
+            return Subscription.query.filter_by(user_id=current_user.get_owner_id(), is_active=True).first()
         
         subscription = retry_operation(get_subscription)
         return render_template('index.html', title='Dashboard', subscription=subscription)
@@ -312,15 +316,20 @@ def profile():
     survive on Vercel needs an external storage bucket (S3 etc.), which is
     out of scope for this change.
     """
-    form = BusinessProfileForm(obj=current_user)
+    # Business name/logo are shared tenant branding shown to clients, so an
+    # invited team member reads and writes through the owner's User row
+    # rather than their own - a no-op when current_user IS the owner.
+    owner = User.query.get(current_user.get_owner_id())
+    form = BusinessProfileForm(obj=owner)
     if form.validate_on_submit():
-        current_user.business_name = form.business_name.data
+        owner.business_name = form.business_name.data
         logo_file = form.business_logo.data
         if logo_file and logo_file.filename:
-            saved_path = _save_business_logo(logo_file, current_user.id)
+            saved_path = _save_business_logo(logo_file, owner.id)
             if saved_path:
-                current_user.business_logo_url = saved_path
+                owner.business_logo_url = saved_path
         # else: no new file chosen - leave the existing logo alone.
+        db.session.add(owner)
         db.session.commit()
         flash('Business profile updated.', 'success')
         return redirect(url_for('profile'))
@@ -369,6 +378,65 @@ def reset_password(token):
 
     return render_template('auth/reset_password.html', title='Reset Password', form=form)
 
+@app.route('/accept-invite/<token>', methods=['GET', 'POST'])
+def accept_invite(token):
+    """Public accept-invite landing page for a team invite email - mirrors
+    reset_password() above (no @login_required, same "invalid or expired"
+    handling for a bad token), except a successful submit creates a brand
+    new User + TeamMembership instead of updating an existing one."""
+    if current_user.is_authenticated:
+        return redirect(url_for('home'))
+
+    invite = TeamInvite.verify_invite_token(token)
+    if not invite:
+        # Covers an unsigned/tampered token, an expired one, and - thanks to
+        # verify_invite_token's extra status=='pending' check - one that's
+        # already been accepted or revoked, all with the same message so a
+        # caller can't tell which case it was.
+        flash('That invite link is invalid or has expired.', 'danger')
+        return redirect(url_for('login'))
+
+    form = AcceptInviteForm()
+    if form.validate_on_submit():
+        # The invitee's email is the invite's own invitee_email, not a form
+        # field (see forms.AcceptInviteForm) - checked here the same way
+        # RegistrationForm.validate_email checks a submitted email, just
+        # against the invite's fixed address instead of user input.
+        if User.query.filter_by(email=invite.invitee_email).first():
+            flash('An account with this email already exists. Please log in instead.', 'danger')
+            return redirect(url_for('login'))
+
+        new_user = User(
+            username=form.username.data,
+            email=invite.invitee_email,
+            first_name=form.first_name.data,
+            last_name=form.last_name.data,
+            phone=form.phone.data,
+            role=invite.role  # TeamInvite.role is already a UserRole enum column, not a string.
+        )
+        new_user.set_password(form.password.data)
+        db.session.add(new_user)
+        db.session.flush()  # assigns new_user.id without a separate round trip, needed below
+
+        membership = TeamMembership(
+            account_owner_id=invite.inviter_id,
+            member_user_id=new_user.id,
+            role=invite.role,
+            is_active=True
+        )
+        db.session.add(membership)
+
+        invite.status = 'accepted'
+        invite.accepted_at = datetime.utcnow()
+
+        db.session.commit()
+
+        login_user(new_user)
+        flash('Your account has been created and you have joined the team!', 'success')
+        return redirect(url_for('home'))
+
+    return render_template('auth/accept_invite.html', title='Accept Invite', form=form, invite=invite)
+
 # Client Management Routes
 @app.route('/clients')
 @login_required
@@ -378,7 +446,7 @@ def clients():
     # visit - client lists grow unbounded and .all() was pulling the whole table.
     page = request.args.get('page', 1, type=int)
     # Tenant isolation: only ever list this user's own clients.
-    pagination = Client.query.filter_by(owner_id=current_user.id).order_by(Client.name).paginate(page=page, per_page=20, error_out=False)
+    pagination = Client.query.filter_by(owner_id=current_user.get_owner_id()).order_by(Client.name).paginate(page=page, per_page=20, error_out=False)
     return render_template('clients/index.html', clients=pagination.items, pagination=pagination, now=datetime.now())
 
 @app.route('/clients/create', methods=['GET', 'POST'])
@@ -386,7 +454,7 @@ def clients():
 def client_create():
     """Create a new client"""
     # owner_id scopes the email-uniqueness check to this user's own clients - see forms.py.
-    form = ClientForm(owner_id=current_user.id)
+    form = ClientForm(owner_id=current_user.get_owner_id())
     if form.validate_on_submit():
         client = Client(
             name=form.name.data,
@@ -395,7 +463,7 @@ def client_create():
             phone=form.phone.data,
             address=form.address.data,
             notes=form.notes.data,
-            owner_id=current_user.id  # tenant isolation: this client belongs to its creator
+            owner_id=current_user.get_owner_id()  # tenant isolation: this client belongs to its creator
         )
         db.session.add(client)
         db.session.commit()
@@ -403,7 +471,7 @@ def client_create():
         # Log the activity
         activity = ActivityLog(
             user_id=current_user.id,
-            owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+            owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
             action_type='created',
             entity_type='client',
             entity_id=client.id,
@@ -424,7 +492,7 @@ def client_detail(client_id):
     client = Client.query.get_or_404(client_id)
     # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
     # and confirm another tenant's client id.
-    if client.owner_id != current_user.id:
+    if client.owner_id != current_user.get_owner_id():
         abort(404)
     return render_template('clients/detail.html', client=client)
 
@@ -440,7 +508,7 @@ def client_send_sms(client_id):
     client = Client.query.get_or_404(client_id)
     # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
     # and confirm another tenant's client id.
-    if client.owner_id != current_user.id:
+    if client.owner_id != current_user.get_owner_id():
         abort(404)
     message = request.form.get('message', '').strip()
 
@@ -459,11 +527,11 @@ def client_edit(client_id):
     client = Client.query.get_or_404(client_id)
     # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
     # and confirm another tenant's client id.
-    if client.owner_id != current_user.id:
+    if client.owner_id != current_user.get_owner_id():
         abort(404)
     # owner_id scopes the email-uniqueness check to this user's own clients
     # (same fix as client_create() above) - see forms.py.
-    form = ClientForm(client_id=client.id, obj=client, owner_id=current_user.id)
+    form = ClientForm(client_id=client.id, obj=client, owner_id=current_user.get_owner_id())
     
     if form.validate_on_submit():
         form.populate_obj(client)
@@ -472,7 +540,7 @@ def client_edit(client_id):
         # Log the activity
         activity = ActivityLog(
             user_id=current_user.id,
-            owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+            owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
             action_type='updated',
             entity_type='client',
             entity_id=client.id,
@@ -493,7 +561,7 @@ def client_delete(client_id):
     client = Client.query.get_or_404(client_id)
     # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
     # and confirm another tenant's client id.
-    if client.owner_id != current_user.id:
+    if client.owner_id != current_user.get_owner_id():
         abort(404)
     client_name = client.name
     
@@ -505,7 +573,7 @@ def client_delete(client_id):
     # Log the activity before deleting the client
     activity = ActivityLog(
         user_id=current_user.id,
-        owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+        owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
         action_type='deleted',
         entity_type='client',
         entity_id=client.id,
@@ -529,7 +597,7 @@ def projects():
     # projects table on every visit.
     page = request.args.get('page', 1, type=int)
     # Tenant isolation: only ever list this user's own projects.
-    pagination = Project.query.filter_by(owner_id=current_user.id).order_by(Project.start_date.desc()).paginate(page=page, per_page=20, error_out=False)
+    pagination = Project.query.filter_by(owner_id=current_user.get_owner_id()).order_by(Project.start_date.desc()).paginate(page=page, per_page=20, error_out=False)
     return render_template('projects/index.html', projects=pagination.items, pagination=pagination, now=datetime.now())
 
 @app.route('/projects/create', methods=['GET', 'POST'])
@@ -537,7 +605,7 @@ def projects():
 def project_create():
     """Create a new project"""
     # owner_id scopes the client dropdown to this user's own clients - see forms.py.
-    form = ProjectForm(owner_id=current_user.id)
+    form = ProjectForm(owner_id=current_user.get_owner_id())
     
     # Pre-select client if provided in query params
     client_id = request.args.get('client_id', type=int)
@@ -555,7 +623,7 @@ def project_create():
                 status=form.status.data,
                 priority=form.priority.data,
                 budget=form.budget.data,
-                owner_id=current_user.id  # tenant isolation: this project belongs to its creator
+                owner_id=current_user.get_owner_id()  # tenant isolation: this project belongs to its creator
             )
             db.session.add(project)
             db.session.commit()
@@ -563,7 +631,7 @@ def project_create():
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
-                owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+                owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
                 action_type='created',
                 entity_type='project',
                 entity_id=project.id,
@@ -587,7 +655,7 @@ def project_detail(project_id):
     project = Project.query.get_or_404(project_id)
     # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
     # and confirm another tenant's project id.
-    if project.owner_id != current_user.id:
+    if project.owner_id != current_user.get_owner_id():
         abort(404)
     # KNOWN SIMPLIFICATION: there is no team/organization concept yet, so a
     # project can only be assigned to the user who owns it - the dropdown
@@ -604,11 +672,11 @@ def project_edit(project_id):
     project = Project.query.get_or_404(project_id)
     # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
     # and confirm another tenant's project id.
-    if project.owner_id != current_user.id:
+    if project.owner_id != current_user.get_owner_id():
         abort(404)
     # owner_id scopes the client dropdown to this user's own clients - see
     # forms.py (same fix as project_create() above).
-    form = ProjectForm(obj=project, owner_id=current_user.id)
+    form = ProjectForm(obj=project, owner_id=current_user.get_owner_id())
     
     if form.validate_on_submit():
         try:
@@ -618,7 +686,7 @@ def project_edit(project_id):
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
-                owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+                owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
                 action_type='updated',
                 entity_type='project',
                 entity_id=project.id,
@@ -642,7 +710,7 @@ def project_delete(project_id):
     project = Project.query.get_or_404(project_id)
     # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
     # and confirm another tenant's project id.
-    if project.owner_id != current_user.id:
+    if project.owner_id != current_user.get_owner_id():
         abort(404)
     project_title = project.title
     
@@ -655,7 +723,7 @@ def project_delete(project_id):
         # Log the activity before deleting the project
         activity = ActivityLog(
             user_id=current_user.id,
-            owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+            owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
             action_type='deleted',
             entity_type='project',
             entity_id=project.id,
@@ -681,7 +749,7 @@ def task_time_start(task_id):
     """Start time tracking for a task"""
     task = Task.query.get_or_404(task_id)
     # Task has no owner_id of its own - tenant isolation is via its parent project.
-    if task.project.owner_id != current_user.id:
+    if task.project.owner_id != current_user.get_owner_id():
         abort(404)
 
     # Check if there's already an active time entry for this task and user
@@ -714,7 +782,7 @@ def task_time_start(task_id):
         # Log the activity
         activity = ActivityLog(
             user_id=current_user.id,
-            owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+            owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
             action_type='started',
             entity_type='time_entry',
             entity_id=time_entry.id,
@@ -736,7 +804,7 @@ def task_time_stop(task_id):
     """Stop time tracking for a task"""
     task = Task.query.get_or_404(task_id)
     # Task has no owner_id of its own - tenant isolation is via its parent project.
-    if task.project.owner_id != current_user.id:
+    if task.project.owner_id != current_user.get_owner_id():
         abort(404)
 
     # Find the active time entry for this task and user
@@ -768,7 +836,7 @@ def task_time_stop(task_id):
         # Log the activity
         activity = ActivityLog(
             user_id=current_user.id,
-            owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+            owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
             action_type='stopped',
             entity_type='time_entry',
             entity_id=active_entry.id,
@@ -790,7 +858,7 @@ def task_time_add(task_id):
     """Manually add a time entry for a task"""
     task = Task.query.get_or_404(task_id)
     # Task has no owner_id of its own - tenant isolation is via its parent project.
-    if task.project.owner_id != current_user.id:
+    if task.project.owner_id != current_user.get_owner_id():
         abort(404)
     form = TimeEntryForm()
     form.task_id.data = task.id
@@ -832,7 +900,7 @@ def task_time_add(task_id):
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
-                owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+                owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
                 action_type='added',
                 entity_type='time_entry',
                 entity_id=time_entry.id,
@@ -859,7 +927,7 @@ def task_delete_comment(task_id, comment_id):
     # project. This is separate from the author/admin check below: that one
     # guards *who may delete this specific comment*, this one guards
     # *whether this task belongs to the caller's tenant at all*.
-    if task.project.owner_id != current_user.id:
+    if task.project.owner_id != current_user.get_owner_id():
         abort(404)
 
     # Only allow the comment author or an admin to delete the comment
@@ -871,7 +939,7 @@ def task_delete_comment(task_id, comment_id):
         # Log the activity before deleting the comment
         activity = ActivityLog(
             user_id=current_user.id,
-            owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+            owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
             action_type='deleted',
             entity_type='comment',
             entity_id=comment.id,
@@ -898,7 +966,7 @@ def project_assign_user(project_id):
     project = Project.query.get_or_404(project_id)
     # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
     # and confirm another tenant's project id.
-    if project.owner_id != current_user.id:
+    if project.owner_id != current_user.get_owner_id():
         abort(404)
 
     if request.method == 'POST':
@@ -940,7 +1008,7 @@ def project_assign_user(project_id):
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
-                owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+                owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
                 action_type='assigned',
                 entity_type='project',
                 entity_id=project.id,
@@ -963,7 +1031,7 @@ def project_remove_user(project_id, user_id):
     project = Project.query.get_or_404(project_id)
     # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
     # and confirm another tenant's project id.
-    if project.owner_id != current_user.id:
+    if project.owner_id != current_user.get_owner_id():
         abort(404)
     user = User.query.get_or_404(user_id)
     
@@ -983,7 +1051,7 @@ def project_remove_user(project_id, user_id):
         # Log the activity before removing the team member
         activity = ActivityLog(
             user_id=current_user.id,
-            owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+            owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
             action_type='removed',
             entity_type='project',
             entity_id=project.id,
@@ -1010,7 +1078,7 @@ def task_create(project_id):
     project = Project.query.get_or_404(project_id)
     # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
     # and confirm another tenant's project id.
-    if project.owner_id != current_user.id:
+    if project.owner_id != current_user.get_owner_id():
         abort(404)
     # user=current_user populates the project/assignee dropdowns per
     # TaskForm.__init__ - without it both choices are empty and any
@@ -1036,7 +1104,7 @@ def task_create(project_id):
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
-                owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+                owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
                 action_type='created',
                 entity_type='task',
                 entity_id=task.id,
@@ -1048,7 +1116,7 @@ def task_create(project_id):
             if task.assignee_id:
                 assignment_activity = ActivityLog(
                     user_id=current_user.id,
-                    owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+                    owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
                     action_type='assigned',
                     entity_type='task',
                     entity_id=task.id,
@@ -1089,7 +1157,7 @@ def task_detail(task_id):
     task = Task.query.get_or_404(task_id)
     # Task has no owner_id of its own - tenant isolation is via its parent
     # project, same 404-not-403 pattern used for Client/Project/Quote/Invoice.
-    if task.project.owner_id != current_user.id:
+    if task.project.owner_id != current_user.get_owner_id():
         abort(404)
     return render_template('tasks/detail.html', task=task, now=datetime.now())
 
@@ -1101,7 +1169,7 @@ def task_edit(task_id):
     # Task has no owner_id of its own - tenant isolation is via its parent
     # project. Separate from the assigned_to check further below, which
     # guards *who a task can be assigned to*, not who may edit it.
-    if task.project.owner_id != current_user.id:
+    if task.project.owner_id != current_user.get_owner_id():
         abort(404)
     # user=current_user populates the project/assignee dropdowns per
     # TaskForm.__init__ - without it both choices are empty and any
@@ -1146,7 +1214,7 @@ def task_edit(task_id):
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,
-                owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+                owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
                 action_type='updated',
                 entity_type='task',
                 entity_id=task.id,
@@ -1159,7 +1227,7 @@ def task_edit(task_id):
                 if new_assignee_id:
                     assignment_activity = ActivityLog(
                         user_id=current_user.id,
-                        owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+                        owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
                         action_type='assigned',
                         entity_type='task',
                         entity_id=task.id,
@@ -1168,7 +1236,7 @@ def task_edit(task_id):
                 else:
                     assignment_activity = ActivityLog(
                         user_id=current_user.id,
-                        owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+                        owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
                         action_type='unassigned',
                         entity_type='task',
                         entity_id=task.id,
@@ -1221,7 +1289,7 @@ def task_delete(task_id):
     """Delete a task"""
     task = Task.query.get_or_404(task_id)
     # Task has no owner_id of its own - tenant isolation is via its parent project.
-    if task.project.owner_id != current_user.id:
+    if task.project.owner_id != current_user.get_owner_id():
         abort(404)
     project_id = task.project_id
     task_title = task.title
@@ -1230,7 +1298,7 @@ def task_delete(task_id):
         # Log the activity before deleting the task
         activity = ActivityLog(
             user_id=current_user.id,
-            owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+            owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
             action_type='deleted',
             entity_type='task',
             entity_id=task.id,
@@ -1255,7 +1323,7 @@ def task_add_comment(task_id):
     """Add a comment to a task"""
     task = Task.query.get_or_404(task_id)
     # Task has no owner_id of its own - tenant isolation is via its parent project.
-    if task.project.owner_id != current_user.id:
+    if task.project.owner_id != current_user.get_owner_id():
         abort(404)
     content = request.form.get('content')
     
@@ -1275,7 +1343,7 @@ def task_add_comment(task_id):
         # Log the activity
         activity = ActivityLog(
             user_id=current_user.id,
-            owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+            owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
             action_type='commented',
             entity_type='task',
             entity_id=task.id,
@@ -1318,7 +1386,7 @@ def reports():
 def report_project_status():
     """Project status report"""
     # Tenant isolation: only report on this user's own projects.
-    projects = Project.query.filter_by(owner_id=current_user.id).all()
+    projects = Project.query.filter_by(owner_id=current_user.get_owner_id()).all()
     
     # Prepare data for charts
     status_counts = {}
@@ -1357,7 +1425,7 @@ def report_task_distribution():
     # Query tasks with optional filter. Task has no owner_id of its own, so
     # tenant isolation is via a join through Project (same pattern as
     # all_tasks()).
-    base_query = Task.query.join(Project).filter(Project.owner_id == current_user.id)
+    base_query = Task.query.join(Project).filter(Project.owner_id == current_user.get_owner_id())
     if status_filter:
         tasks = base_query.filter(Task.status == status_filter).all()
     else:
@@ -1369,7 +1437,7 @@ def report_task_distribution():
     assignee_counts = {}
 
     # Project-specific task counts by status
-    projects = Project.query.filter_by(owner_id=current_user.id).all()
+    projects = Project.query.filter_by(owner_id=current_user.get_owner_id()).all()
     project_labels = [project.title for project in projects]
     todo_counts = [0] * len(projects)
     in_progress_counts = [0] * len(projects)
@@ -1439,9 +1507,9 @@ def report_time_tracking():
     """Time tracking report"""
     # Tenant isolation: TimeEntry has no owner_id of its own, so scope via a
     # join through Task -> Project (same pattern as all_tasks()).
-    projects = Project.query.filter_by(owner_id=current_user.id).all()
+    projects = Project.query.filter_by(owner_id=current_user.get_owner_id()).all()
     time_entries = TimeEntry.query.join(Task).join(Project).filter(
-        Project.owner_id == current_user.id
+        Project.owner_id == current_user.get_owner_id()
     ).order_by(TimeEntry.start_time.desc()).limit(50).all()
     
     # Prepare data for charts
@@ -1457,7 +1525,7 @@ def report_time_tracking():
         project_hours[project.title] = round(total_hours, 1)
     
     # Calculate hours per user from time entries
-    for entry in TimeEntry.query.join(Task).join(Project).filter(Project.owner_id == current_user.id).all():
+    for entry in TimeEntry.query.join(Task).join(Project).filter(Project.owner_id == current_user.get_owner_id()).all():
         if entry.duration:  # Only count entries with a duration
             username = entry.user.username
             if username in user_hours:
@@ -1497,7 +1565,7 @@ def report_project_timeline():
     # (used for the Gantt chart and both summary tables) is narrowed to the
     # selected one when project_id is given.
     # Tenant isolation: only offer/report on this user's own projects.
-    all_projects = Project.query.filter_by(owner_id=current_user.id).order_by(Project.title).all()
+    all_projects = Project.query.filter_by(owner_id=current_user.get_owner_id()).order_by(Project.title).all()
     project_id = request.args.get('project_id', type=int)
     if project_id:
         projects = [p for p in all_projects if p.id == project_id]
@@ -1553,7 +1621,7 @@ def all_tasks():
     
     # Start with base query. Task has no owner_id of its own, so tenant
     # isolation is via a join through Project.
-    query = Task.query.join(Project).filter(Project.owner_id == current_user.id)
+    query = Task.query.join(Project).filter(Project.owner_id == current_user.get_owner_id())
 
     # Apply filters
     if status:
@@ -1582,7 +1650,7 @@ def all_tasks():
     # Get all projects and users for filter dropdowns, scoped to this user -
     # otherwise the filter dropdowns would leak other tenants' project/user
     # names even though the task list itself is now scoped above.
-    projects = Project.query.filter_by(owner_id=current_user.id).order_by(Project.title).all()
+    projects = Project.query.filter_by(owner_id=current_user.get_owner_id()).order_by(Project.title).all()
     # KNOWN SIMPLIFICATION: no team/organization concept yet - see
     # project_detail().
     users = [current_user]
@@ -1605,7 +1673,7 @@ def create_task():
 
     # Get all projects for the dropdown, scoped to this user - otherwise a
     # task could be filed against another tenant's project.
-    projects = Project.query.filter_by(owner_id=current_user.id).order_by(Project.title).all()
+    projects = Project.query.filter_by(owner_id=current_user.get_owner_id()).order_by(Project.title).all()
 
     # KNOWN SIMPLIFICATION: no team/organization concept yet - see
     # project_detail().
@@ -1618,7 +1686,7 @@ def create_task():
         # assigned_to check in task_edit(), a crafted POST bypassing the
         # dropdown shouldn't be trusted to have gone through it.
         target_project = Project.query.get_or_404(form.project_id.data)
-        if target_project.owner_id != current_user.id:
+        if target_project.owner_id != current_user.get_owner_id():
             abort(404)
 
         # Create new task
@@ -1641,7 +1709,7 @@ def create_task():
         # Create activity log entry
         activity = ActivityLog(
             user_id=current_user.id,
-            owner_id=current_user.id,  # tenant isolation: activity log entries belong to the acting tenant
+            owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
             action_type='task_created',
             entity_type='task',
             entity_id=task.id,
@@ -1671,7 +1739,7 @@ def report_overdue_tasks():
     # Tenant isolation: Task has no owner_id of its own, so scope via a join
     # through Project (same pattern as all_tasks()).
     overdue_tasks = Task.query.join(Project).filter(
-        Project.owner_id == current_user.id,
+        Project.owner_id == current_user.get_owner_id(),
         Task.due_date < today,
         Task.status != TaskStatus.COMPLETED
     ).order_by(Task.due_date).all()
@@ -1730,7 +1798,7 @@ def calculate_project_progress(project):
 def export_project_status_report():
     """Export project status report as CSV"""
     # Tenant isolation: this CSV must only ever contain this user's own data.
-    projects = Project.query.filter_by(owner_id=current_user.id).all()
+    projects = Project.query.filter_by(owner_id=current_user.get_owner_id()).all()
     
     # Create a DataFrame
     data = []
@@ -1771,7 +1839,7 @@ def export_task_distribution_report():
     """Export task distribution report as CSV"""
     # Tenant isolation: Task has no owner_id of its own, so scope via a join
     # through Project - this CSV must only ever contain this user's own data.
-    tasks = Task.query.join(Project).filter(Project.owner_id == current_user.id).all()
+    tasks = Task.query.join(Project).filter(Project.owner_id == current_user.get_owner_id()).all()
     
     # Create a DataFrame
     data = []
@@ -1810,7 +1878,7 @@ def export_time_tracking_report():
     # Tenant isolation: TimeEntry has no owner_id of its own, so scope via a
     # join through Task -> Project - this CSV must only ever contain this
     # user's own data.
-    time_entries = TimeEntry.query.join(Task).join(Project).filter(Project.owner_id == current_user.id).all()
+    time_entries = TimeEntry.query.join(Task).join(Project).filter(Project.owner_id == current_user.get_owner_id()).all()
     
     # Create a DataFrame
     data = []
@@ -1849,7 +1917,7 @@ def export_overdue_tasks_report():
     # Tenant isolation: Task has no owner_id of its own, so scope via a join
     # through Project - this CSV must only ever contain this user's own data.
     overdue_tasks = Task.query.join(Project).filter(
-        Project.owner_id == current_user.id,
+        Project.owner_id == current_user.get_owner_id(),
         Task.due_date < today,
         Task.status != TaskStatus.COMPLETED
     ).order_by(Task.due_date).all()
@@ -1893,7 +1961,7 @@ def comment_delete(comment_id):
     # parent task's parent project. Separate from the author/admin check
     # below: this one guards whether the comment's task even belongs to the
     # caller's tenant, regardless of who wrote the comment.
-    if comment.task.project.owner_id != current_user.id:
+    if comment.task.project.owner_id != current_user.get_owner_id():
         abort(404)
 
     # Only the comment author or an admin can delete a comment

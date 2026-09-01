@@ -27,7 +27,7 @@ def bulk_email():
         
         # Get clients - scoped to this user's own so ids for another tenant's
         # clients can't be used to email their customers.
-        clients = Client.query.filter(Client.id.in_(client_ids), Client.owner_id == current_user.id).all()
+        clients = Client.query.filter(Client.id.in_(client_ids), Client.owner_id == current_user.get_owner_id()).all()
         if not clients:
             flash('No clients selected.', 'danger')
             return redirect(url_for('email.bulk_email'))
@@ -61,7 +61,7 @@ def bulk_email():
         return redirect(url_for('clients'))
     
     # Get all clients for selection - scoped to this user's own.
-    clients = Client.query.filter_by(owner_id=current_user.id).all()
+    clients = Client.query.filter_by(owner_id=current_user.get_owner_id()).all()
     return render_template('email/bulk.html', clients=clients)
 
 @email_bp.route('/email/unsubscribe')
