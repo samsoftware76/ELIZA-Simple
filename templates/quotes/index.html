@@ -76,5 +76,7 @@
             <p>No quotes yet. <a href="{{ url_for('billing.quote_create') }}">Create your first quote</a> to get started.</p>
         </div>
     {% endif %}
+
+    {% include "_pagination.html" %}
 </div>
 {% endblock %}

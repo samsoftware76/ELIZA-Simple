@@ -3,9 +3,11 @@ import os
 import logging
 import sys
 import re
+import uuid
 from datetime import datetime, timedelta
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 from flask_mail import Mail, Message
 from flask_wtf.csrf import CSRFProtect
@@ -36,6 +38,7 @@ from utils.db_utils import configure_db_pool, retry_operation, safe_commit, safe
 from models import ProjectStatus, TaskStatus, UserRole
 from models.subscription import Payment
 from api.payment import PesaPalPayment
+from api.sms import send_sms
 
 # Import forms
 from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, ProjectAssignmentForm, BusinessProfileForm
@@ -87,6 +90,12 @@ csrf = CSRFProtect(app)
 # Initialize Talisman security headers (HTTPS/HSTS/secure cookies in production only)
 from security import configure_security
 configure_security(app)
+
+# Initialize rate limiting (currently just guards the login POST below against
+# brute-force password guessing) - see security.py for the in-memory-storage
+# caveat on Vercel.
+from security import limiter, configure_limiter
+configure_limiter(app)
 
 # Import and register blueprints
 from api.subscription import subscription_bp
@@ -149,6 +158,10 @@ def test_email():
 
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
+# methods=['POST'] scopes the limit to the credential-check submission only -
+# GET (the login page itself) is never throttled, so the page always loads
+# even mid-attack.
+@limiter.limit("5 per minute", methods=['POST'])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('home'))
@@ -177,6 +190,9 @@ def login():
     return render_template('auth/login.html', title='Login', form=form)
 
 @app.route('/register', methods=['GET', 'POST'])
+# Looser than login (5/min) - registration abuse isn't the priority here,
+# this is just cheap insurance against a signup-spam script.
+@limiter.limit("20 per hour", methods=['POST'])
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('home'))
@@ -201,21 +217,110 @@ def register():
     
     return render_template('auth/register.html', title='Register', form=form)
 
+
+@app.errorhandler(429)
+def rate_limit_exceeded(e):
+    """Flask-Limiter raises a plain 429 when a limited route (login/register
+    POST) is hit too often. Re-render the form that was being submitted with
+    a clear flash instead of a raw 429 error page - a user who mistyped their
+    password a few times shouldn't hit a scary/unexplained error screen."""
+    if request.endpoint == 'login':
+        flash('Too many login attempts - please wait a minute and try again.', 'danger')
+        return render_template('auth/login.html', title='Login', form=LoginForm()), 429
+    if request.endpoint == 'register':
+        flash('Too many attempts - please wait a while and try again.', 'danger')
+        return render_template('auth/register.html', title='Register', form=RegistrationForm()), 429
+    flash('Too many requests - please wait a moment and try again.', 'danger')
+    return redirect(url_for('home'))
+
 @app.route('/logout')
 def logout():
     logout_user()
     flash('You have been logged out.', 'info')
     return redirect(url_for('home'))
 
+# Logo uploads land here - see the read-only-filesystem note in profile() below
+# before assuming this survives in production on Vercel.
+LOGO_UPLOAD_DIR = os.path.join(app.static_folder, 'uploads', 'logos')
+LOGO_ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+LOGO_MAX_BYTES = 2 * 1024 * 1024  # 2MB
+
+
+def _save_business_logo(file_storage, user_id):
+    """Validates and saves an uploaded logo image, returning the path to store
+    in User.business_logo_url (relative to static/), or None if the upload
+    was rejected (a flash message is set explaining why).
+
+    Two checks, not one: the extension allowlist alone only catches a file
+    named badly, so we also make Pillow actually decode the image data -
+    that's what catches a renamed .exe or similar being passed off as a .png.
+    """
+    filename = file_storage.filename or ''
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    if ext not in LOGO_ALLOWED_EXTENSIONS:
+        flash('Logo must be a PNG, JPG, GIF, or WEBP image.', 'danger')
+        return None
+
+    # Check size before touching disk - seek to end to get length, then
+    # rewind so save()/Image.open() below still read from the start.
+    file_storage.stream.seek(0, os.SEEK_END)
+    size = file_storage.stream.tell()
+    file_storage.stream.seek(0)
+    if size > LOGO_MAX_BYTES:
+        flash('Logo image is too large - please use a file under 2MB.', 'danger')
+        return None
+
+    try:
+        from PIL import Image
+        Image.open(file_storage.stream).verify()
+        file_storage.stream.seek(0)
+    except Exception:
+        flash('That file is not a valid image.', 'danger')
+        return None
+
+    try:
+        os.makedirs(LOGO_UPLOAD_DIR, exist_ok=True)
+    except OSError as e:
+        # See the read-only-filesystem note in profile() - on Vercel this
+        # directory can't be created at request time, so degrade instead of
+        # 500ing on a user just trying to save their business name.
+        print(f"ERROR creating logo upload dir: {str(e)}")
+        flash('Logo upload is not available on this deployment right now - your business name was still saved.', 'warning')
+        return None
+
+    safe_name = secure_filename(filename)
+    unique_name = f"user{user_id}-{uuid.uuid4().hex}-{safe_name}"
+    file_storage.save(os.path.join(LOGO_UPLOAD_DIR, unique_name))
+    return f"uploads/logos/{unique_name}"
+
+
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required
 def profile():
     """Let a user set the business name/logo shown to their own clients on
-    the portal and in quote/invoice emails, instead of the ELIZA brand."""
+    the portal and in quote/invoice emails, instead of the ELIZA brand.
+
+    business_logo_url stores a path relative to static/ (rendered via
+    url_for('static', ...) in templates), not a full URL, despite the column
+    name - see models/models.py.
+
+    IMPORTANT (Vercel): the platform's filesystem is read-only/ephemeral at
+    request time except /tmp - a logo saved to static/uploads/logos/ here
+    will NOT persist between requests or survive a redeploy in production on
+    Vercel, only in local dev or on a host with persistent disk. Same class
+    of caveat as the PesaPal/email settings note in api/admin.py. Making this
+    survive on Vercel needs an external storage bucket (S3 etc.), which is
+    out of scope for this change.
+    """
     form = BusinessProfileForm(obj=current_user)
     if form.validate_on_submit():
         current_user.business_name = form.business_name.data
-        current_user.business_logo_url = form.business_logo_url.data
+        logo_file = form.business_logo.data
+        if logo_file and logo_file.filename:
+            saved_path = _save_business_logo(logo_file, current_user.id)
+            if saved_path:
+                current_user.business_logo_url = saved_path
+        # else: no new file chosen - leave the existing logo alone.
         db.session.commit()
         flash('Business profile updated.', 'success')
         return redirect(url_for('profile'))
@@ -269,8 +374,11 @@ def reset_password(token):
 @login_required
 def clients():
     """List all clients"""
-    clients_list = Client.query.order_by(Client.name).all()
-    return render_template('clients/index.html', clients=clients_list, now=datetime.now())
+    # Paginated so the page doesn't have to load every client row on every
+    # visit - client lists grow unbounded and .all() was pulling the whole table.
+    page = request.args.get('page', 1, type=int)
+    pagination = Client.query.order_by(Client.name).paginate(page=page, per_page=20, error_out=False)
+    return render_template('clients/index.html', clients=pagination.items, pagination=pagination, now=datetime.now())
 
 @app.route('/clients/create', methods=['GET', 'POST'])
 @login_required
@@ -311,6 +419,26 @@ def client_detail(client_id):
     """View client details"""
     client = Client.query.get_or_404(client_id)
     return render_template('clients/detail.html', client=client)
+
+@app.route('/clients/<int:client_id>/send-sms', methods=['POST'])
+@login_required
+def client_send_sms(client_id):
+    """Send a one-off SMS to a client's phone via Africa's Talking.
+
+    Sending only - no delivery-status tracking, no per-SMS charge. See
+    api/sms.py for the "not configured" degradation if the AFRICASTALKING_*
+    env vars aren't set.
+    """
+    client = Client.query.get_or_404(client_id)
+    message = request.form.get('message', '').strip()
+
+    if not message:
+        flash('Enter a message before sending.', 'danger')
+        return redirect(url_for('client_detail', client_id=client.id))
+
+    result = send_sms(client.phone, message)
+    flash(result['message'], 'success' if result['success'] else 'warning')
+    return redirect(url_for('client_detail', client_id=client.id))
 
 @app.route('/clients/<int:client_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -373,8 +501,11 @@ def client_delete(client_id):
 @login_required
 def projects():
     """List all projects"""
-    projects_list = Project.query.order_by(Project.start_date.desc()).all()
-    return render_template('projects/index.html', projects=projects_list, now=datetime.now())
+    # Paginated for the same reason as clients() - avoid loading the whole
+    # projects table on every visit.
+    page = request.args.get('page', 1, type=int)
+    pagination = Project.query.order_by(Project.start_date.desc()).paginate(page=page, per_page=20, error_out=False)
+    return render_template('projects/index.html', projects=pagination.items, pagination=pagination, now=datetime.now())
 
 @app.route('/projects/create', methods=['GET', 'POST'])
 @login_required
@@ -1308,17 +1439,21 @@ def all_tasks():
     if project_id:
         query = query.filter(Task.project_id == project_id)
     
-    # Get all tasks with applied filters
-    tasks = query.order_by(Task.due_date.asc()).all()
-    
+    # Get all tasks with applied filters, paginated - .all() was loading the
+    # entire (filtered) task table on every visit.
+    page = request.args.get('page', 1, type=int)
+    pagination = query.order_by(Task.due_date.asc()).paginate(page=page, per_page=20, error_out=False)
+    tasks = pagination.items
+
     # Get all projects and users for filter dropdowns
     projects = Project.query.all()
     users = User.query.all()
-    
-    return render_template('tasks/all_tasks.html', 
-                          tasks=tasks, 
-                          projects=projects, 
-                          users=users, 
+
+    return render_template('tasks/all_tasks.html',
+                          tasks=tasks,
+                          pagination=pagination,
+                          projects=projects,
+                          users=users,
                           now=datetime.now())
 
 @app.route('/tasks/create', methods=['GET', 'POST'])

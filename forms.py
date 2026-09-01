@@ -1,4 +1,5 @@
 from flask_wtf import FlaskForm
+from flask_wtf.file import FileField, FileAllowed
 from wtforms import StringField, PasswordField, SubmitField, BooleanField, SelectField, TextAreaField, DateField, FloatField, IntegerField, HiddenField, DateTimeField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError, Optional, NumberRange
 from models.models import User, Client, Project, Task
@@ -68,11 +69,16 @@ class PasswordResetForm(FlaskForm):
 class BusinessProfileForm(FlaskForm):
     """Form for a user to set their own business branding, shown to their
     clients on the portal and in quote/invoice emails instead of ELIZA's own
-    brand (see User.business_name/business_logo_url)."""
+    brand (see User.business_name/business_logo_url).
+
+    business_logo_url is no longer a form field - the column it maps to on
+    User still holds a path (not a full URL) written by the /profile upload
+    handler in api/index.py, which does its own extension/content/size
+    checks on the uploaded file before touching the column."""
     business_name = StringField('Business Name', validators=[Optional(), Length(max=150)],
                                  description="Shown to your clients instead of your personal name or 'ELIZA'")
-    business_logo_url = StringField('Logo URL', validators=[Optional(), Length(max=500)],
-                                     description="Optional: a public URL to your logo image")
+    business_logo = FileField('Logo Image', validators=[FileAllowed(['png', 'jpg', 'jpeg', 'gif', 'webp'], 'Images only (png/jpg/jpeg/gif/webp).')],
+                               description="Optional: upload a logo image (max 2MB). Leave blank to keep your current logo.")
     submit = SubmitField('Save')
 
 

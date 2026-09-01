@@ -54,7 +54,7 @@
         <div class="container">
             <span class="brand">
                 {% if brand_logo_url %}
-                <img src="{{ brand_logo_url }}" alt="{{ brand_name }}" style="height: 28px; vertical-align: middle;" class="mr-2">
+                <img src="{{ url_for('static', filename=brand_logo_url) }}" alt="{{ brand_name }}" style="height: 28px; vertical-align: middle;" class="mr-2">
                 {% else %}
                 <i class="fas fa-briefcase mr-2"></i>
                 {% endif %}

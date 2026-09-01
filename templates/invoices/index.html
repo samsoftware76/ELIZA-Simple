@@ -82,5 +82,7 @@
             <p>No invoices yet. <a href="{{ url_for('billing.invoice_create') }}">Create your first invoice</a> to get started.</p>
         </div>
     {% endif %}
+
+    {% include "_pagination.html" %}
 </div>
 {% endblock %}

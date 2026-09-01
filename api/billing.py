@@ -51,8 +51,10 @@ def parse_line_items(form):
 @login_required
 def quotes_list():
     """List all quotes"""
-    quotes = Quote.query.order_by(Quote.created_at.desc()).all()
-    return render_template('quotes/index.html', quotes=quotes)
+    # Paginated so the page doesn't load every quote row on every visit.
+    page = request.args.get('page', 1, type=int)
+    pagination = Quote.query.order_by(Quote.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+    return render_template('quotes/index.html', quotes=pagination.items, pagination=pagination)
 
 
 @billing_bp.route('/quotes/create', methods=['GET', 'POST'])
@@ -248,8 +250,10 @@ def quote_convert_to_invoice(quote_id):
 @login_required
 def invoices_list():
     """List all invoices"""
-    invoices = Invoice.query.order_by(Invoice.created_at.desc()).all()
-    return render_template('invoices/index.html', invoices=invoices)
+    # Paginated so the page doesn't load every invoice row on every visit.
+    page = request.args.get('page', 1, type=int)
+    pagination = Invoice.query.order_by(Invoice.created_at.desc()).paginate(page=page, per_page=20, error_out=False)
+    return render_template('invoices/index.html', invoices=pagination.items, pagination=pagination)
 
 
 @billing_bp.route('/invoices/create', methods=['GET', 'POST'])

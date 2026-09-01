@@ -4,9 +4,35 @@ Implements protection against common web vulnerabilities
 """
 import os
 from flask_talisman import Talisman
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # CSRF protection is initialized once in api/index.py (CSRFProtect(app)) —
 # not duplicated here to avoid double-registering the before_request hook.
+
+# Rate limiter for brute-force-sensitive routes (currently just login).
+# Created here (unbound) and init_app()'d against the real app in
+# configure_limiter() below, the same split Flask-SQLAlchemy's db object
+# uses - lets api/index.py `from security import limiter` and decorate the
+# login view with @limiter.limit(...) without an import cycle.
+#
+# HONEST LIMITATION: default storage is in-memory (per Python process). This
+# app deploys to Vercel, where each serverless invocation can land on a cold
+# start or a different instance with its own empty counter - there is no
+# shared store (e.g. Redis) wired up. So this meaningfully slows down a
+# single-IP brute-force script hitting one warm instance, but it is NOT a
+# hard guarantee once Vercel scales to multiple instances; a determined
+# attacker distributed across cold starts can still exceed 5/minute overall.
+# Wiring a shared storage_uri (Redis) would close that gap if it's ever
+# needed - not done here to avoid adding a new required service/env var for
+# a first pass at this protection.
+limiter = Limiter(key_func=get_remote_address)
+
+
+def configure_limiter(app):
+    """Attach the rate limiter to the Flask app. Call once, after app is created."""
+    limiter.init_app(app)
+    return limiter
 
 
 def configure_security(app):

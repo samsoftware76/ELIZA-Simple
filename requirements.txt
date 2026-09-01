@@ -9,6 +9,9 @@ WTForms
 Flask-Mail
 pyjwt
 matplotlib
+Pillow
 pandas
 requests
 Flask-Talisman
+Flask-Limiter
+africastalking

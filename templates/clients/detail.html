@@ -22,6 +22,45 @@
         </div>
     </div>
 
+    {# client_detail is a redirect target for edit/delete/SMS actions, none of
+       which had anywhere to show their flash() message on this page - added
+       so the "Send SMS" result below is actually visible after redirect. #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Send SMS</h5>
+        </div>
+        <div class="card-body">
+            {% if client.phone %}
+            <form method="POST" action="{{ url_for('client_send_sms', client_id=client.id) }}"
+                  onsubmit="return confirmAndDisable(this, 'Send this SMS to ' + '{{ client.phone }}' + '?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label for="sms-message">Message to {{ client.phone }}</label>
+                    <textarea class="form-control" id="sms-message" name="message" rows="2" maxlength="480" required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-sms"></i> Send SMS
+                </button>
+            </form>
+            {% else %}
+            <p class="text-muted mb-0">This client has no phone number on file, so SMS can't be sent.</p>
+            {% endif %}
+        </div>
+    </div>
+
     <div class="mt-5">
         <h3>Projects</h3>
         {% if client.projects %}

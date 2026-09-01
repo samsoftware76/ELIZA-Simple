@@ -168,7 +168,7 @@
     <div class="sheet">
         <div class="doc-header">
             <div class="brand">
-                {% if brand_logo_url %}<img src="{{ brand_logo_url }}" alt="{{ brand_name }}">{% endif %}
+                {% if brand_logo_url %}<img src="{{ url_for('static', filename=brand_logo_url) }}" alt="{{ brand_name }}">{% endif %}
                 <span class="brand-name">{{ brand_name }}</span>
             </div>
             <div>

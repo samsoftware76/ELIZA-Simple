@@ -24,7 +24,7 @@
                 {% endif %}
             {% endwith %}
 
-            <form method="POST">
+            <form method="POST" enctype="multipart/form-data">
                 {{ form.hidden_tag() }}
                 <div class="form-group">
                     {{ form.business_name.label }}
@@ -32,9 +32,17 @@
                     <small class="form-text text-muted">{{ form.business_name.description }}</small>
                 </div>
                 <div class="form-group">
-                    {{ form.business_logo_url.label }}
-                    {{ form.business_logo_url(class="form-control", placeholder="https://...") }}
-                    <small class="form-text text-muted">{{ form.business_logo_url.description }}</small>
+                    {{ form.business_logo.label }}
+                    {% if current_user.business_logo_url %}
+                    <div class="mb-2">
+                        <img src="{{ url_for('static', filename=current_user.business_logo_url) }}" alt="Current logo" style="max-height: 60px;">
+                    </div>
+                    {% endif %}
+                    {{ form.business_logo(class="form-control-file", accept="image/*") }}
+                    {% for error in form.business_logo.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
+                    <small class="form-text text-muted">{{ form.business_logo.description }}</small>
                 </div>
                 {% if not current_user.business_name %}
                 <div class="alert alert-info">
