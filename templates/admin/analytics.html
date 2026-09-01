@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Analytics</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <div class="col-md-3">
+            <div class="list-group">
+                <a href="{{ url_for('admin.dashboard') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-speedometer2 me-2"></i> Dashboard
+                </a>
+                <a href="{{ url_for('admin.users') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-people me-2"></i> User Management
+                </a>
+                <a href="{{ url_for('admin.subscriptions') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-credit-card me-2"></i> Subscriptions
+                </a>
+                <a href="{{ url_for('admin.analytics') }}" class="list-group-item list-group-item-action active">
+                    <i class="bi bi-graph-up me-2"></i> Analytics
+                </a>
+                <a href="{{ url_for('admin.system') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-gear me-2"></i> System Settings
+                </a>
+            </div>
+        </div>
+
+        <div class="col-md-9">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Signups (last 30 days)</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="signupsChart" width="400" height="150"></canvas>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Trial &rarr; Paid Funnel</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Step</th>
+                                    <th>Users</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for step in funnel %}
+                                <tr>
+                                    <td>{{ step.label }}</td>
+                                    <td>{{ step.count }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-muted mb-0">Each step counts users who also completed every step before it (registered &rarr; created a client &rarr; sent an invoice &rarr; converted to a paid subscription).</p>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Events by Type (all time)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Event Type</th>
+                                    <th>Count</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for event_type, count in event_type_counts %}
+                                <tr>
+                                    <td>{{ event_type }}</td>
+                                    <td>{{ count }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="2" class="text-center">No events logged yet</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var signupsCtx = document.getElementById('signupsChart').getContext('2d');
+        var signupsChart = new Chart(signupsCtx, {
+            type: 'line',
+            data: {
+                labels: {{ signup_labels | tojson }},
+                datasets: [{
+                    label: 'Signups',
+                    data: {{ signup_counts | tojson }},
+                    fill: false,
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                    tension: 0.2
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { precision: 0 }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: 'Daily Signups'
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

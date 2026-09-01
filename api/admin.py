@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_required, current_user
-from models.models import User, Client, Project, Task, UserRole, ProjectStatus, TaskStatus
+from sqlalchemy import func
+from models.models import User, Client, Project, Task, UserRole, ProjectStatus, TaskStatus, AnalyticsEvent
 from models.subscription import Subscription, SubscriptionPlan
 from forms import UserForm, SubscriptionPlanForm, SubscriptionForm, EmailSettingsForm, PesapalSettingsForm, AppSettingsForm
 from models import db
@@ -76,6 +77,63 @@ def dashboard():
                           enterprise_count=enterprise_count,
                           trial_count=trial_count,
                           recent_activities=recent_activities)
+
+@admin_bp.route('/analytics')
+@login_required
+@admin_required
+def analytics():
+    """Platform-wide product-usage analytics (see models.models.AnalyticsEvent
+    and utils/analytics.py's log_event()) - deliberately NOT owner_id-scoped,
+    same as the rest of this admin blueprint: the point is comparing behavior
+    across every tenant to see where trial users drop off and what correlates
+    with converting to a paying subscriber.
+    """
+    # Signups per day for the last 30 days. func.date() works on both
+    # Postgres and the sqlite dev fallback (see api/index.py's DATABASE_URL
+    # handling), unlike a Postgres-only date_trunc.
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    signup_rows = db.session.query(
+        func.date(AnalyticsEvent.created_at).label('day'),
+        func.count(AnalyticsEvent.id).label('count')
+    ).filter(
+        AnalyticsEvent.event_type == 'user_registered',
+        AnalyticsEvent.created_at >= thirty_days_ago
+    ).group_by('day').order_by('day').all()
+    signup_labels = [str(row.day) for row in signup_rows]
+    signup_counts = [row.count for row in signup_rows]
+
+    # Simple conversion funnel. Kept as plain Python set intersections rather
+    # than a fancier SQL join - this table is small enough that it doesn't
+    # need to be optimized, and sets make "also has" trivial to read.
+    def _user_ids_for(event_type):
+        rows = db.session.query(AnalyticsEvent.user_id).filter(
+            AnalyticsEvent.event_type == event_type,
+            AnalyticsEvent.user_id.isnot(None)
+        ).distinct().all()
+        return {row.user_id for row in rows}
+
+    registered_ids = _user_ids_for('user_registered')
+    with_client = registered_ids & _user_ids_for('client_created')
+    with_invoice_sent = with_client & _user_ids_for('invoice_sent')
+    with_conversion = with_invoice_sent & _user_ids_for('subscription_converted')
+
+    funnel = [
+        {'label': 'Registered', 'count': len(registered_ids)},
+        {'label': 'Created a client', 'count': len(with_client)},
+        {'label': 'Sent an invoice', 'count': len(with_invoice_sent)},
+        {'label': 'Converted to paid', 'count': len(with_conversion)},
+    ]
+
+    # Total counts per event_type overall.
+    event_type_counts = db.session.query(
+        AnalyticsEvent.event_type, func.count(AnalyticsEvent.id)
+    ).group_by(AnalyticsEvent.event_type).order_by(func.count(AnalyticsEvent.id).desc()).all()
+
+    return render_template('admin/analytics.html',
+                          signup_labels=signup_labels,
+                          signup_counts=signup_counts,
+                          funnel=funnel,
+                          event_type_counts=event_type_counts)
 
 @admin_bp.route('/users')
 @login_required

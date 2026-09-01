@@ -432,4 +432,30 @@ class ActivityLog(db.Model):
     def __repr__(self):
         return f'<ActivityLog {self.action_type} {self.entity_type} {self.entity_id}>'
 
+class AnalyticsEvent(db.Model):
+    """Platform-wide product-usage event log (signups, first-client, invoice
+    sent/paid, trial conversion, ...) - NOT tenant-scoped by owner_id like
+    Client/Project above. The whole point is comparing behavior across every
+    tenant to see where trial users drop off, so this is queried the way
+    api/admin.py's dashboard() queries User/Client/Project counts: globally,
+    admin-only. See utils/analytics.py for the write side.
+    """
+    __tablename__ = 'analytics_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Nullable: some events (e.g. a failed login attempt) have no known user yet.
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    event_type = db.Column(db.String(100), nullable=False)
+    # Named event_metadata, not metadata - `metadata` is reserved on
+    # SQLAlchemy declarative models (it's the Base's own MetaData attribute)
+    # and raises if used directly as a column name. Small JSON string for
+    # extra context, e.g. {"invoice_id": 5, "amount": 100}.
+    event_metadata = db.Column(db.Text, nullable=True)
+    # Indexed: this table is queried by date range (e.g. "signups in the last
+    # 30 days" on the admin analytics dashboard).
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    def __repr__(self):
+        return f'<AnalyticsEvent {self.event_type} user={self.user_id}>'
+
 # Subscription models are defined in models/subscription.py

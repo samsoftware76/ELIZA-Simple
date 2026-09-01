@@ -18,6 +18,7 @@ from models.billing import Quote, Invoice, QuoteStatus, InvoiceStatus
 from api.payment import PesaPalPayment
 from utils.email_utils import send_quote_response_notification, send_invoice_paid_notification
 from utils.document_print import build_print_context
+from utils.analytics import log_event
 
 portal_bp = Blueprint('portal', __name__, url_prefix='/portal')
 
@@ -72,6 +73,9 @@ def accept_quote(token):
         quote.status = QuoteStatus.ACCEPTED
         quote.responded_at = datetime.utcnow()
         db.session.commit()
+        # No logged-in current_user here - portal.py is public - so the quote's
+        # own creator is the user_id this event is attributed to.
+        log_event('quote_accepted', user_id=quote.created_by_id, quote_id=quote.id)
         send_quote_response_notification(quote)
         flash('Thank you! The quote has been accepted.', 'success')
     except Exception as e:
@@ -193,6 +197,7 @@ def invoice_payment_callback(token):
                 invoice.paid_at = datetime.utcnow()
                 invoice.payment_method = status.get('payment_method') or 'pesapal'
                 db.session.commit()
+                log_event('invoice_paid', user_id=invoice.created_by_id, invoice_id=invoice.id, amount=invoice.total)
                 # This is the one notification that matters most: without it,
                 # the only way staff learns money arrived is by manually
                 # checking the invoices list.

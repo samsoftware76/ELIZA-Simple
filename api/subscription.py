@@ -8,6 +8,7 @@ from models import db
 from models.models import User, Client
 from models.subscription import SubscriptionPlan, Subscription, Payment
 from api.payment import PesaPalPayment
+from utils.analytics import log_event
 
 # Create blueprint
 subscription_bp = Blueprint('subscription', __name__)
@@ -99,7 +100,8 @@ def subscribe(plan, cycle):
         )
         db.session.add(subscription)
         db.session.commit()
-        
+        log_event('subscription_trial_started', user_id=current_user.id, plan=plan_name)
+
         # Calculate trial end date for the flash message
         trial_end_date = subscription.get_trial_end_date()
         flash(f'Your 14-day free trial of the {plan_name} plan has started! You will be asked to provide payment details before {trial_end_date.strftime("%B %d, %Y")} to continue using the service.', 'success')
@@ -336,7 +338,8 @@ def payment_callback():
             
             db.session.commit()
             current_app.logger.info(f"Subscription {subscription.id} activated after successful payment")
-            
+            log_event('subscription_converted', user_id=subscription.user_id, plan=subscription.plan.name)
+
             # Clear the pending payment from session
             if 'pending_payment' in session:
                 session.pop('pending_payment')

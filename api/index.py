@@ -49,6 +49,9 @@ from filters import register_filters
 # Import email utilities
 from utils.email_utils import mail, send_task_assignment_notification, send_task_update_notification, send_task_comment_notification, send_bulk_email, send_password_reset_email
 
+# Import analytics - log_event() is unconditionally safe to call, never raises (see utils/analytics.py)
+from utils.analytics import log_event
+
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 
 # Configure the SQLAlchemy part of the app
@@ -181,6 +184,7 @@ def login():
             
             if user and user.check_password(form.password.data):
                 login_user(user, remember=form.remember_me.data)
+                log_event('user_login', user_id=user.id)
                 next_page = request.args.get('next')
                 flash('Login successful!', 'success')
                 return redirect(next_page or url_for('home'))
@@ -212,10 +216,11 @@ def register():
             role=UserRole[form.role.data]  # Convert string to enum
         )
         user.set_password(form.password.data)
-        
+
         db.session.add(user)
         db.session.commit()
-        
+        log_event('user_registered', user_id=user.id, role=user.role.name)
+
         flash('Your account has been created! You can now log in.', 'success')
         return redirect(url_for('login'))
     
@@ -437,6 +442,7 @@ def accept_invite(token):
         invite.accepted_at = datetime.utcnow()
 
         db.session.commit()
+        log_event('team_invite_accepted', user_id=new_user.id, inviter_id=invite.inviter_id)
 
         login_user(new_user)
         flash('Your account has been created and you have joined the team!', 'success')
@@ -505,7 +511,8 @@ def client_create():
         )
         db.session.add(client)
         db.session.commit()
-        
+        log_event('client_created', user_id=current_user.id)
+
         # Log the activity
         activity = ActivityLog(
             user_id=current_user.id,
@@ -517,7 +524,7 @@ def client_create():
         )
         db.session.add(activity)
         db.session.commit()
-        
+
         flash(f'Client "{client.name}" has been created successfully!', 'success')
         return redirect(url_for('clients'))
     
@@ -668,7 +675,8 @@ def project_create():
             )
             db.session.add(project)
             db.session.commit()
-            
+            log_event('project_created', user_id=current_user.id)
+
             # Log the activity
             activity = ActivityLog(
                 user_id=current_user.id,

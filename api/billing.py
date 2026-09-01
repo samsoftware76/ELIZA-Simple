@@ -14,6 +14,7 @@ from models.billing import Quote, QuoteItem, Invoice, InvoiceItem, QuoteStatus, 
 from forms import QuoteForm, InvoiceForm
 from utils.email_utils import send_quote_email, send_invoice_email
 from utils.document_print import build_print_context
+from utils.analytics import log_event
 
 billing_bp = Blueprint('billing', __name__)
 
@@ -98,6 +99,7 @@ def quote_create():
                     db.session.add(QuoteItem(quote_id=quote.id, **item))
 
                 db.session.commit()
+                log_event('quote_created', user_id=current_user.id, quote_id=quote.id)
                 flash(f'Quote {quote.quote_number} created.', 'success')
                 return redirect(url_for('billing.quote_detail', quote_id=quote.id))
             except Exception as e:
@@ -195,6 +197,7 @@ def quote_send(quote_id):
         quote.status = QuoteStatus.SENT
         quote.sent_at = datetime.utcnow()
         db.session.commit()
+        log_event('quote_sent', user_id=current_user.id, quote_id=quote.id)
 
         portal_url = current_app.config['BASE_URL'].rstrip('/') + url_for('portal.view_quote', token=quote.public_token)
         send_quote_email(quote, portal_url)
@@ -326,6 +329,7 @@ def invoice_create():
                     db.session.add(InvoiceItem(invoice_id=invoice.id, **item))
 
                 db.session.commit()
+                log_event('invoice_created', user_id=current_user.id, invoice_id=invoice.id)
                 flash(f'Invoice {invoice.invoice_number} created.', 'success')
                 return redirect(url_for('billing.invoice_detail', invoice_id=invoice.id))
             except Exception as e:
@@ -423,6 +427,7 @@ def invoice_send(invoice_id):
         invoice.status = InvoiceStatus.SENT
         invoice.sent_at = datetime.utcnow()
         db.session.commit()
+        log_event('invoice_sent', user_id=current_user.id, invoice_id=invoice.id)
 
         portal_url = current_app.config['BASE_URL'].rstrip('/') + url_for('portal.view_invoice', token=invoice.public_token)
         send_invoice_email(invoice, portal_url)
@@ -448,6 +453,7 @@ def invoice_mark_paid(invoice_id):
         invoice.paid_at = datetime.utcnow()
         invoice.payment_method = request.form.get('payment_method', 'manual')
         db.session.commit()
+        log_event('invoice_paid', user_id=invoice.created_by_id, invoice_id=invoice.id, amount=invoice.total)
         flash(f'Invoice {invoice.invoice_number} marked as paid.', 'success')
     except Exception as e:
         db.session.rollback()
