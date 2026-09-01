@@ -27,21 +27,19 @@
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <label for="project_id" class="form-label">Project *</label>
-                        <select class="form-select" id="project_id" name="project_id" required>
-                            <option value="" selected disabled>Select a project</option>
-                            {% for project in projects %}
-                                <option value="{{ project.id }}">{{ project.title }}</option>
-                            {% endfor %}
-                        </select>
+                        {# Was a hand-rolled <select> over the route's unfiltered
+                           Project.query.all() - now uses TaskForm's own project_id
+                           field so the options are scoped to this user's own
+                           projects (see forms.py TaskForm.__init__). #}
+                        {{ form.project_id(class="form-select") }}
                     </div>
                     <div class="col-md-6">
-                        <label for="assignee_id" class="form-label">Assignee</label>
-                        <select class="form-select" id="assignee_id" name="assignee_id">
-                            <option value="">Unassigned</option>
-                            {% for user in users %}
-                                <option value="{{ user.id }}" {% if user.id == current_user.id %}selected{% endif %}>{{ user.username }}</option>
-                            {% endfor %}
-                        </select>
+                        <label for="assigned_to" class="form-label">Assignee</label>
+                        {# Was a hand-rolled <select name="assignee_id"> - TaskForm's
+                           actual field is "assigned_to", so the selected assignee was
+                           silently dropped on submit. Also scoped via TaskForm's own
+                           field (see forms.py TaskForm.__init__). #}
+                        {{ form.assigned_to(class="form-select") }}
                     </div>
                 </div>
                 

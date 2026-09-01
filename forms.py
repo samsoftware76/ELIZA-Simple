@@ -29,8 +29,13 @@ class RegistrationForm(FlaskForm):
         DataRequired(),
         EqualTo('password', message='Passwords must match')
     ])
+    # Administrator is deliberately excluded from public self-registration -
+    # this form has no invite/approval gate, so offering ADMIN here let any
+    # anonymous visitor grant themselves full platform-admin access (every
+    # user/client/project across every tenant) in one submission. Admins are
+    # now only created by an existing admin via the admin panel's add_user
+    # flow (api/admin.py), which is correctly gated behind @admin_required.
     role = SelectField('Role', choices=[
-        (UserRole.ADMIN.name, 'Administrator'),
         (UserRole.PROJECT_MANAGER.name, 'Project Manager'),
         (UserRole.DEVELOPER.name, 'Developer'),
         (UserRole.SECRETARY.name, 'Secretary')
@@ -94,12 +99,24 @@ class ClientForm(FlaskForm):
     
     def __init__(self, *args, **kwargs):
         self.client_id = kwargs.pop('client_id', None)
+        # Tenant isolation: see ProjectForm.owner_id above - the uniqueness
+        # check below must only look at this user's own clients, matching
+        # the composite UNIQUE(owner_id, email) constraint added by
+        # migrations/add_client_unsubscribe_token.py. Passed in explicitly
+        # by the route rather than read from a global current_user, same as
+        # every other owner_id kwarg in this file.
+        self.owner_id = kwargs.pop('owner_id', None)
         super(ClientForm, self).__init__(*args, **kwargs)
-    
+
     def validate_email(self, email):
-        """Check if email already exists (only if provided)"""
+        """Check if email already exists for this tenant (only if provided)"""
         if email.data:  # Only validate if email is provided
-            client = Client.query.filter_by(email=email.data).first()
+            # No owner_id passed in => no tenant context => skip the check
+            # rather than querying globally, matching the "empty dropdown,
+            # not every record on the platform" behavior of the other forms.
+            if self.owner_id is None:
+                return
+            client = Client.query.filter_by(email=email.data, owner_id=self.owner_id).first()
             if client and (self.client_id is None or client.id != self.client_id):
                 raise ValidationError('A client with this email already exists.')
 
@@ -120,9 +137,22 @@ class ProjectForm(FlaskForm):
     submit = SubmitField('Save')
     
     def __init__(self, *args, **kwargs):
+        # Tenant isolation: the client dropdown must only offer clients the
+        # current user owns, or one tenant could assign their project to
+        # another tenant's client record. owner_id is passed in explicitly
+        # by the route (same kwargs.pop pattern as ClientForm.client_id
+        # above) rather than read from a global current_user here, so the
+        # scoping decision stays visible at the call site.
+        self.owner_id = kwargs.pop('owner_id', None)
         super(ProjectForm, self).__init__(*args, **kwargs)
-        # Populate the client dropdown
-        self.client_id.choices = [(c.id, c.name) for c in Client.query.order_by(Client.name).all()]
+        # Populate the client dropdown, scoped to this user's own clients.
+        # No owner_id passed in is treated as "no tenant context" and gets
+        # an empty dropdown rather than silently falling back to every
+        # client on the platform.
+        if self.owner_id is not None:
+            self.client_id.choices = [(c.id, c.name) for c in Client.query.filter_by(owner_id=self.owner_id).order_by(Client.name).all()]
+        else:
+            self.client_id.choices = []
         # Populate the status dropdown
         self.status.choices = [(status.name, status.value) for status in ProjectStatus]
         
@@ -150,19 +180,36 @@ class TaskForm(FlaskForm):
     
     def __init__(self, *args, **kwargs):
         self.project = kwargs.pop('project', None)
+        # The logged-in user, passed in explicitly by the route (see
+        # ProjectForm.owner_id above for why this isn't read from a global
+        # current_user here). Used both to scope the project dropdown to
+        # this user's own projects and to build the assignee dropdown.
+        self.user = kwargs.pop('user', None)
         super(TaskForm, self).__init__(*args, **kwargs)
-        
+
         # Populate the project dropdown
         if self.project:
             self.project_id.data = self.project.id
             self.project_id.render_kw = {'readonly': True}
-        self.project_id.choices = [(p.id, p.title) for p in Project.query.order_by(Project.title).all()]
-        
+        # Tenant isolation: only offer this user's own projects, otherwise a
+        # task could be filed against another tenant's project. No user
+        # passed in => no tenant context => empty dropdown, not "every
+        # project on the platform".
+        if self.user is not None:
+            self.project_id.choices = [(p.id, p.title) for p in Project.query.filter_by(owner_id=self.user.id).order_by(Project.title).all()]
+        else:
+            self.project_id.choices = []
+
         # Populate the status dropdown
         self.status.choices = [(status.name, status.value) for status in TaskStatus]
-        
-        # Populate the user dropdown for assignment
-        self.assigned_to.choices = [(0, 'Unassigned')] + [(u.id, f"{u.username} ({u.email})") for u in User.query.order_by(User.username).all()]
+
+        # KNOWN SIMPLIFICATION: there is no team/organization concept yet
+        # (see the migration plan's note on this), so a task can only be
+        # assigned to the user who owns it - the dropdown intentionally
+        # offers just the current user instead of every registered
+        # platform account, which would otherwise let one tenant assign
+        # work to a user who has nothing to do with their projects.
+        self.assigned_to.choices = [(0, 'Unassigned')] + ([(self.user.id, f"{self.user.username} ({self.user.email})")] if self.user is not None else [])
         
     def validate_due_date(self, due_date):
         """Validate that due date is not in the past"""
@@ -184,10 +231,17 @@ class QuoteForm(FlaskForm):
     submit = SubmitField('Save Quote')
 
     def __init__(self, *args, **kwargs):
+        # Tenant isolation: see ProjectForm.owner_id above - a quote must
+        # only be able to point at this user's own clients/projects.
+        self.owner_id = kwargs.pop('owner_id', None)
         super(QuoteForm, self).__init__(*args, **kwargs)
-        self.client_id.choices = [(c.id, c.name) for c in Client.query.order_by(Client.name).all()]
-        self.project_id.choices = [(0, '— No project —')] + \
-            [(p.id, p.title) for p in Project.query.order_by(Project.title).all()]
+        if self.owner_id is not None:
+            self.client_id.choices = [(c.id, c.name) for c in Client.query.filter_by(owner_id=self.owner_id).order_by(Client.name).all()]
+            self.project_id.choices = [(0, '— No project —')] + \
+                [(p.id, p.title) for p in Project.query.filter_by(owner_id=self.owner_id).order_by(Project.title).all()]
+        else:
+            self.client_id.choices = []
+            self.project_id.choices = [(0, '— No project —')]
 
 
 class InvoiceForm(FlaskForm):
@@ -202,10 +256,17 @@ class InvoiceForm(FlaskForm):
     submit = SubmitField('Save Invoice')
 
     def __init__(self, *args, **kwargs):
+        # Tenant isolation: see ProjectForm.owner_id above - an invoice must
+        # only be able to point at this user's own clients/projects.
+        self.owner_id = kwargs.pop('owner_id', None)
         super(InvoiceForm, self).__init__(*args, **kwargs)
-        self.client_id.choices = [(c.id, c.name) for c in Client.query.order_by(Client.name).all()]
-        self.project_id.choices = [(0, '— No project —')] + \
-            [(p.id, p.title) for p in Project.query.order_by(Project.title).all()]
+        if self.owner_id is not None:
+            self.client_id.choices = [(c.id, c.name) for c in Client.query.filter_by(owner_id=self.owner_id).order_by(Client.name).all()]
+            self.project_id.choices = [(0, '— No project —')] + \
+                [(p.id, p.title) for p in Project.query.filter_by(owner_id=self.owner_id).order_by(Project.title).all()]
+        else:
+            self.client_id.choices = []
+            self.project_id.choices = [(0, '— No project —')]
 
 
 class ProjectAssignmentForm(FlaskForm):
@@ -222,9 +283,15 @@ class ProjectAssignmentForm(FlaskForm):
     submit = SubmitField('Add to Project')
     
     def __init__(self, *args, **kwargs):
+        # See TaskForm.assigned_to above: no team/organization concept yet,
+        # so the only valid assignee is the current user themselves. Passed
+        # in explicitly by the route rather than read from a global
+        # current_user (same pattern as ProjectForm.owner_id above).
+        self.user = kwargs.pop('user', None)
         super(ProjectAssignmentForm, self).__init__(*args, **kwargs)
-        # Populate the user dropdown
-        self.user_id.choices = [(u.id, f"{u.username} ({u.email})") for u in User.query.order_by(User.username).all()]
+        # KNOWN SIMPLIFICATION: dropdown is just the current user, not every
+        # registered platform account - see TaskForm.assigned_to for why.
+        self.user_id.choices = [(self.user.id, f"{self.user.username} ({self.user.email})")] if self.user is not None else []
 
 class TimeEntryForm(FlaskForm):
     """Form for tracking time spent on tasks"""

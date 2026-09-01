@@ -147,7 +147,7 @@
             {% if request.args %}
                 <p>Try adjusting your filters or <a href="{{ url_for('all_tasks') }}">view all tasks</a>.</p>
             {% else %}
-                <p>Get started by <a href="{{ url_for('task_create') }}">creating a new task</a>.</p>
+                <p>Get started by <a href="{{ url_for('create_task') }}">creating a new task</a>.</p>
             {% endif %}
         </div>
     {% endif %}

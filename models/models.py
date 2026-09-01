@@ -3,8 +3,21 @@ from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 import enum
+import secrets
 
 db = SQLAlchemy()
+
+
+def generate_client_unsubscribe_token():
+    """A URL-safe token used for the public, no-auth unsubscribe link.
+
+    Same secrets.token_urlsafe(32) pattern as generate_public_token() in
+    models/billing.py, kept as its own copy rather than imported from there:
+    models/billing.py does `from models import db`, which runs this package's
+    __init__.py, which imports *this* module (models.models) first - so this
+    module importing back from models.billing would be circular.
+    """
+    return secrets.token_urlsafe(32)
 
 # Enums for status fields
 class ProjectStatus(enum.Enum):
@@ -115,17 +128,41 @@ class Client(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     contact_person = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(120), unique=True)
+    # Not unique=True here anymore - email uniqueness is scoped per-tenant now
+    # (see __table_args__ below), not global. migrations/add_client_unsubscribe_token.py
+    # dropped the old bare clients_email_key constraint and replaced it with
+    # a composite UNIQUE(owner_id, email) so two different tenants can have a
+    # client with the same email without a false "already exists" error.
+    email = db.Column(db.String(120))
     phone = db.Column(db.String(20), nullable=False)
     address = db.Column(db.Text)
     notes = db.Column(db.Text)
     email_opt_out = db.Column(db.Boolean, default=False)  # For bulk email unsubscribe functionality
+    # Per-client unsubscribe link secret, so the unsubscribe endpoint can look
+    # a client up without auth (it's a public GET link inside an email) while
+    # still requiring something unguessable - a bare email address is not
+    # enough, see migrations/add_client_unsubscribe_token.py. Every existing
+    # row was backfilled with a unique token by that migration, so this can
+    # be NOT NULL + UNIQUE from the start (unlike owner_id below). The
+    # default= ensures every client created from here on gets one too,
+    # not just the rows the migration backfilled.
+    unsubscribe_token = db.Column(db.String(64), unique=True, default=generate_client_unsubscribe_token)
+    # Tenant isolation: which user this client belongs to. Nullable because
+    # existing rows were backfilled by migrations/add_tenant_ownership.py
+    # rather than made NOT NULL - see that file for how the backfill owner
+    # was chosen.
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
+    # Composite uniqueness matching the constraint added by
+    # migrations/add_client_unsubscribe_token.py (name kept identical so this
+    # matches the real constraint rather than describing a different one).
+    __table_args__ = (db.UniqueConstraint('owner_id', 'email', name='clients_owner_id_email_key'),)
+
     # Relationships
     # Note: Project relationship is defined in the Project model
-    
+
     def __repr__(self):
         return f'<Client {self.name}>'
 
@@ -157,9 +194,13 @@ class Project(db.Model):
     status = db.Column(db.Enum(ProjectStatus), default=ProjectStatus.PENDING)
     priority = db.Column(db.Integer, default=2)  # 1=Low, 2=Medium, 3=High
     budget = db.Column(db.Float)
+    # Tenant isolation: which user this project belongs to. Nullable for the
+    # same reason as Client.owner_id above - see
+    # migrations/add_tenant_ownership.py for the backfill of existing rows.
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     client = db.relationship('Client', backref=db.backref('projects', lazy=True))
     tasks = db.relationship('Task', backref='project', lazy=True, cascade='all, delete-orphan')
@@ -250,11 +291,24 @@ class ActivityLog(db.Model):
     entity_type = db.Column(db.String(50), nullable=False)  # e.g., 'project', 'task', 'client'
     entity_id = db.Column(db.Integer, nullable=False)
     description = db.Column(db.Text)
+    # Tenant isolation: which user's data this log entry is about (the acting
+    # user, same as user_id above - there's no separate actor/subject split
+    # here). Nullable and NOT backfilled on existing rows: entity_type/
+    # entity_id is polymorphic (task, project, client, ...) with no single
+    # join back to an owner that's safe for every entity_type, so old rows
+    # are left NULL rather than guessed at. See
+    # migrations/add_activity_log_owner.py.
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     # Relationships
-    user = db.relationship('User', backref=db.backref('activity_logs', lazy=True))
-    
+    # foreign_keys=[user_id] is required now that owner_id (added above) is a
+    # second FK to users.id on this table - without it SQLAlchemy can't tell
+    # which column this relationship should join on and raises
+    # AmbiguousForeignKeysError on the *first* query touching any mapper in
+    # the registry (i.e. it breaks the entire app, not just ActivityLog).
+    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('activity_logs', lazy=True))
+
     def __repr__(self):
         return f'<ActivityLog {self.action_type} {self.entity_type} {self.entity_id}>'
 
