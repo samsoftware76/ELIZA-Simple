@@ -452,8 +452,39 @@ def clients():
     # Paginated so the page doesn't have to load every client row on every
     # visit - client lists grow unbounded and .all() was pulling the whole table.
     page = request.args.get('page', 1, type=int)
-    # Tenant isolation: only ever list this user's own clients.
-    pagination = Client.query.filter_by(owner_id=current_user.get_owner_id()).order_by(Client.name).paginate(page=page, per_page=20, error_out=False)
+    q = request.args.get('q', '').strip()
+    created_after = request.args.get('created_after', '').strip()
+    created_before = request.args.get('created_before', '').strip()
+    # Tenant isolation: only ever list this user's own clients - every filter
+    # below is ANDed onto this base query, never replacing it.
+    query = Client.query.filter_by(owner_id=current_user.get_owner_id())
+
+    if q:
+        search = f"%{q}%"
+        query = query.filter(db.or_(
+            Client.name.ilike(search),
+            Client.contact_person.ilike(search),
+            Client.email.ilike(search)
+        ))
+
+    # created_after/created_before come from plain HTML date inputs
+    # (YYYY-MM-DD) - invalid/unparseable input is ignored rather than
+    # raising, so a malformed or hand-edited querystring just falls back to
+    # the unfiltered list instead of a 500.
+    if created_after:
+        try:
+            query = query.filter(Client.created_at >= datetime.strptime(created_after, '%Y-%m-%d'))
+        except ValueError:
+            pass
+    if created_before:
+        try:
+            # +1 day so the filter includes the entire created_before day,
+            # not just rows created at exactly midnight.
+            query = query.filter(Client.created_at < datetime.strptime(created_before, '%Y-%m-%d') + timedelta(days=1))
+        except ValueError:
+            pass
+
+    pagination = query.order_by(Client.name).paginate(page=page, per_page=20, error_out=False)
     return render_template('clients/index.html', clients=pagination.items, pagination=pagination, now=datetime.now())
 
 @app.route('/clients/create', methods=['GET', 'POST'])
@@ -630,6 +661,9 @@ def project_create():
                 status=form.status.data,
                 priority=form.priority.data,
                 budget=form.budget.data,
+                zoom_link=form.zoom_link.data,
+                drive_link=form.drive_link.data,
+                whatsapp_contact=form.whatsapp_contact.data,
                 owner_id=current_user.get_owner_id()  # tenant isolation: this project belongs to its creator
             )
             db.session.add(project)
@@ -1289,6 +1323,43 @@ def task_edit(task_id):
             flash(f'Error updating task: {str(e)}', 'danger')
     
     return render_template('tasks/form.html', form=form, task=task, project=task.project, now=datetime.now())
+
+@app.route('/tasks/<int:task_id>/submit-review', methods=['POST'])
+@login_required
+def task_submit_review(task_id):
+    """Shortcut for the assignee (or anyone who can already edit the task) to
+    signal "I think this is done, please check" without opening the full edit
+    form and hunting for the status dropdown. Moves the task to REVIEW rather
+    than COMPLETED - review is the correct semantic here, the assignee isn't
+    unilaterally closing the task, they're asking for it to be checked."""
+    task = Task.query.get_or_404(task_id)
+    # Task has no owner_id of its own - tenant isolation is via its parent
+    # project, same 404-not-403 pattern used on every other task route.
+    if task.project.owner_id != current_user.get_owner_id():
+        abort(404)
+
+    if task.status in (TaskStatus.REVIEW, TaskStatus.COMPLETED):
+        flash(f'Task "{task.title}" is already {task.status.value}.', 'info')
+        return redirect(url_for('task_detail', task_id=task.id))
+
+    task.status = TaskStatus.REVIEW
+    db.session.commit()
+
+    # Log the activity - same paired user_id/owner_id pattern as every other
+    # status-affecting ActivityLog call in this file.
+    activity = ActivityLog(
+        user_id=current_user.id,
+        owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
+        action_type='status_changed',
+        entity_type='task',
+        entity_id=task.id,
+        description=f'Submitted task for review: {task.title}'
+    )
+    db.session.add(activity)
+    db.session.commit()
+
+    flash(f'Task "{task.title}" has been submitted for review.', 'success')
+    return redirect(url_for('task_detail', task_id=task.id))
 
 @app.route('/tasks/<int:task_id>/delete')
 @login_required

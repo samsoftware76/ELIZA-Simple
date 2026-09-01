@@ -228,6 +228,13 @@ class Project(db.Model):
     # same reason as Client.owner_id above - see
     # migrations/add_tenant_ownership.py for the backfill of existing rows.
     owner_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    # Third-party tool links for a project - all optional/nullable, see
+    # migrations/add_project_tool_links.py. String(255) is plenty for a URL
+    # or a wa.me link/phone number; no format constraint at the DB layer,
+    # that's enforced by ProjectForm's validators instead.
+    zoom_link = db.Column(db.String(255))
+    drive_link = db.Column(db.String(255))
+    whatsapp_contact = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

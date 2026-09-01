@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
 from wtforms import StringField, PasswordField, SubmitField, BooleanField, SelectField, TextAreaField, DateField, FloatField, IntegerField, HiddenField, DateTimeField
-from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError, Optional, NumberRange
+from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError, Optional, NumberRange, URL
 from models.models import User, Client, Project, Task
 from models.subscription import Subscription, SubscriptionPlan
 from models import UserRole, ProjectStatus, TaskStatus
@@ -201,8 +201,15 @@ class ProjectForm(FlaskForm):
         (3, 'High')
     ], coerce=int, validators=[DataRequired()])
     budget = FloatField('Budget', validators=[Optional(), NumberRange(min=0)])
+    # Third-party tool links (see migrations/add_project_tool_links.py) - all
+    # optional. zoom_link/drive_link get URL() since they're meant to be
+    # clickable links; whatsapp_contact deliberately skips URL() since it may
+    # hold a plain phone number instead of a wa.me link.
+    zoom_link = StringField('Zoom Link', validators=[Optional(), URL(), Length(max=255)])
+    drive_link = StringField('Drive Link', validators=[Optional(), URL(), Length(max=255)])
+    whatsapp_contact = StringField('WhatsApp Contact', validators=[Optional(), Length(max=255)])
     submit = SubmitField('Save')
-    
+
     def __init__(self, *args, **kwargs):
         # Tenant isolation: the client dropdown must only offer clients the
         # current user owns, or one tenant could assign their project to

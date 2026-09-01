@@ -24,6 +24,27 @@
         </div>
     </div>
 
+    {% if project.zoom_link or project.drive_link or project.whatsapp_contact %}
+    <div class="mb-4">
+        {% if project.zoom_link %}
+        <a href="{{ project.zoom_link }}" target="_blank" rel="noopener" class="btn btn-outline-primary me-2 mb-2">
+            <i class="fas fa-video"></i> Zoom Meeting
+        </a>
+        {% endif %}
+        {% if project.drive_link %}
+        <a href="{{ project.drive_link }}" target="_blank" rel="noopener" class="btn btn-outline-primary me-2 mb-2">
+            <i class="fas fa-folder-open"></i> Drive Files
+        </a>
+        {% endif %}
+        {% if project.whatsapp_contact %}
+        {% set whatsapp_href = project.whatsapp_contact if project.whatsapp_contact.startswith('http') else 'https://wa.me/' + project.whatsapp_contact|replace(' ', '')|replace('+', '') %}
+        <a href="{{ whatsapp_href }}" target="_blank" rel="noopener" class="btn btn-outline-success mb-2">
+            <i class="fab fa-whatsapp"></i> WhatsApp
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <div class="row">
         <div class="col-md-8">
             <div class="card shadow-sm mb-4">

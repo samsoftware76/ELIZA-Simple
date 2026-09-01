@@ -96,6 +96,36 @@
                             </div>
                         </div>
 
+                        <hr class="my-4">
+                        <h5 class="mb-3">Meeting &amp; File Links (optional)</h5>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.zoom_link.id }}" class="form-label">{{ form.zoom_link.label.text }}</label>
+                                {{ form.zoom_link(class="form-control" + (" is-invalid" if form.zoom_link.errors else ""), placeholder="https://zoom.us/j/...") }}
+                                {% for error in form.zoom_link.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-md-6">
+                                <label for="{{ form.drive_link.id }}" class="form-label">{{ form.drive_link.label.text }}</label>
+                                {{ form.drive_link(class="form-control" + (" is-invalid" if form.drive_link.errors else ""), placeholder="https://drive.google.com/...") }}
+                                {% for error in form.drive_link.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.whatsapp_contact.id }}" class="form-label">{{ form.whatsapp_contact.label.text }}</label>
+                                {{ form.whatsapp_contact(class="form-control" + (" is-invalid" if form.whatsapp_contact.errors else ""), placeholder="Phone number or wa.me link") }}
+                                {% for error in form.whatsapp_contact.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+
                         <div class="d-flex justify-content-between mt-4">
                             <a href="{{ url_for('projects') }}" class="btn btn-outline-secondary">Cancel</a>
                             {{ form.submit(class="btn btn-primary") }}
