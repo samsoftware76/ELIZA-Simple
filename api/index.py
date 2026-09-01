@@ -1743,25 +1743,16 @@ def comment_delete(comment_id):
     return redirect(url_for('task_detail', task_id=task_id))
 
 # Route to initialize the database (only for development)
-@app.route('/init-db')
-def init_db():
-    try:
-        with app.app_context():
-            db.create_all()
-        return jsonify({'message': 'Database initialized successfully!'}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-        
-# Route to reset the database (only for development - CAUTION: destroys all data)
-@app.route('/reset-db')
-def reset_db():
-    try:
-        with app.app_context():
-            db.drop_all()
-            db.create_all()
-        return jsonify({'message': 'Database reset successfully! All tables dropped and recreated.'}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+# /init-db and /reset-db used to live here as plain, unauthenticated GET
+# routes - anyone who found /reset-db could wipe the entire production
+# database (db.drop_all() + db.create_all()) with a single request, no
+# login required. Removed outright: db.create_all() only creates missing
+# tables (it never alters existing ones, so it has no ongoing use once
+# production tables already exist), and db.drop_all() has no legitimate
+# production use case at all. If local-dev table creation is ever needed
+# again, do it via a one-off script following the migrations/ convention
+# (e.g. migrations/add_task_columns.py - idempotent, run manually against
+# DATABASE_URL), not a live HTTP endpoint.
 
 # NOTE: /admin/* is handled by admin_bp (api/admin.py, registered above) -
 # it has the real, working implementation (correct enum comparisons, real
