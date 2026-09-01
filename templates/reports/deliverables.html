@@ -1,0 +1,254 @@
+{% extends 'base.html' %}
+
+{% block title %}Deliverables Report{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('reports') }}">Reports</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Deliverables Report</li>
+        </ol>
+    </nav>
+
+    {% if not report %}
+    <h1 class="mb-4">Deliverables Report</h1>
+    <p class="text-muted">Choose a project or a client to generate a presentable, client-ready report of what's been delivered, what's overdue, and who was responsible.</p>
+
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">By Project</h5>
+                </div>
+                <div class="card-body">
+                    {% if projects %}
+                    <form method="GET" action="{{ url_for('report_deliverables') }}" class="row g-2">
+                        <div class="col-9">
+                            <select name="project_id" class="form-select" required>
+                                <option value="" disabled selected>Choose a project...</option>
+                                {% for project in projects %}
+                                <option value="{{ project.id }}">{{ project.title }} ({{ project.client.name }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-3">
+                            <button type="submit" class="btn btn-primary w-100">View</button>
+                        </div>
+                    </form>
+                    {% else %}
+                    <p class="text-muted mb-0">You don't have any projects yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">By Client</h5>
+                </div>
+                <div class="card-body">
+                    {% if clients %}
+                    <form method="GET" action="{{ url_for('report_deliverables') }}" class="row g-2">
+                        <div class="col-9">
+                            <select name="client_id" class="form-select" required>
+                                <option value="" disabled selected>Choose a client...</option>
+                                {% for client in clients %}
+                                <option value="{{ client.id }}">{{ client.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-3">
+                            <button type="submit" class="btn btn-primary w-100">View</button>
+                        </div>
+                    </form>
+                    <p class="text-muted small mt-2 mb-0">Every project belonging to this client is reported separately below.</p>
+                    {% else %}
+                    <p class="text-muted mb-0">You don't have any clients yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="mb-0">Deliverables Report</h1>
+            <p class="text-muted mb-0">
+                {% if report.scope == 'client' %}
+                    Client: <strong>{{ report.client.name }}</strong>
+                {% else %}
+                    Client: <strong>{{ report.client.name if report.client else 'N/A' }}</strong>
+                {% endif %}
+                &middot; Generated {{ report.generated_at.strftime('%b %d, %Y %H:%M') }}
+            </p>
+        </div>
+        <div class="text-end">
+            <a href="{{ url_for('report_deliverables_print', project_id=report.project.id if report.project else none, client_id=report.client.id if report.scope == 'client' else none) }}"
+               class="btn btn-outline-secondary btn-sm" target="_blank"><i class="fas fa-file-pdf"></i> Print / Download PDF</a>
+            <a href="{{ url_for('export_deliverables_report', project_id=report.project.id if report.project else none, client_id=report.client.id if report.scope == 'client' else none) }}"
+               class="btn btn-outline-primary btn-sm"><i class="fas fa-file-excel"></i> Export to Excel</a>
+            <a href="{{ url_for('report_deliverables') }}" class="btn btn-outline-secondary btn-sm">Choose a different report</a>
+        </div>
+    </div>
+
+    {% if report.summary %}
+    <div class="card shadow-sm mb-4 border-primary">
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0">Summary &mdash; {{ report.client.name }}</h5>
+        </div>
+        <div class="card-body">
+            <div class="row text-center mb-3">
+                <div class="col-md-3 col-6 mb-3 mb-md-0">
+                    <h3 class="mb-0">{{ report.summary.total_projects }}</h3>
+                    <small class="text-muted">Projects</small>
+                </div>
+                <div class="col-md-3 col-6 mb-3 mb-md-0">
+                    <h3 class="mb-0 {% if report.summary.overdue_projects %}text-danger{% endif %}">{{ report.summary.overdue_projects }}</h3>
+                    <small class="text-muted">Overdue Projects</small>
+                </div>
+                <div class="col-md-3 col-6">
+                    <h3 class="mb-0 {% if report.summary.total_late_tasks %}text-warning{% endif %}">{{ report.summary.total_late_tasks }}</h3>
+                    <small class="text-muted">Late Tasks</small>
+                </div>
+                <div class="col-md-3 col-6">
+                    <h3 class="mb-0">{{ report.projects|sum(attribute='total_hours')|round(1) }}</h3>
+                    <small class="text-muted">Total Hours Logged</small>
+                </div>
+            </div>
+            {% if report.summary.recurring_late_assignees %}
+            <hr>
+            <h6 class="fw-bold">Recurring late-task pattern</h6>
+            <ul class="mb-0">
+                {% for entry in report.summary.recurring_late_assignees %}
+                <li>{{ entry.name }} &mdash; appears on {{ entry.count }} late tasks in this report</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% for project_report in report.projects %}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+            <div>
+                <h4 class="mb-0">{{ project_report.title }}</h4>
+                <small class="text-muted">{{ project_report.client_name }}</small>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-{{ project_report.status.name|status_badge }}">{{ project_report.status.value|replace('_', ' ')|title }}</span>
+                {% if project_report.is_overdue %}
+                <span class="badge bg-danger"><i class="fas fa-exclamation-triangle"></i> Overdue</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Start Date</small>
+                    {{ project_report.start_date.strftime('%b %d, %Y') if project_report.start_date else 'N/A' }}
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">End Date</small>
+                    {{ project_report.end_date.strftime('%b %d, %Y') if project_report.end_date else 'N/A' }}
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">Hours Logged</small>
+                    {{ project_report.total_hours }}
+                </div>
+                <div class="col-md-3">
+                    <small class="text-muted d-block">{{ project_report.percent_complete }}% Complete</small>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-{{ 'success' if project_report.percent_complete == 100 else 'primary' }}" role="progressbar"
+                             style="width: {{ project_report.percent_complete }}%"
+                             aria-valuenow="{{ project_report.percent_complete }}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                </div>
+            </div>
+
+            <h6 class="fw-bold">Tasks</h6>
+            {% if project_report.tasks %}
+            <div class="table-responsive mb-3">
+                <table class="table table-hover table-sm align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Task</th>
+                            <th>Assignee</th>
+                            <th>Due Date</th>
+                            <th>Completed</th>
+                            <th>Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for task_report in project_report.tasks %}
+                        <tr>
+                            <td>{{ task_report.title }}</td>
+                            <td>
+                                {% if task_report.assignee_name == 'Unassigned' %}
+                                <span class="text-muted">Unassigned</span>
+                                {% else %}
+                                {{ task_report.assignee_name }}
+                                {% endif %}
+                            </td>
+                            <td>{{ task_report.due_date.strftime('%b %d, %Y') if task_report.due_date else 'N/A' }}</td>
+                            <td>{{ task_report.completed_at.strftime('%b %d, %Y') if task_report.completed_at else '—' }}</td>
+                            <td>
+                                <span class="badge bg-{{ task_report.status.name|status_badge }}">{{ task_report.status.value|replace('_', ' ')|title }}</span>
+                                {% if task_report.is_late %}
+                                <span class="badge bg-warning text-dark"><i class="fas fa-exclamation-circle"></i> Late</span>
+                                {% endif %}
+                            </td>
+                            <td></td>
+                        </tr>
+                        {% if task_report.is_late %}
+                        <tr class="table-warning">
+                            <td colspan="6" class="small">
+                                <i class="fas fa-user-clock me-1"></i>{{ task_report.accountability_sentence }}
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% if task_report.comments %}
+                        <tr>
+                            <td colspan="6" class="bg-light">
+                                <small class="text-muted fw-bold d-block mb-1">Comments</small>
+                                <ul class="list-unstyled mb-0 small">
+                                    {% for comment in task_report.comments %}
+                                    <li class="mb-1"><strong>{{ comment.author_name }}</strong> <span class="text-muted">({{ comment.created_at.strftime('%b %d, %Y %H:%M') }}):</span> {{ comment.content }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">No tasks on this project yet.</p>
+            {% endif %}
+
+            <h6 class="fw-bold">Activity Feed</h6>
+            {% if project_report.activity_feed %}
+            <ul class="list-group list-group-flush mb-0">
+                {% for item in project_report.activity_feed %}
+                <li class="list-group-item px-0 py-1 small">
+                    <span class="text-muted">{{ item.created_at.strftime('%b %d, %Y %H:%M') }}</span>
+                    &mdash; <strong>{{ item.actor_name }}</strong> {{ item.description }}
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-muted mb-0">No recorded activity for this project.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    {% endif %}
+</div>
+{% endblock %}

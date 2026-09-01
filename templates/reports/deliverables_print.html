@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deliverables Report{% if report.client %} - {{ report.client.name }}{% endif %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #2952e3;
+            --ink: #1a1d29;
+            --muted: #6b7280;
+            --line: #e5e7eb;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, Segoe UI, Arial, sans-serif;
+            color: var(--ink);
+            margin: 0;
+            background: #f4f6f9;
+        }
+        .toolbar {
+            background: #212529;
+            padding: 14px 0;
+            text-align: center;
+        }
+        .toolbar button {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .toolbar button:hover { background: #1e3fc4; }
+        .toolbar .hint { color: #aab; font-size: 12px; margin-top: 6px; }
+
+        .sheet {
+            max-width: 900px;
+            margin: 32px auto;
+            background: #fff;
+            padding: 56px 64px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+            border-radius: 4px;
+        }
+
+        .doc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 3px solid var(--accent);
+            padding-bottom: 24px;
+            margin-bottom: 24px;
+        }
+        .brand-name { font-size: 22px; font-weight: 700; }
+        .doc-type {
+            text-align: right;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .doc-sub { text-align: right; color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+        .summary-block {
+            background: #f9fafb;
+            border-left: 3px solid var(--accent);
+            border-radius: 4px;
+            padding: 18px 20px;
+            margin-bottom: 32px;
+        }
+        .summary-block h6 {
+            margin: 0 0 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--muted);
+        }
+        .summary-stats { display: flex; gap: 32px; flex-wrap: wrap; margin-bottom: 4px; }
+        .summary-stats .stat-value { font-size: 22px; font-weight: 700; }
+        .summary-stats .stat-label { color: var(--muted); font-size: 12px; }
+        .recurring-list { margin: 12px 0 0; padding-left: 18px; font-size: 13px; }
+
+        .project-block { margin-bottom: 40px; page-break-inside: avoid; }
+        .project-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 2px solid var(--line);
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+        .project-header h3 { margin: 0; font-size: 18px; }
+        .project-header .client-name { color: var(--muted); font-size: 13px; }
+        .project-meta { display: flex; gap: 28px; margin-bottom: 16px; font-size: 13px; }
+        .project-meta .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: block; }
+        .status-pill {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 100px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-overdue { background: #fee2e2; color: #991b1b; }
+
+        table.tasks { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+        table.tasks th {
+            text-align: left;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--muted);
+            border-bottom: 2px solid var(--line);
+            padding: 8px 6px;
+        }
+        table.tasks td {
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--line);
+            font-size: 13px;
+            vertical-align: top;
+        }
+        .accountability-row td {
+            background: #fffbeb;
+            font-size: 12px;
+            color: #92400e;
+            padding: 6px;
+        }
+        .comments-row td { background: #f9fafb; font-size: 12px; color: #374151; padding: 6px; }
+        .no-tasks, .no-activity { color: var(--muted); font-size: 13px; margin: 4px 0 12px; }
+
+        .activity-feed { margin: 0; padding-left: 0; list-style: none; font-size: 12px; }
+        .activity-feed li { padding: 3px 0; border-bottom: 1px solid var(--line); }
+        .activity-feed .ts { color: var(--muted); }
+
+        .doc-footer {
+            text-align: center;
+            color: var(--muted);
+            font-size: 12px;
+            padding-top: 24px;
+            border-top: 1px solid var(--line);
+        }
+
+        @media print {
+            body { background: #fff; }
+            .toolbar { display: none; }
+            .sheet { box-shadow: none; margin: 0; padding: 0.4in; max-width: 100%; border-radius: 0; }
+            @page { margin: 0.5in; }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button onclick="window.print()">Download PDF / Print</button>
+        <div class="hint">Use your browser's "Save as PDF" option in the print dialog</div>
+    </div>
+
+    <div class="sheet">
+        <div class="doc-header">
+            <div>
+                <div class="brand-name">ELIZA</div>
+            </div>
+            <div>
+                <div class="doc-type">Deliverables Report</div>
+                <div class="doc-sub">
+                    {% if report.scope == 'client' %}
+                        Client: {{ report.client.name }}
+                    {% else %}
+                        {{ report.projects[0].title if report.projects else '' }}{% if report.client %} &middot; {{ report.client.name }}{% endif %}
+                    {% endif %}
+                </div>
+                <div class="doc-sub">Generated {{ report.generated_at.strftime('%B %d, %Y %H:%M') }}</div>
+            </div>
+        </div>
+
+        {% if report.summary %}
+        <div class="summary-block">
+            <h6>Summary &mdash; {{ report.client.name }}</h6>
+            <div class="summary-stats">
+                <div><div class="stat-value">{{ report.summary.total_projects }}</div><div class="stat-label">Projects</div></div>
+                <div><div class="stat-value">{{ report.summary.overdue_projects }}</div><div class="stat-label">Overdue Projects</div></div>
+                <div><div class="stat-value">{{ report.summary.total_late_tasks }}</div><div class="stat-label">Late Tasks</div></div>
+                <div><div class="stat-value">{{ report.projects|sum(attribute='total_hours')|round(1) }}</div><div class="stat-label">Total Hours Logged</div></div>
+            </div>
+            {% if report.summary.recurring_late_assignees %}
+            <div style="font-weight:600; font-size:12px; margin-top:8px;">Recurring late-task pattern</div>
+            <ul class="recurring-list">
+                {% for entry in report.summary.recurring_late_assignees %}
+                <li>{{ entry.name }} &mdash; appears on {{ entry.count }} late tasks in this report</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% for project_report in report.projects %}
+        <div class="project-block">
+            <div class="project-header">
+                <h3>{{ project_report.title }}</h3>
+                <span class="client-name">{{ project_report.client_name }}</span>
+            </div>
+            <div class="project-meta">
+                <div><span class="label">Start Date</span>{{ project_report.start_date.strftime('%b %d, %Y') if project_report.start_date else 'N/A' }}</div>
+                <div><span class="label">End Date</span>{{ project_report.end_date.strftime('%b %d, %Y') if project_report.end_date else 'N/A' }}</div>
+                <div><span class="label">Hours Logged</span>{{ project_report.total_hours }}</div>
+                <div><span class="label">Complete</span>{{ project_report.percent_complete }}%</div>
+                {% if project_report.is_overdue %}<div><span class="status-pill status-overdue">Overdue</span></div>{% endif %}
+            </div>
+
+            {% if project_report.tasks %}
+            <table class="tasks">
+                <thead>
+                    <tr><th>Task</th><th>Assignee</th><th>Due Date</th><th>Completed</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                    {% for task_report in project_report.tasks %}
+                    <tr>
+                        <td>{{ task_report.title }}</td>
+                        <td>{{ task_report.assignee_name }}</td>
+                        <td>{{ task_report.due_date.strftime('%b %d, %Y') if task_report.due_date else 'N/A' }}</td>
+                        <td>{{ task_report.completed_at.strftime('%b %d, %Y') if task_report.completed_at else '—' }}</td>
+                        <td>{{ task_report.status.value|replace('_', ' ')|title }}{% if task_report.is_late %} &middot; Late{% endif %}</td>
+                    </tr>
+                    {% if task_report.is_late %}
+                    <tr class="accountability-row"><td colspan="5">{{ task_report.accountability_sentence }}</td></tr>
+                    {% endif %}
+                    {% if task_report.comments %}
+                    <tr class="comments-row">
+                        <td colspan="5">
+                            {% for comment in task_report.comments %}
+                            <div><strong>{{ comment.author_name }}</strong> ({{ comment.created_at.strftime('%b %d, %Y %H:%M') }}): {{ comment.content }}</div>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="no-tasks">No tasks on this project yet.</p>
+            {% endif %}
+
+            {% if project_report.activity_feed %}
+            <ul class="activity-feed">
+                {% for item in project_report.activity_feed %}
+                <li><span class="ts">{{ item.created_at.strftime('%b %d, %Y %H:%M') }}</span> &mdash; <strong>{{ item.actor_name }}</strong> {{ item.description }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="no-activity">No recorded activity for this project.</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="doc-footer">
+            ELIZA &middot; Deliverables Report
+        </div>
+    </div>
+</body>
+</html>

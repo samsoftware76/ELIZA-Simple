@@ -11,6 +11,7 @@ pyjwt
 matplotlib
 Pillow
 pandas
+openpyxl
 requests
 Flask-Talisman
 Flask-Limiter

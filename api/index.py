@@ -14,6 +14,7 @@ from flask_wtf.csrf import CSRFProtect
 
 # For reporting features
 import pandas as pd
+from io import BytesIO
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')  # Use non-interactive backend for server-side plotting
@@ -51,6 +52,10 @@ from utils.email_utils import mail, send_task_assignment_notification, send_task
 
 # Import analytics - log_event() is unconditionally safe to call, never raises (see utils/analytics.py)
 from utils.analytics import log_event
+
+# Import the deliverables report builder - see utils/deliverables_report.py for why the
+# heavier per-project/per-client aggregation lives there instead of inline in this route.
+from utils.deliverables_report import build_deliverables_report
 
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 
@@ -1862,12 +1867,81 @@ def report_overdue_tasks():
         'values': list(assignee_data.values())
     }
     
-    return render_template('reports/overdue_tasks.html', 
+    return render_template('reports/overdue_tasks.html',
                            projects_with_overdue=projects_with_overdue,
                            overdue_tasks=overdue_tasks,
                            assignee_chart_data=assignee_chart_data,
                            priority_chart_data=priority_data,
                            now=datetime.now())
+
+@app.route('/reports/deliverables')
+@login_required
+def report_deliverables():
+    """Deliverables report: an executive-ready compiled view of what's been
+    delivered, what's overdue, and who was responsible, for one project or
+    every project under one client."""
+    project_id = request.args.get('project_id', type=int)
+    client_id = request.args.get('client_id', type=int)
+
+    if project_id and client_id:
+        # Ambiguous scope - a report can't be about a project and a client at once.
+        abort(400)
+
+    if not project_id and not client_id:
+        # No scope chosen yet - render the picker, dropdowns scoped to this
+        # user's own data same as every other filter dropdown in this file.
+        projects = Project.query.filter_by(owner_id=current_user.get_owner_id()).order_by(Project.title).all()
+        clients = Client.query.filter_by(owner_id=current_user.get_owner_id()).order_by(Client.name).all()
+        return render_template('reports/deliverables.html', report=None, projects=projects, clients=clients)
+
+    if project_id:
+        project = Project.query.get_or_404(project_id)
+        # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
+        # and confirm another tenant's project id.
+        if project.owner_id != current_user.get_owner_id():
+            abort(404)
+        report = build_deliverables_report(current_user.get_owner_id(), project_id=project_id)
+    else:
+        client = Client.query.get_or_404(client_id)
+        # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
+        # and confirm another tenant's client id.
+        if client.owner_id != current_user.get_owner_id():
+            abort(404)
+        report = build_deliverables_report(current_user.get_owner_id(), client_id=client_id)
+
+    return render_template('reports/deliverables.html', report=report, now=datetime.now())
+
+@app.route('/reports/deliverables/print')
+@login_required
+def report_deliverables_print():
+    """Standalone printable/PDF view of the deliverables report - same
+    project_id/client_id query convention and ownership checks as
+    report_deliverables() above, following the same browser-print pattern
+    used for quotes/invoices (see api/billing.py's quote_print/invoice_print
+    and templates/print/document.html)."""
+    project_id = request.args.get('project_id', type=int)
+    client_id = request.args.get('client_id', type=int)
+
+    if project_id and client_id:
+        abort(400)
+    if not project_id and not client_id:
+        # Nothing to print without a scope - unlike the main route this has
+        # no picker to fall back to.
+        abort(400)
+
+    if project_id:
+        project = Project.query.get_or_404(project_id)
+        # 404 (not 403), same reasoning as report_deliverables().
+        if project.owner_id != current_user.get_owner_id():
+            abort(404)
+        report = build_deliverables_report(current_user.get_owner_id(), project_id=project_id)
+    else:
+        client = Client.query.get_or_404(client_id)
+        if client.owner_id != current_user.get_owner_id():
+            abort(404)
+        report = build_deliverables_report(current_user.get_owner_id(), client_id=client_id)
+
+    return render_template('reports/deliverables_print.html', report=report, now=datetime.now())
 
 # Helper functions for reports
 def calculate_project_progress(project):
@@ -2035,7 +2109,113 @@ def export_overdue_tasks_report():
         mimetype='text/csv',
         headers={'Content-Disposition': 'attachment; filename=overdue_tasks_report.csv'}
     )
-    
+
+    return response
+
+def _excel_sheet_name(title, used_names):
+    """Excel sheet names are capped at 31 chars and can't contain []:*?/\\ -
+    project titles are free text and can hit either limit, so sanitize and
+    de-dupe before handing a name to ExcelWriter (which raises on a name
+    that's too long, invalid, or already used in the workbook)."""
+    invalid_chars = set('[]:*?/\\')
+    cleaned = ''.join(c for c in title if c not in invalid_chars).strip() or 'Project'
+    base = cleaned[:31]
+    name = base
+    suffix_n = 2
+    while name in used_names:
+        suffix = f' ({suffix_n})'
+        name = base[:31 - len(suffix)] + suffix
+        suffix_n += 1
+    return name
+
+@app.route('/export/deliverables')
+@login_required
+def export_deliverables_report():
+    """Export the deliverables report as an .xlsx workbook - same
+    project_id/client_id query convention and ownership-check pattern as
+    report_deliverables(). One sheet per project with its task table, plus a
+    Summary sheet rolling up the whole client when the report is
+    client-scoped."""
+    project_id = request.args.get('project_id', type=int)
+    client_id = request.args.get('client_id', type=int)
+
+    if project_id and client_id:
+        abort(400)
+    if not project_id and not client_id:
+        abort(400)
+
+    if project_id:
+        project = Project.query.get_or_404(project_id)
+        # 404 (not 403), same reasoning as report_deliverables().
+        if project.owner_id != current_user.get_owner_id():
+            abort(404)
+        report = build_deliverables_report(current_user.get_owner_id(), project_id=project_id)
+        filename = f'deliverables_{secure_filename(project.title)}.xlsx'
+    else:
+        client = Client.query.get_or_404(client_id)
+        if client.owner_id != current_user.get_owner_id():
+            abort(404)
+        report = build_deliverables_report(current_user.get_owner_id(), client_id=client_id)
+        filename = f'deliverables_{secure_filename(client.name)}.xlsx'
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        if report['summary']:
+            summary = report['summary']
+            summary_df = pd.DataFrame([{
+                'Client': report['client'].name,
+                'Projects': summary['total_projects'],
+                'Overdue Projects': summary['overdue_projects'],
+                'Late Tasks': summary['total_late_tasks'],
+                'Total Hours Logged': round(sum(p['total_hours'] for p in report['projects']), 1),
+            }])
+            summary_df.to_excel(writer, sheet_name='Summary', index=False)
+
+            projects_df = pd.DataFrame([{
+                'Project': p['title'],
+                'Status': p['status'].value,
+                '% Complete': p['percent_complete'],
+                'Overdue': 'Yes' if p['is_overdue'] else 'No',
+                'Hours Logged': p['total_hours'],
+            } for p in report['projects']])
+            # startrow leaves a blank row under the block above, same sheet.
+            projects_start = len(summary_df) + 2
+            projects_df.to_excel(writer, sheet_name='Summary', index=False, startrow=projects_start)
+
+            if summary['recurring_late_assignees']:
+                recurring_df = pd.DataFrame([{
+                    'Assignee': a['name'],
+                    'Late Tasks': a['count'],
+                } for a in summary['recurring_late_assignees']])
+                recurring_start = projects_start + len(projects_df) + 3
+                recurring_df.to_excel(writer, sheet_name='Summary', index=False, startrow=recurring_start)
+
+        used_sheet_names = {'Summary'} if report['summary'] else set()
+        for p in report['projects']:
+            data = [{
+                'Task': t['title'],
+                'Assignee': t['assignee_name'],
+                'Due Date': t['due_date'].strftime('%Y-%m-%d') if t['due_date'] else '',
+                'Completed': t['completed_at'].strftime('%Y-%m-%d') if t['completed_at'] else '',
+                'Status': t['status'].value,
+                'Late': 'Yes' if t['is_late'] else 'No',
+                'Accountability Note': t['accountability_sentence'] or '',
+            } for t in p['tasks']]
+            if not data:
+                # An all-empty DataFrame still needs a sheet, otherwise a
+                # project with zero tasks would silently vanish from the workbook.
+                data = [{'Task': 'No tasks on this project yet.'}]
+            sheet_name = _excel_sheet_name(p['title'], used_sheet_names)
+            used_sheet_names.add(sheet_name)
+            pd.DataFrame(data).to_excel(writer, sheet_name=sheet_name, index=False)
+
+    output.seek(0)
+
+    response = app.response_class(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
     return response
 
 @app.route('/comments/<int:comment_id>/delete')
