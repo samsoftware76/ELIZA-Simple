@@ -128,12 +128,13 @@
            hand, and the client-portal pages never did - so a client
            approving/rejecting a task, or posting a comment, saw the page
            silently reload with zero feedback either way, even though the
-           flash() call on the server side was firing correctly. Since
-           get_flashed_messages() consumes the queued messages the first
-           time it's called, any page-level block added before this one
-           (like clients/detail.html's) just renders empty now rather than
-           duplicating - harmless, safe to leave as dead code rather than
-           hunt down and remove every one. #}
+           flash() call on the server side was firing correctly.
+           get_flashed_messages() caches the flashes on the request context
+           after the first call, so any page-level block calling it again
+           does NOT render empty - it re-renders the same messages a second
+           time. All page-level copies of this block have been removed in
+           favor of this one; don't add another one to a page that extends
+           this template. #}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}

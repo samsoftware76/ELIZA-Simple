@@ -22,22 +22,6 @@
         </div>
     </div>
 
-    {# client_detail is a redirect target for edit/delete/SMS actions, none of
-       which had anywhere to show their flash() message on this page - added
-       so the "Send SMS" result below is actually visible after redirect. #}
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
     <div class="card shadow-sm mb-4">
         <div class="card-header">
             <h5 class="card-title mb-0">Portal Access</h5>
@@ -46,7 +30,8 @@
             {% if client.user_id %}
                 <p class="text-success"><i class="fas fa-check-circle"></i> Portal access: active</p>
                 <form method="POST" action="{{ url_for('client_revoke_portal_access', client_id=client.id) }}"
-                      onsubmit="return confirmAndDisable(this, 'Revoke portal access for ' + '{{ client.name }}' + '? They will no longer be able to log in and view this project.')">
+                      data-client-name="{{ client.name }}"
+                      onsubmit="return confirmAndDisable(this, 'Revoke portal access for ' + this.dataset.clientName + '? They will no longer be able to log in and view this project.')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-danger btn-sm mb-0">
                         <i class="fas fa-user-slash"></i> Revoke Portal Access
@@ -56,7 +41,8 @@
                 <p class="text-muted mb-0"><i class="fas fa-clock"></i> Invite sent, awaiting response.</p>
             {% elif client.email %}
                 <form method="POST" action="{{ url_for('client_invite_portal', client_id=client.id) }}"
-                      onsubmit="return confirmAndDisable(this, 'Invite ' + '{{ client.email }}' + ' to the client portal?')">
+                      data-client-email="{{ client.email }}"
+                      onsubmit="return confirmAndDisable(this, 'Invite ' + this.dataset.clientEmail + ' to the client portal?')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-paper-plane"></i> Invite to Portal
@@ -75,7 +61,8 @@
         <div class="card-body">
             {% if client.phone %}
             <form method="POST" action="{{ url_for('client_send_sms', client_id=client.id) }}"
-                  onsubmit="return confirmAndDisable(this, 'Send this SMS to ' + '{{ client.phone }}' + '?')">
+                  data-client-phone="{{ client.phone }}"
+                  onsubmit="return confirmAndDisable(this, 'Send this SMS to ' + this.dataset.clientPhone + '?')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="form-group">
                     <label for="sms-message">Message to {{ client.phone }}</label>

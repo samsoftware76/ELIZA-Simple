@@ -8,19 +8,6 @@
         <h1>Team</h1>
     </div>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
     <div class="card mb-4">
         <div class="card-header bg-primary text-white">
             <h2 class="mb-0 h5">Team Members</h2>
@@ -45,7 +32,8 @@
                                     <td>{{ membership.role.value.replace('_', ' ')|title }}</td>
                                     <td>
                                         <form method="POST" action="{{ url_for('team.remove_member', membership_id=membership.id) }}" class="d-inline"
-                                              onsubmit="return confirmAndDisable(this, 'Remove ' + '{{ membership.member.get_full_name() }}' + ' from your team?')">
+                                              data-member-name="{{ membership.member.get_full_name() }}"
+                                              onsubmit="return confirmAndDisable(this, 'Remove ' + this.dataset.memberName + ' from your team?')">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="btn btn-sm btn-danger" title="Remove">
                                                 <i class="fas fa-user-minus"></i> Remove
@@ -87,7 +75,8 @@
                                     <td>{{ invite.created_at.strftime('%b %d, %Y') if invite.created_at else '—' }}</td>
                                     <td>
                                         <form method="POST" action="{{ url_for('team.revoke_invite', invite_id=invite.id) }}" class="d-inline"
-                                              onsubmit="return confirmAndDisable(this, 'Revoke the invite to ' + '{{ invite.invitee_email }}' + '?')">
+                                              data-invitee-email="{{ invite.invitee_email }}"
+                                              onsubmit="return confirmAndDisable(this, 'Revoke the invite to ' + this.dataset.inviteeEmail + '?')">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="btn btn-sm btn-outline-danger" title="Revoke">
                                                 <i class="fas fa-times"></i> Revoke

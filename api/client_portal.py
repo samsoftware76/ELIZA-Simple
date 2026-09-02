@@ -106,6 +106,15 @@ def approve_task(task_id):
         flash(f'"{task.title}" is not ready for approval yet.', 'danger')
         return redirect(url_for('client_portal.project_detail', project_id=task.project_id))
 
+    # Idempotency guard - the portal hides the Approve button once
+    # client_approved is set, but that's cosmetic only. Without this check a
+    # double-click or a resubmit from a stale/cached page would re-stamp
+    # client_approved_at and write a duplicate ActivityLog/analytics event
+    # for what is really the same approval.
+    if task.client_approved:
+        flash(f'"{task.title}" has already been approved.', 'info')
+        return redirect(url_for('client_portal.project_detail', project_id=task.project_id))
+
     task.client_approved = True
     task.client_approved_at = datetime.utcnow()
     db.session.commit()

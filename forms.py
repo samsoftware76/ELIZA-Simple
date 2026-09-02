@@ -383,30 +383,6 @@ class InvoiceForm(FlaskForm):
             self.project_id.choices = [(0, '— No project —')]
 
 
-class ProjectAssignmentForm(FlaskForm):
-    """Form for assigning users to a project"""
-    project_id = HiddenField('Project ID', validators=[DataRequired()])
-    user_id = SelectField('User', coerce=int, validators=[DataRequired()])
-    role = SelectField('Role', choices=[
-        ('manager', 'Project Manager'),
-        ('developer', 'Developer'),
-        ('designer', 'Designer'),
-        ('tester', 'Tester'),
-        ('stakeholder', 'Stakeholder')
-    ], validators=[DataRequired()])
-    submit = SubmitField('Add to Project')
-    
-    def __init__(self, *args, **kwargs):
-        # See TaskForm.assigned_to above: no team/organization concept yet,
-        # so the only valid assignee is the current user themselves. Passed
-        # in explicitly by the route rather than read from a global
-        # current_user (same pattern as ProjectForm.owner_id above).
-        self.user = kwargs.pop('user', None)
-        super(ProjectAssignmentForm, self).__init__(*args, **kwargs)
-        # KNOWN SIMPLIFICATION: dropdown is just the current user, not every
-        # registered platform account - see TaskForm.assigned_to for why.
-        self.user_id.choices = [(self.user.id, f"{self.user.username} ({self.user.email})")] if self.user is not None else []
-
 class TimeEntryForm(FlaskForm):
     """Form for tracking time spent on tasks"""
     task_id = HiddenField('Task ID', validators=[DataRequired()])

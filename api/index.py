@@ -42,7 +42,7 @@ from api.payment import PesaPalPayment
 from api.sms import send_sms
 
 # Import forms
-from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, ProjectAssignmentForm, BusinessProfileForm, AcceptInviteForm, ClientAcceptInviteForm
+from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, BusinessProfileForm, AcceptInviteForm, ClientAcceptInviteForm
 
 # Import template filters
 from filters import register_filters

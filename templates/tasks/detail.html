@@ -17,7 +17,8 @@
         <div>
             {% if task.status.name not in ('REVIEW', 'COMPLETED') %}
             <form method="POST" action="{{ url_for('task_submit_review', task_id=task.id) }}" class="d-inline"
-                  onsubmit="return confirmAndDisable(this, 'Submit \'' + '{{ task.title }}' + '\' for review?')">
+                  data-task-title="{{ task.title }}"
+                  onsubmit="return confirmAndDisable(this, 'Submit \'' + this.dataset.taskTitle + '\' for review?')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-success">
                     <i class="fas fa-check-circle"></i> Submit for Review
@@ -26,7 +27,8 @@
             {% endif %}
             {% if task.status.name == 'REVIEW' %}
             <form method="POST" action="{{ url_for('task_mark_complete', task_id=task.id) }}" class="d-inline"
-                  onsubmit="return confirmAndDisable(this, 'Mark \'' + '{{ task.title }}' + '\' as complete?')">
+                  data-task-title="{{ task.title }}"
+                  onsubmit="return confirmAndDisable(this, 'Mark \'' + this.dataset.taskTitle + '\' as complete?')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-success">
                     <i class="fas fa-check-double"></i> Mark Complete

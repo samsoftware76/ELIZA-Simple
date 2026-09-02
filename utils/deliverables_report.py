@@ -17,8 +17,7 @@ from datetime import datetime
 
 from sqlalchemy import or_, and_
 
-from models import db
-from models.models import Project, Client, TaskStatus, ProjectStatus, ActivityLog, TimeEntry
+from models.models import Project, Client, TaskStatus, ProjectStatus, ActivityLog
 
 
 def _condense_text(text, limit=240):

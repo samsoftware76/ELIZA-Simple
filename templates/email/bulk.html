@@ -9,19 +9,6 @@
             <h1>Send Bulk Email to Clients</h1>
             <p class="lead">Use this form to send updates, newsletters, or important information to multiple clients at once.</p>
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-
             <div class="card">
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('email.bulk_email') }}">

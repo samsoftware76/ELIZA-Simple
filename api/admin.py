@@ -105,12 +105,34 @@ def analytics():
     # Simple conversion funnel. Kept as plain Python set intersections rather
     # than a fancier SQL join - this table is small enough that it doesn't
     # need to be optimized, and sets make "also has" trivial to read.
+    #
+    # Events are logged under the raw acting user_id (correct for audit
+    # purposes - see log_event() callers, do not change that), but a team
+    # member's own signup is logged as 'team_invite_accepted', never
+    # 'user_registered' (see api/index.py's accept_invite()), so their
+    # user_id would never land in registered_ids - meaning a
+    # client_created/invoice_sent event THEY performed (logged under their
+    # own user_id) would never count as progress for the account, even
+    # though the account genuinely progressed. Resolve every user_id to its
+    # account owner id (User.get_owner_id() - a no-op for owners themselves)
+    # once up front, and reuse that map for every stage below, rather than
+    # re-resolving the same user_id redundantly per stage.
+    all_event_user_ids = {
+        row.user_id for row in db.session.query(AnalyticsEvent.user_id).filter(
+            AnalyticsEvent.user_id.isnot(None)
+        ).distinct().all()
+    }
+    owner_id_by_user_id = {}
+    for uid in all_event_user_ids:
+        user = User.query.get(uid)
+        owner_id_by_user_id[uid] = user.get_owner_id() if user else uid
+
     def _user_ids_for(event_type):
         rows = db.session.query(AnalyticsEvent.user_id).filter(
             AnalyticsEvent.event_type == event_type,
             AnalyticsEvent.user_id.isnot(None)
         ).distinct().all()
-        return {row.user_id for row in rows}
+        return {owner_id_by_user_id.get(row.user_id, row.user_id) for row in rows}
 
     registered_ids = _user_ids_for('user_registered')
     with_client = registered_ids & _user_ids_for('client_created')

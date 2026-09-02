@@ -6,15 +6,7 @@
 <div class="auth-container">
     <div class="auth-form">
         <h2>Create an Account</h2>
-        
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-        
+
         <form method="POST" action="{{ url_for('register') }}">
             {{ form.hidden_tag() }}
             

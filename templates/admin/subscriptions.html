@@ -6,17 +6,6 @@
 <div class="container mt-4">
     <h1 class="mb-4">Subscription Management</h1>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
     <div class="row">
         <div class="col-md-3">
             <div class="list-group">
@@ -214,7 +203,7 @@
                 {{ add_plan_form.csrf_token }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="addPlanModalLabel">Add New Subscription Plan</h5>
-                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
@@ -277,7 +266,7 @@
                 {{ edit_plan_form.plan_id }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="editPlanModalLabel">Edit Subscription Plan</h5>
-                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
@@ -339,7 +328,7 @@
                 {{ delete_plan_form.plan_id }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="deletePlanModalLabel">Confirm Delete</h5>
-                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                 </div>
                 <div class="modal-body">
                     <p>Are you sure you want to delete the plan <strong id="deletePlanName"></strong>?</p>
@@ -363,7 +352,7 @@
                 {{ edit_subscription_form.subscription_id }}
                 <div class="modal-header">
                     <h5 class="modal-title" id="editSubscriptionModalLabel">Edit Subscription</h5>
-                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
@@ -409,7 +398,7 @@
                 <input type="hidden" name="subscription_id" value="">
                 <div class="modal-header">
                     <h5 class="modal-title" id="cancelSubscriptionModalLabel">Confirm Cancellation</h5>
-                    <button type="button" class="btn-close" data-dismiss="modal" aria-label="Close"></button>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                 </div>
                 <div class="modal-body">
                     <p>Are you sure you want to cancel the subscription for <strong id="cancelUserName"></strong> to the <strong id="cancelPlanName"></strong> plan?</p>
