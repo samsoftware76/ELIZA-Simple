@@ -6,7 +6,10 @@
 <div class="auth-container">
     <div class="auth-form">
         <h2>Join the Team</h2>
-        <p class="text-muted">You've been invited as a <strong>{{ invite.role.value.replace('_', ' ')|title }}</strong>. Set up your account below.</p>
+        {# display_role (models/models.py): the title the owner chose, else the
+           humanized machine role - the same wording as the invite email that
+           brought them here, so the two don't disagree. #}
+        <p class="text-muted">You've been invited as a <strong>{{ invite.display_role }}</strong>. Set up your account below.</p>
 
         <form method="POST">
             {{ form.hidden_tag() }}

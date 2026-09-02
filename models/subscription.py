@@ -21,7 +21,14 @@ class SubscriptionPlan(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
-    subscriptions = db.relationship('Subscription', backref='plan', lazy=True)
+    # foreign_keys is required now that Subscription has a SECOND FK to this
+    # table (Subscription.pending_plan_id) - without it SQLAlchemy can't tell
+    # which column this relationship (and its `plan` backref, used everywhere)
+    # should join on and raises AmbiguousForeignKeysError at mapper configure
+    # time. Pinning it to plan_id keeps `subscription.plan` meaning exactly
+    # what it has always meant: the plan the account is ACTUALLY on.
+    subscriptions = db.relationship('Subscription', backref='plan', lazy=True,
+                                    foreign_keys='Subscription.plan_id')
     
     def __repr__(self):
         return f'<SubscriptionPlan {self.name}>'
@@ -40,11 +47,34 @@ class Subscription(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     is_trial = db.Column(db.Boolean, default=False)
     billing_cycle = db.Column(db.String(10), default='monthly')  # 'monthly' or 'yearly'
+    # Pending plan change (see migrations/add_subscription_plan_change.py).
+    # All nullable/additive: NULL across all three means "no plan change in
+    # flight", which is every pre-existing row. Set by
+    # api/subscription.py's subscribe() so that changing plan NEVER mutates the
+    # plan the account is actually on until the change is legitimately due -
+    # previously subscribe() deactivated the paid subscription outright and
+    # dropped the customer into a fresh trial.
+    #
+    # Two distinct cases, told apart by pending_change_at:
+    #   pending_change_at IS NULL  -> an UPGRADE awaiting payment. Applied only
+    #       by payment_callback() once PesaPal confirms the money arrived.
+    #   pending_change_at IS SET   -> a DOWNGRADE scheduled for the end of the
+    #       already-paid-for cycle. No payment involved; applied lazily on read
+    #       by utils/plan_limits.apply_due_plan_change() once that date passes,
+    #       since this app has no scheduler.
+    pending_plan_id = db.Column(db.Integer, db.ForeignKey('subscription_plans.id'))
+    pending_billing_cycle = db.Column(db.String(10))
+    pending_change_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Define relationships
     user = db.relationship('User', backref='subscriptions')
+    # Explicit foreign_keys: there are now TWO FKs from this table to
+    # subscription_plans (plan_id and pending_plan_id), so SQLAlchemy can't
+    # pick one on its own. `plan` itself stays the backref declared on
+    # SubscriptionPlan.subscriptions above, which needs the same disambiguation.
+    pending_plan = db.relationship('SubscriptionPlan', foreign_keys=[pending_plan_id])
     
     def __repr__(self):
         return f'<Subscription {self.id}>'

@@ -11,8 +11,21 @@
     {# is_owner comes from team.dashboard() (api/team.py). Members get a
        READ-ONLY view: the same member list plus the owner marked as Owner,
        but no Actions column, no pending invites and no invite form. This is
-       presentation only - the invite/revoke/remove POST routes each enforce
-       _require_owner() server-side regardless of what renders here. #}
+       presentation only - the invite/revoke/remove/role-title POST routes
+       each enforce _require_owner() server-side regardless of what renders
+       here. #}
+
+    {% if is_owner %}
+    {# Shared by the invite form's title field and every member row's inline
+       title edit. A <datalist> only SUGGESTS: the inputs stay free text, so
+       the owner can type any job title that isn't on this list. Referenced
+       by id, so its position on the page doesn't matter. #}
+    <datalist id="roleTitleSuggestions">
+        {% for suggestion in role_title_suggestions %}
+            <option value="{{ suggestion }}"></option>
+        {% endfor %}
+    </datalist>
+    {% endif %}
 
     <div class="card mb-4">
         <div class="card-header bg-primary text-white">
@@ -21,6 +34,8 @@
         <div class="card-body">
             {% if not is_owner %}
                 <p class="text-muted"><i class="fas fa-info-circle mr-1"></i> Your team is managed by the account owner.</p>
+            {% elif memberships %}
+                <p class="text-muted small"><i class="fas fa-info-circle mr-1"></i> A role title is just a label - type anything (Accountant, Marketer, Designer) and press the tick to save it. It doesn't change what anyone can do; the access level below each title does.</p>
             {% endif %}
             {% if memberships or not is_owner %}
                 <div class="table-responsive">
@@ -29,7 +44,7 @@
                             <tr>
                                 <th>Name</th>
                                 <th>Email</th>
-                                <th>Role</th>
+                                <th>Role{% if is_owner %} title{% endif %}</th>
                                 {% if is_owner %}<th>Actions</th>{% endif %}
                             </tr>
                         </thead>
@@ -45,7 +60,32 @@
                                 <tr>
                                     <td>{{ membership.member.get_full_name() }}{% if membership.member.id == current_user.id %} <span class="text-muted">(you)</span>{% endif %}</td>
                                     <td>{{ membership.member.email }}</td>
-                                    <td>{{ membership.role.value.replace('_', ' ')|title }}</td>
+                                    {# display_role (models/models.py) = the custom title if the
+                                       owner set one, else the humanized machine role. The owner
+                                       gets the same value inside an editable input; a member
+                                       sees it as plain text. #}
+                                    {% if is_owner %}
+                                    <td>
+                                        <form method="POST" action="{{ url_for('team.update_role_title', membership_id=membership.id) }}" class="mb-0">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <div class="input-group input-group-sm">
+                                                <input type="text" name="role_title" class="form-control"
+                                                       maxlength="60" list="roleTitleSuggestions"
+                                                       value="{{ membership.role_title or '' }}"
+                                                       placeholder="{{ membership.display_role }}"
+                                                       aria-label="Role title">
+                                                <div class="input-group-append">
+                                                    <button type="submit" class="btn btn-outline-secondary" title="Save role title">
+                                                        <i class="fas fa-check"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                        <small class="text-muted">Access level: {{ membership.role|humanize_role }}</small>
+                                    </td>
+                                    {% else %}
+                                    <td>{{ membership.display_role }}</td>
+                                    {% endif %}
                                     {% if is_owner %}
                                     <td>
                                         <form method="POST" action="{{ url_for('team.remove_member', membership_id=membership.id) }}" class="d-inline"
@@ -90,7 +130,14 @@
                             {% for invite in pending_invites %}
                                 <tr>
                                     <td>{{ invite.invitee_email }}</td>
-                                    <td>{{ invite.role.value.replace('_', ' ')|title }}</td>
+                                    {# Same display_role fallback as the members table above -
+                                       the chosen title, else the humanized machine role. The
+                                       access level is shown underneath so the owner can still
+                                       see what the invite actually grants. #}
+                                    <td>
+                                        {{ invite.display_role }}
+                                        {% if invite.role_title %}<br><small class="text-muted">Access level: {{ invite.role|humanize_role }}</small>{% endif %}
+                                    </td>
                                     <td>{{ invite.created_at.strftime('%b %d, %Y') if invite.created_at else '—' }}</td>
                                     <td>
                                         <form method="POST" action="{{ url_for('team.revoke_invite', invite_id=invite.id) }}" class="d-inline"
@@ -122,7 +169,7 @@
                 {{ form.hidden_tag() }}
 
                 <div class="form-row">
-                    <div class="form-group col-md-8">
+                    <div class="form-group col-md-6">
                         {{ form.email.label }}
                         {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), placeholder="teammate@example.com") }}
                         {% if form.email.errors %}
@@ -133,7 +180,22 @@
                             </div>
                         {% endif %}
                     </div>
-                    <div class="form-group col-md-4">
+                    <div class="form-group col-md-3">
+                        {# Free text with a datalist of quick picks - the list is a
+                           convenience, not a set of choices: any job title can be typed
+                           here. Stored as a label only (see forms.TeamInviteForm). #}
+                        {{ form.role_title.label }}
+                        {{ form.role_title(class="form-control" + (" is-invalid" if form.role_title.errors else ""), placeholder="e.g. Accountant", maxlength="60", list="roleTitleSuggestions") }}
+                        {% if form.role_title.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.role_title.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <small class="form-text text-muted">Just a label - type anything. Defaults to the access level.</small>
+                    </div>
+                    <div class="form-group col-md-3">
                         {{ form.role.label }}
                         {{ form.role(class="form-control" + (" is-invalid" if form.role.errors else "")) }}
                         {% if form.role.errors %}
@@ -143,6 +205,7 @@
                                 {% endfor %}
                             </div>
                         {% endif %}
+                        <small class="form-text text-muted">This controls permissions.</small>
                     </div>
                 </div>
 

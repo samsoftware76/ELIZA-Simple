@@ -114,10 +114,22 @@ def approx_display(amount, from_currency):
 
 def register_filters(app):
     """Register all filters with the Flask app"""
+    # Imported inside the function, not at module scope: filters.py is
+    # imported by api/index.py while the app is being built, and keeping the
+    # models import lazy here matches how the rest of this module avoids
+    # importing app-level objects at import time (see approx_display).
+    from models.models import humanize_role
+
     app.jinja_env.filters['status_badge'] = status_badge
     app.jinja_env.filters['nl2br'] = nl2br
     app.jinja_env.filters['billing_status_badge'] = billing_status_badge
     app.jinja_env.filters['timeago'] = timeago
+    # UserRole.PROJECT_MANAGER -> 'Project Manager'. The one implementation of
+    # that transform (models.models.humanize_role), shared with
+    # TeamMembership.display_role/TeamInvite.display_role so a template
+    # showing the raw ACCESS LEVEL formats it identically to the fallback
+    # those properties produce.
+    app.jinja_env.filters['humanize_role'] = humanize_role
     # A global (not a filter): called as approx_display(amount, currency) in
     # templates next to real amounts. Returns '' whenever no conversion
     # should be shown, so call sites just {% if %} on the result.

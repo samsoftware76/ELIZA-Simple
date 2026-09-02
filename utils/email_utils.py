@@ -269,7 +269,11 @@ def send_team_invite_email(invite, accept_url):
         inviter_name = invite.inviter.business_name or invite.inviter.get_full_name()
         text_body = (
             f"Hello,\n\n"
-            f"{inviter_name} has invited you to join their team on ELIZA as a {invite.role.value.replace('_', ' ').title()}. "
+            # invite.display_role (models/models.py) = the owner's custom
+            # title if they set one, else the humanized machine role - so
+            # someone hired as an Accountant reads the job they were offered
+            # rather than the internal access level they map onto.
+            f"{inviter_name} has invited you to join their team on ELIZA as a {invite.display_role}. "
             f"This link expires in 7 days:\n"
             f"{accept_url}\n\n"
             f"If you weren't expecting this invite, you can ignore this email.\n\n"

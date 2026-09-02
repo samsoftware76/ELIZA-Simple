@@ -40,6 +40,30 @@ class UserRole(enum.Enum):
     SECRETARY = "secretary"
     CLIENT = "client"
 
+
+def humanize_role(role):
+    """'PROJECT_MANAGER'/UserRole.PROJECT_MANAGER -> 'Project Manager'.
+
+    The fallback half of display_role below. Kept as one function so the
+    "underscores to spaces, title case" transform isn't re-implemented in
+    each template that prints a role.
+    """
+    if role is None:
+        return ''
+    value = role.value if isinstance(role, UserRole) else str(role)
+    return value.replace('_', ' ').title()
+
+
+# Quick-pick suggestions offered next to the free-text "Role title" field on
+# the team invite form (forms.TeamInviteForm) - rendered as an HTML <datalist>,
+# which is a convenience only: the input accepts ANY text the owner types,
+# these are not choices and are never validated against. Deliberately NOT tied
+# to UserRole: a role title is a label, the enum is the access level.
+ROLE_TITLE_SUGGESTIONS = [
+    'Accountant', 'Finance', 'Marketer', 'Designer', 'Project Manager',
+    'Developer', 'Secretary', 'Operations', 'Sales', 'Support',
+]
+
 # Association table for many-to-many relationship between users and projects
 project_users = db.Table('project_users',
     db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
@@ -306,6 +330,14 @@ class TeamMembership(db.Model):
     # for which account's clients/projects to show them.
     member_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
     role = db.Column(db.Enum(UserRole), nullable=False, default=UserRole.DEVELOPER)
+    # DISPLAY ONLY - the owner's own words for what this person does
+    # ("Accountant", "Marketer", "Designer", anything they type). See
+    # migrations/add_role_title.py. Nothing anywhere reads this to decide
+    # access: `role` above is the machine role and remains the only thing
+    # permission checks look at, so a title can never widen what someone can
+    # do. Nullable - NULL means "no custom title", and display_role() falls
+    # back to the humanized machine role.
+    role_title = db.Column(db.String(60))
     # Soft-revoke flag: kept instead of deleting the row so a removed member's
     # history (who invited them, when) isn't lost, matching this codebase's
     # general preference for auditable soft state over hard deletes.
@@ -324,6 +356,19 @@ class TeamMembership(db.Model):
     member = db.relationship('User', foreign_keys=[member_user_id],
                               backref=db.backref('team_membership', lazy=True, uselist=False))
 
+    @property
+    def display_role(self):
+        """What to print wherever this member's role is shown.
+
+        The custom title if the owner set one, otherwise the humanized
+        machine role ('Project Manager'). The single home of that fallback -
+        the team page (owner + read-only member view) and anything else
+        showing a member's role call this instead of repeating
+        `role.value.replace('_',' ')|title` with their own idea of the
+        fallback.
+        """
+        return (self.role_title or '').strip() or humanize_role(self.role)
+
     def __repr__(self):
         return f'<TeamMembership member={self.member_user_id} owner={self.account_owner_id}>'
 
@@ -337,6 +382,13 @@ class TeamInvite(db.Model):
     # able to hold an email with no matching account until it's accepted.
     invitee_email = db.Column(db.String(120), nullable=False)
     role = db.Column(db.Enum(UserRole), nullable=False, default=UserRole.DEVELOPER)
+    # DISPLAY ONLY, same as TeamMembership.role_title above - carried on the
+    # invite so the title the owner chose when sending it survives to
+    # acceptance: accept_invite() in api/index.py copies this onto the
+    # TeamMembership it creates. Also what the invite email prints ("as a
+    # {role}"), so the invitee reads the job title they were offered rather
+    # than the internal access level. Nullable, never read by a permission check.
+    role_title = db.Column(db.String(60))
     status = db.Column(db.String(20), default='pending')  # pending / accepted / revoked
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     accepted_at = db.Column(db.DateTime, nullable=True)
@@ -374,6 +426,13 @@ class TeamInvite(db.Model):
         if invite and invite.status == 'pending':
             return invite
         return None
+
+    @property
+    def display_role(self):
+        """Same contract as TeamMembership.display_role - custom title if set,
+        else the humanized machine role. Used by the pending-invites table and
+        by the invite email (text + HTML)."""
+        return (self.role_title or '').strip() or humanize_role(self.role)
 
     def __repr__(self):
         return f'<TeamInvite {self.invitee_email} status={self.status}>'

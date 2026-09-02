@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Change Your Plan{% endblock %}
+
+{#
+  Confirmation step for changing the plan on an ACTIVE PAID subscription (see
+  api/subscription.py change_plan()). Nothing was mutated to get here - the GET
+  that rendered this page is a pure read, and the POST below is what acts.
+
+  Two shapes, one form:
+    * upgrade   -> pay now via PesaPal; the current plan stays untouched until
+                   the payment is confirmed.
+    * downgrade -> scheduled for the end of the already-paid cycle, no charge.
+
+  Bootstrap 4 markup (the app loads Bootstrap 4.5.2 - see templates/base.html).
+#}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header {% if is_upgrade %}bg-primary{% else %}bg-secondary{% endif %} text-white">
+                    <h3 class="mb-0">{% if is_upgrade %}Upgrade to {{ target_plan.name }}{% else %}Downgrade to {{ target_plan.name }}{% endif %}</h3>
+                </div>
+                <div class="card-body">
+                    {% if is_upgrade %}
+                    <div class="alert alert-info">
+                        <p class="mb-0">
+                            You are on the <strong>{{ current_plan.name if current_plan else 'current' }}</strong> plan.
+                            Your current plan stays active and unchanged until this payment completes &ndash;
+                            nothing is cancelled by starting this.
+                        </p>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <p class="mb-0">
+                            You are on the <strong>{{ current_plan.name if current_plan else 'current' }}</strong> plan,
+                            paid through <strong>{{ effective_at.strftime('%B %d, %Y') }}</strong>.
+                            Downgrading takes effect on that date &ndash; you keep everything you have until then and
+                            you will not be charged now.
+                        </p>
+                    </div>
+                    {% endif %}
+
+                    <table class="table">
+                        <tr>
+                            <th style="width: 40%;">Current plan</th>
+                            <td>{{ current_plan.name if current_plan else 'None' }}</td>
+                        </tr>
+                        <tr>
+                            <th>New plan</th>
+                            <td>{{ target_plan.name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Billing cycle</th>
+                            <td>{{ cycle|capitalize }}</td>
+                        </tr>
+                        <tr>
+                            <th>{% if is_upgrade %}Amount due now{% else %}Price after the change{% endif %}</th>
+                            <td>${{ '%.2f'|format(amount_due) }} / {{ 'month' if cycle == 'monthly' else 'year' }}</td>
+                        </tr>
+                        <tr>
+                            <th>New limits</th>
+                            <td>
+                                {{ target_plan.max_projects if target_plan.max_projects else 'Unlimited' }} projects
+                                &middot;
+                                {{ target_plan.max_clients if target_plan.max_clients else 'Unlimited' }} clients
+                                &middot;
+                                {{ target_plan.max_users if target_plan.max_users else 'Unlimited' }} team members
+                            </td>
+                        </tr>
+                    </table>
+
+                    <form method="post" action="{{ url_for('subscription.change_plan', plan=target_slug, cycle=cycle) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        {% if is_upgrade %}
+                        <div class="form-group">
+                            <label for="currency">Currency</label>
+                            <select class="form-control" id="currency" name="currency">
+                                <option value="USD">USD (US Dollar)</option>
+                                <option value="UGX">UGX (Ugandan Shilling)</option>
+                            </select>
+                        </div>
+                        <div class="alert alert-secondary">
+                            <p class="mb-0"><i class="fas fa-info-circle mr-1"></i> You will be redirected to PesaPal's secure payment page to complete your transaction.</p>
+                        </div>
+                        {% endif %}
+
+                        <button type="submit" class="btn btn-lg btn-block {% if is_upgrade %}btn-primary{% else %}btn-warning{% endif %}">
+                            {% if is_upgrade %}Continue to payment{% else %}Schedule this downgrade{% endif %}
+                        </button>
+                        <a href="{{ url_for('subscription.plans') }}" class="btn btn-block btn-outline-secondary">Cancel</a>
+                    </form>
+                </div>
+                <div class="card-footer">
+                    <small class="text-muted">
+                        {% if is_upgrade %}
+                        Your existing subscription is not cancelled or modified until PesaPal confirms the payment.
+                        {% else %}
+                        You can cancel a scheduled change any time before it takes effect, from the plans page.
+                        {% endif %}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

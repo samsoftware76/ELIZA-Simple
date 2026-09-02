@@ -13,6 +13,22 @@
         </div>
     </div>
 
+    {# Non-blocking plan-limit banner - same shape as the clients list page.
+       None unless the account is at or within 80% of a real max_projects. #}
+    {% if limit_notice %}
+    <div class="alert {% if limit_notice.at_limit %}alert-danger{% else %}alert-warning{% endif %}">
+        <i class="fas fa-exclamation-triangle mr-1"></i>
+        {% if limit_notice.at_limit %}
+            You have used all {{ limit_notice.limit }} projects included in your
+            {{ limit_notice.plan_name or 'current' }} plan.
+        {% else %}
+            You are using {{ limit_notice.current }} of the {{ limit_notice.limit }} projects included in your
+            {{ limit_notice.plan_name or 'current' }} plan.
+        {% endif %}
+        <a href="{{ url_for('subscription.plans') }}" class="alert-link">Upgrade your plan</a> to add more.
+    </div>
+    {% endif %}
+
     {% if projects %}
     <div class="card shadow-sm">
         <div class="card-body p-0">

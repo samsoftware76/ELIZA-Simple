@@ -55,7 +55,16 @@ class RegistrationForm(FlaskForm):
             raise ValidationError('Email already registered. Please use a different one or reset your password.')
 
 class TeamInviteForm(FlaskForm):
-    """Form for an account owner to invite a team member."""
+    """Form for an account owner to invite a team member.
+
+    Two separate ideas here, deliberately not merged:
+    - `role` is the ACCESS LEVEL - a UserRole enum value, a fixed set,
+      security-relevant (see below).
+    - `role_title` is a LABEL - free text, purely what the person is called
+      ("Accountant", "Marketer", "Designer"). Nothing reads it to decide
+      access. This is what lets an owner describe any job on their team
+      without the enum having to grow a value per job title.
+    """
     email = StringField('Email', validators=[DataRequired(), Email()])
     # Administrator is deliberately excluded here for the same reason it's
     # excluded from RegistrationForm.role above: UserRole.ADMIN is the exact
@@ -64,12 +73,36 @@ class TeamInviteForm(FlaskForm):
     # own team". Letting an account owner grant that to an invitee would let
     # them (or anyone whose email they typed) see every other customer's
     # data, not just their own.
-    role = SelectField('Role', choices=[
+    #
+    # SelectField validates the submitted value against `choices` on its own,
+    # so a hand-crafted POST of role=ADMIN is rejected as an invalid choice -
+    # that check is the security control, do not relax it. Labelled "Access
+    # level" in the UI to keep it distinct from the free-text title below.
+    role = SelectField('Access level', choices=[
         (UserRole.PROJECT_MANAGER.name, 'Project Manager'),
         (UserRole.DEVELOPER.name, 'Developer'),
         (UserRole.SECRETARY.name, 'Secretary')
     ], validators=[DataRequired()])
+    # Optional free text, max 60 to match the VARCHAR(60) columns added by
+    # migrations/add_role_title.py. The template renders a <datalist> of
+    # models.models.ROLE_TITLE_SUGGESTIONS beside it, but that is a typing
+    # convenience only - anything the owner types is accepted, which is the
+    # whole point of the field.
+    role_title = StringField('Role title (optional)', validators=[Optional(), Length(max=60)])
     submit = SubmitField('Send Invite')
+
+
+class RoleTitleForm(FlaskForm):
+    """Owner-only inline edit of an existing member's display title.
+
+    Same free-text/max-60 contract as TeamInviteForm.role_title above, split
+    into its own tiny form so editing a title never touches the machine role:
+    there is no role field here at all, so no crafted POST to this route can
+    change anyone's access level. Used by team.update_role_title (api/team.py),
+    which is _require_owner()-guarded.
+    """
+    role_title = StringField('Role title', validators=[Optional(), Length(max=60)])
+    submit = SubmitField('Save')
 
 
 class AcceptInviteForm(FlaskForm):

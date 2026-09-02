@@ -11,9 +11,10 @@ from flask import Blueprint, render_template, redirect, url_for, flash, current_
 from flask_login import login_required, current_user
 
 from models import db
-from models.models import User, TeamMembership, TeamInvite, UserRole, ActivityLog
+from models.models import (User, TeamMembership, TeamInvite, UserRole, ActivityLog,
+                           ROLE_TITLE_SUGGESTIONS)
 from models.subscription import Subscription
-from forms import TeamInviteForm
+from forms import TeamInviteForm, RoleTitleForm
 from utils.email_utils import send_team_invite_email
 
 team_bp = Blueprint('team', __name__)
@@ -39,6 +40,27 @@ def _require_owner():
     return None
 
 
+def _clean_role_title(raw):
+    """Normalise a submitted free-text role title to what goes in the column.
+
+    Strips surrounding whitespace and turns an empty/whitespace-only value
+    into None ("no custom title", so display_role falls back to the humanized
+    machine role) rather than storing ''. Truncates to 60 to match the
+    VARCHAR(60) added by migrations/add_role_title.py - the WTForms
+    Length(max=60) validator already rejects longer input before this is
+    reached, so this is the belt-and-braces second check that a value which
+    somehow bypassed the form still can't overflow the column.
+
+    Note what this does NOT do: it never looks at the value to decide
+    anything. A title is a label; the machine role stays the only input to
+    any permission decision.
+    """
+    if not raw:
+        return None
+    cleaned = str(raw).strip()[:60]
+    return cleaned or None
+
+
 @team_bp.route('/team')
 @login_required
 def dashboard():
@@ -58,16 +80,23 @@ def dashboard():
     memberships = TeamMembership.query.filter_by(account_owner_id=owner_id, is_active=True).all()
 
     if not is_owner:
-        # Read-only teammate view: no invite form, no pending invites.
+        # Read-only teammate view: no invite form, no pending invites, no
+        # inline title editing - the member view just prints
+        # membership.display_role as text.
         owner = User.query.get(owner_id)
         return render_template('team/index.html', memberships=memberships,
                                pending_invites=[], form=None,
+                               role_title_suggestions=ROLE_TITLE_SUGGESTIONS,
                                is_owner=False, owner=owner)
 
     pending_invites = TeamInvite.query.filter_by(inviter_id=owner_id, status='pending').order_by(TeamInvite.created_at.desc()).all()
     form = TeamInviteForm()
+    # ROLE_TITLE_SUGGESTIONS feeds the <datalist> next to both the invite
+    # form's title field and each row's inline edit - a typing convenience,
+    # not a set of choices (the input accepts anything).
     return render_template('team/index.html', memberships=memberships,
                            pending_invites=pending_invites, form=form,
+                           role_title_suggestions=ROLE_TITLE_SUGGESTIONS,
                            is_owner=True, owner=current_user)
 
 
@@ -102,8 +131,13 @@ def invite():
         max_users = subscription.plan.max_users if subscription else 0
 
         if max_users and seats_used >= max_users:
-            flash(f'You have reached your plan\'s limit of {max_users} team members. Upgrade your plan to invite more.', 'danger')
-            return redirect(url_for('team.dashboard'))
+            # Redirects to the plans page rather than back to the dashboard, so
+            # this cap points at the upgrade path exactly like the client and
+            # project caps in api/index.py do. A link can't go in the flash
+            # itself: flashes render as toast textContent (templates/base.html),
+            # so any HTML in the message would show up as literal markup.
+            flash(f'You have reached your plan limit of {max_users} team members. Upgrade your plan to invite more.', 'danger')
+            return redirect(url_for('subscription.plans'))
 
         # An email that already has a User account can't go through the
         # ordinary invite-by-email flow below: accept_invite() in
@@ -125,6 +159,11 @@ def invite():
             if existing_membership:
                 existing_membership.is_active = True
                 existing_membership.role = UserRole[form.role.data]
+                # Re-inviting is how an owner re-states this person's job, so
+                # the title from THIS invite wins - including being cleared
+                # back to the machine-role fallback if the owner left the
+                # field empty this time.
+                existing_membership.role_title = _clean_role_title(form.role_title.data)
                 activity = ActivityLog(
                     user_id=current_user.id,
                     owner_id=owner_id,  # tenant isolation: activity log entries belong to the acting tenant
@@ -150,6 +189,11 @@ def invite():
             inviter_id=current_user.id,
             invitee_email=form.email.data,
             role=UserRole[form.role.data],
+            # Display-only label, carried on the invite so accept_invite() in
+            # api/index.py can copy it onto the TeamMembership it creates -
+            # and so the invite email can say "as an Accountant" rather than
+            # "as a Developer". Never consulted by any access check.
+            role_title=_clean_role_title(form.role_title.data),
             status='pending'
         )
         db.session.add(team_invite)
@@ -191,6 +235,43 @@ def revoke_invite(invite_id):
     team_invite.status = 'revoked'
     db.session.commit()
     flash(f'Invite to {team_invite.invitee_email} has been revoked.', 'success')
+    return redirect(url_for('team.dashboard'))
+
+
+@team_bp.route('/team/members/<int:membership_id>/role-title', methods=['POST'])
+@login_required
+def update_role_title(membership_id):
+    """Owner-only: rename a member's display title without re-inviting them.
+
+    Updates role_title and NOTHING else - RoleTitleForm has no role field, so
+    there is no machine role for a crafted POST here to touch, and the
+    membership's UserRole (the only thing access checks read) is untouched by
+    definition. A team member calling this is refused by _require_owner()
+    exactly like the invite/revoke/remove routes above.
+    """
+    not_owner = _require_owner()
+    if not_owner:
+        return not_owner
+
+    membership = TeamMembership.query.get_or_404(membership_id)
+    # 404 (not 403) - same "don't confirm another tenant's record id exists"
+    # reasoning as revoke_invite/remove_member below.
+    if membership.account_owner_id != current_user.get_owner_id():
+        abort(404)
+
+    form = RoleTitleForm()
+    if not form.validate_on_submit():
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{field}: {error}', 'danger')
+        return redirect(url_for('team.dashboard'))
+
+    membership.role_title = _clean_role_title(form.role_title.data)
+    db.session.commit()
+    if membership.role_title:
+        flash(f'Role title updated to {membership.role_title}.', 'success')
+    else:
+        flash('Role title cleared.', 'success')
     return redirect(url_for('team.dashboard'))
 
 

@@ -18,7 +18,10 @@
     </div>
     <div class="content">
         <p>Hello,</p>
-        <p>{{ inviter_name }} has invited you to join their team on ELIZA as a <strong>{{ invite.role.value.replace('_', ' ')|title }}</strong>. Click the button below to create your account. This link expires in 7 days.</p>
+        {# display_role = the owner's custom title if they set one, else the
+           humanized machine role (models/models.py) - same value as the
+           plain-text part of this email in utils/email_utils.py. #}
+        <p>{{ inviter_name }} has invited you to join their team on ELIZA as a <strong>{{ invite.display_role }}</strong>. Click the button below to create your account. This link expires in 7 days.</p>
         <a href="{{ accept_url }}" class="button">Accept Invite</a>
         <p style="margin-top: 20px;">If you weren't expecting this invite, you can safely ignore this email.</p>
         <p>Thank you,<br>ELIZA Project Management</p>

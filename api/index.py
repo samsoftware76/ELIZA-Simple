@@ -57,6 +57,12 @@ from utils.analytics import log_event
 # heavier per-project/per-client aggregation lives there instead of inline in this route.
 from utils.deliverables_report import build_deliverables_report
 
+# Subscription plan limits (max_clients/max_projects). Enforced on the create
+# POST paths below and surfaced as a non-blocking banner on the list pages -
+# see utils/plan_limits.py for the 0-means-unlimited convention it shares with
+# api/team.py's seat cap.
+from utils.plan_limits import can_add_client, can_add_project, limit_notice
+
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 
 # Configure the SQLAlchemy part of the app
@@ -844,6 +850,13 @@ def accept_invite(token):
             account_owner_id=invite.inviter_id,
             member_user_id=new_user.id,
             role=invite.role,
+            # Display-only job title chosen by the owner when they sent the
+            # invite, carried through to the membership so the team page
+            # shows "Accountant" from the moment they join (see
+            # migrations/add_role_title.py). Like role above it comes from
+            # the invite row, never from anything the invitee submitted -
+            # AcceptInviteForm has no such field.
+            role_title=invite.role_title,
             is_active=True
         )
         db.session.add(membership)
@@ -960,7 +973,12 @@ def clients():
             pass
 
     pagination = query.order_by(Client.name).paginate(page=page, per_page=20, error_out=False)
-    return render_template('clients/index.html', clients=pagination.items, pagination=pagination, now=datetime.now())
+    # Non-blocking heads-up once the account is at or within 80% of its plan's
+    # max_clients - None (and so no banner) for unlimited plans, accounts with
+    # no subscription, and anyone comfortably under their limit.
+    return render_template('clients/index.html', clients=pagination.items, pagination=pagination,
+                           now=datetime.now(),
+                           limit_notice=limit_notice(current_user.get_owner_id(), 'clients'))
 
 @app.route('/clients/create', methods=['GET', 'POST'])
 @login_required
@@ -969,6 +987,16 @@ def client_create():
     # owner_id scopes the email-uniqueness check to this user's own clients - see forms.py.
     form = ClientForm(owner_id=current_user.get_owner_id())
     if form.validate_on_submit():
+        # Plan limit, checked on the POST path BEFORE anything is created, so a
+        # refused create leaves no row behind. Redirects to the plans page
+        # rather than embedding a link in the flash: flashes are rendered as
+        # toast textContent in templates/base.html, so HTML in a flash message
+        # would show up as literal markup.
+        allowed, limit, current = can_add_client(current_user.get_owner_id())
+        if not allowed:
+            flash(f'You have reached your plan limit of {limit} clients. Upgrade your plan to add more.', 'danger')
+            return redirect(url_for('subscription.plans'))
+
         client = Client(
             name=form.name.data,
             contact_person=form.contact_person.data,
@@ -1213,7 +1241,10 @@ def projects():
     page = request.args.get('page', 1, type=int)
     # Tenant isolation: only ever list this user's own projects.
     pagination = Project.query.filter_by(owner_id=current_user.get_owner_id()).order_by(Project.start_date.desc()).paginate(page=page, per_page=20, error_out=False)
-    return render_template('projects/index.html', projects=pagination.items, pagination=pagination, now=datetime.now())
+    # Same non-blocking near-limit banner as clients() above.
+    return render_template('projects/index.html', projects=pagination.items, pagination=pagination,
+                           now=datetime.now(),
+                           limit_notice=limit_notice(current_user.get_owner_id(), 'projects'))
 
 @app.route('/projects/create', methods=['GET', 'POST'])
 @login_required
@@ -1228,6 +1259,13 @@ def project_create():
         form.client_id.data = client_id
     
     if form.validate_on_submit():
+        # Plan limit, checked before anything is created - same shape and same
+        # reason for redirecting rather than linking as client_create() above.
+        allowed, limit, current = can_add_project(current_user.get_owner_id())
+        if not allowed:
+            flash(f'You have reached your plan limit of {limit} projects. Upgrade your plan to add more.', 'danger')
+            return redirect(url_for('subscription.plans'))
+
         try:
             project = Project(
                 title=form.title.data,

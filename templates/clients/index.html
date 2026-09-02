@@ -13,6 +13,24 @@
         </div>
     </div>
 
+    {# Non-blocking plan-limit banner. limit_notice is None unless the account
+       is at or within 80% of a real (non-zero) max_clients - see
+       utils/plan_limits.limit_notice(). The create route is what actually
+       blocks; this is just the warning that arrives before it does. #}
+    {% if limit_notice %}
+    <div class="alert {% if limit_notice.at_limit %}alert-danger{% else %}alert-warning{% endif %}">
+        <i class="fas fa-exclamation-triangle mr-1"></i>
+        {% if limit_notice.at_limit %}
+            You have used all {{ limit_notice.limit }} clients included in your
+            {{ limit_notice.plan_name or 'current' }} plan.
+        {% else %}
+            You are using {{ limit_notice.current }} of the {{ limit_notice.limit }} clients included in your
+            {{ limit_notice.plan_name or 'current' }} plan.
+        {% endif %}
+        <a href="{{ url_for('subscription.plans') }}" class="alert-link">Upgrade your plan</a> to add more.
+    </div>
+    {% endif %}
+
     <div class="card mb-4">
         <div class="card-header bg-light">
             <h5 class="mb-0">Search Clients</h5>
