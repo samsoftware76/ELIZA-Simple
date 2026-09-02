@@ -95,8 +95,9 @@ def accept_quote(token):
             invoice = create_invoice_from_quote(quote, quote.created_by_id)
         if invoice.status == InvoiceStatus.DRAFT:
             # Presented for payment right now, so it must satisfy is_payable
-            # (status == sent - see models/billing.py). due_date stays unset,
-            # same as the staff convert route leaves it.
+            # (status == sent - see models/billing.py). due_date comes from
+            # the owner's default_payment_terms_days (or stays unset) inside
+            # create_invoice_from_quote, same as the staff convert route.
             invoice.status = InvoiceStatus.SENT
             invoice.sent_at = datetime.utcnow()
 

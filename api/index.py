@@ -42,7 +42,7 @@ from api.payment import PesaPalPayment
 from api.sms import send_sms
 
 # Import forms
-from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, BusinessProfileForm, AcceptInviteForm, ClientAcceptInviteForm
+from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, AcceptInviteForm, ClientAcceptInviteForm, AccountDetailsForm, ChangePasswordForm, BusinessIdentityForm, PayoutDetailsForm, InvoiceDefaultsForm
 
 # Import template filters
 from filters import register_filters
@@ -412,6 +412,9 @@ def rate_limit_exceeded(e):
     if request.endpoint == 'register':
         flash('Too many attempts - please wait a while and try again.', 'danger')
         return render_template('auth/register.html', title='Register', form=RegistrationForm()), 429
+    if request.endpoint == 'profile_password':
+        flash('Too many password change attempts - please wait a minute and try again.', 'danger')
+        return redirect(url_for('profile'))
     flash('Too many requests - please wait a moment and try again.', 'danger')
     return redirect(url_for('home'))
 
@@ -476,11 +479,97 @@ def _save_business_logo(file_storage, user_id):
     return f"uploads/logos/{unique_name}"
 
 
-@app.route('/profile', methods=['GET', 'POST'])
+def _render_profile(account_form=None, password_form=None, business_form=None,
+                    payout_form=None, defaults_form=None):
+    """Render /profile with all five card forms. Each card is its own
+    FlaskForm class POSTed to its own route below - see the comment block
+    above the profile forms in forms.py for why they are never combined.
+
+    A failed POST handler passes its bound form back in so validation errors
+    render inline; every other card falls back to a fresh form here. The
+    fresh forms are built with formdata=None explicitly - without it,
+    FlaskForm auto-binds request.form on ANY POST, so e.g. a failed password
+    POST would blank out the account card's fields (they're absent from that
+    POST body) instead of showing the stored values.
+    """
+    # Business/payout/invoice-defaults are shared tenant settings on the
+    # OWNER row via get_owner_id() (a no-op when current_user IS the owner);
+    # the account/password cards are personal and use current_user's own row.
+    owner = User.query.get(current_user.get_owner_id())
+    is_owner = current_user.id == owner.id
+    return render_template(
+        'profile.html',
+        account_form=account_form or AccountDetailsForm(formdata=None, obj=current_user),
+        password_form=password_form or ChangePasswordForm(formdata=None),
+        business_form=business_form or BusinessIdentityForm(formdata=None, obj=owner),
+        payout_form=payout_form or PayoutDetailsForm(formdata=None, obj=owner),
+        # Team members never get a defaults form at all - they see a muted
+        # "owner manages these" note instead (and the POST route below
+        # rejects them server-side regardless of what the page shows).
+        defaults_form=(defaults_form or InvoiceDefaultsForm(formdata=None, obj=owner)) if is_owner else None,
+        owner=owner,
+        is_owner=is_owner,
+    )
+
+
+@app.route('/profile')
 @login_required
 def profile():
-    """Let a user set the business name/logo shown to their own clients on
+    """The profile page: personal account + password cards (current_user's
+    own row) and tenant-level business identity / payout details / invoice
+    defaults cards (the OWNER row via get_owner_id()). GET only - each card
+    submits to its own POST route below."""
+    return _render_profile()
+
+
+@app.route('/profile/account', methods=['POST'])
+@login_required
+def profile_account():
+    """PERSONAL card: first/last name + phone on current_user's OWN row -
+    never the owner row, a team member is editing their own identity here.
+    Username/email are read-only on the page (changing the login email
+    safely needs a verification flow - out of scope)."""
+    form = AccountDetailsForm()
+    if form.validate_on_submit():
+        current_user.first_name = form.first_name.data
+        current_user.last_name = form.last_name.data
+        current_user.phone = form.phone.data or None
+        db.session.commit()
+        flash('Account details updated.', 'success')
+        return redirect(url_for('profile'))
+    return _render_profile(account_form=form)
+
+
+@app.route('/profile/password', methods=['POST'])
+# Same shape as login()'s decorator: an authenticated password-change
+# endpoint is still worth throttling - it's the one place a stolen session
+# could brute-force the CURRENT password to lock the real user out.
+@limiter.limit("5 per minute", methods=['POST'])
+@login_required
+def profile_password():
+    """PERSONAL card: change current_user's own password. The current
+    password is verified with check_password before anything changes."""
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        if not current_user.check_password(form.current_password.data):
+            flash('Current password is incorrect.', 'danger')
+            return _render_profile(password_form=form)
+        current_user.set_password(form.new_password.data)
+        db.session.commit()
+        log_event('password_changed', user_id=current_user.id)
+        flash('Your password has been changed.', 'success')
+        return redirect(url_for('profile'))
+    return _render_profile(password_form=form)
+
+
+@app.route('/profile/business', methods=['POST'])
+@login_required
+def profile_business():
+    """TENANT card: business name/logo shown to the tenant's own clients on
     the portal and in quote/invoice emails, instead of the ELIZA brand.
+    Written to the OWNER row via get_owner_id() - shared tenant branding, so
+    an invited team member reads and writes through the owner's User row
+    rather than their own (a no-op when current_user IS the owner).
 
     business_logo_url stores a path relative to static/ (rendered via
     url_for('static', ...) in templates), not a full URL, despite the column
@@ -494,11 +583,8 @@ def profile():
     survive on Vercel needs an external storage bucket (S3 etc.), which is
     out of scope for this change.
     """
-    # Business name/logo are shared tenant branding shown to clients, so an
-    # invited team member reads and writes through the owner's User row
-    # rather than their own - a no-op when current_user IS the owner.
     owner = User.query.get(current_user.get_owner_id())
-    form = BusinessProfileForm(obj=owner)
+    form = BusinessIdentityForm()
     if form.validate_on_submit():
         owner.business_name = form.business_name.data
         logo_file = form.business_logo.data
@@ -507,23 +593,61 @@ def profile():
             if saved_path:
                 owner.business_logo_url = saved_path
         # else: no new file chosen - leave the existing logo alone.
-        # Bank transfer details - same owner-row pattern as business_name
-        # above, not current_user's own row.
+        db.session.commit()
+        flash('Business identity updated.', 'success')
+        return redirect(url_for('profile'))
+    return _render_profile(business_form=form)
+
+
+@app.route('/profile/payout', methods=['POST'])
+@login_required
+def profile_payout():
+    """TENANT card: bank transfer + mobile money payout details on the OWNER
+    row via get_owner_id(), same rule as profile_business() above."""
+    owner = User.query.get(current_user.get_owner_id())
+    form = PayoutDetailsForm()
+    if form.validate_on_submit():
         owner.bank_name = form.bank_name.data
         owner.bank_account_name = form.bank_account_name.data
         owner.bank_account_number = form.bank_account_number.data
         owner.bank_swift_code = form.bank_swift_code.data
         owner.bank_transfer_fee = form.bank_transfer_fee.data
-        # Mobile money payout details - same owner-row pattern. The provider
-        # SelectField's "Not set" choice submits '' - store NULL instead so
-        # "unset" is one value, not two.
+        # The provider SelectField's "Not set" choice submits '' - store NULL
+        # instead so "unset" is one value, not two.
         owner.mobile_money_provider = form.mobile_money_provider.data or None
         owner.mobile_money_number = form.mobile_money_number.data or None
-        db.session.add(owner)
         db.session.commit()
-        flash('Business profile updated.', 'success')
+        flash('Payout details updated.', 'success')
         return redirect(url_for('profile'))
-    return render_template('profile.html', form=form)
+    return _render_profile(payout_form=form)
+
+
+@app.route('/profile/invoice-defaults', methods=['POST'])
+@login_required
+def profile_invoice_defaults():
+    """TENANT card, but OWNER-ONLY to write: default currency / tax rate /
+    payment terms stored on the OWNER row (see User.default_currency etc.).
+    Unlike the business/payout cards - which any team member may edit on the
+    owner's behalf, the established behavior - billing defaults are policy
+    the owner sets, so a team member's direct POST is rejected here even
+    though the page never shows them the form."""
+    owner = User.query.get(current_user.get_owner_id())
+    if current_user.id != owner.id:
+        flash('Only the account owner can change invoice defaults.', 'danger')
+        return redirect(url_for('profile'))
+    form = InvoiceDefaultsForm()
+    if form.validate_on_submit():
+        # The currency SelectField's "Not set" choice submits '' - store NULL
+        # so "unset" is one value. The two numeric fields are Optional(), so
+        # blank submits arrive as None already - and 0 is a legitimate tax
+        # rate, so no `or None` coercion on those.
+        owner.default_currency = form.default_currency.data or None
+        owner.default_tax_rate = form.default_tax_rate.data
+        owner.default_payment_terms_days = form.default_payment_terms_days.data
+        db.session.commit()
+        flash('Invoice defaults updated.', 'success')
+        return redirect(url_for('profile'))
+    return _render_profile(defaults_form=form)
 
 
 @app.route('/wallet')

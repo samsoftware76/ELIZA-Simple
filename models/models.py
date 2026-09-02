@@ -90,6 +90,17 @@ class User(db.Model, UserMixin):
     # Other).
     mobile_money_provider = db.Column(db.String(30))
     mobile_money_number = db.Column(db.String(20))
+    # Invoice/quote defaults (see migrations/add_invoice_defaults.py).
+    # Tenant-level like business_name/bank_* above - resolved via
+    # get_owner_id() wherever read, and only the owner themselves may write
+    # them (the /profile invoice-defaults card is owner-only). All nullable:
+    # NULL means "no default set", and these only ever prefill the initial
+    # values of an empty quote/invoice form (or the auto-invoice created when
+    # a client accepts a quote) - explicit user input always wins.
+    # default_currency holds one of forms.CURRENCY_CHOICES' codes.
+    default_currency = db.Column(db.String(10))
+    default_tax_rate = db.Column(db.Float)
+    default_payment_terms_days = db.Column(db.Integer)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

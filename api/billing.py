@@ -4,12 +4,12 @@ Staff-facing Quote and Invoice management for the ELIZA Project Management App.
 The client-facing counterpart (view/accept/decline a quote, view/pay an
 invoice via a tokenized link, no login required) lives in api/portal.py.
 """
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, abort
 from flask_login import login_required, current_user
 
 from models import db
-from models.models import Client, Project
+from models.models import Client, Project, User
 from models.billing import Quote, QuoteItem, Invoice, InvoiceItem, QuoteStatus, InvoiceStatus
 from forms import QuoteForm, InvoiceForm
 from utils.email_utils import send_quote_email, send_invoice_email
@@ -54,7 +54,23 @@ def create_invoice_from_quote(quote, created_by_id):
     back to the quote, and assigns the INV-xxxxx number. Adds to the session
     and flushes (so invoice.id/number exist) but does NOT commit - the caller
     owns the transaction and decides status/sent_at before committing.
+
+    due_date: if the tenant owner has default_payment_terms_days set (the
+    /profile invoice-defaults card), the invoice is due that many days from
+    today; otherwise it stays unset as before. Applied HERE in the shared
+    helper (not per call site) deliberately, so both paths behave the same:
+    the portal accept flow commits the invoice as SENT immediately, and the
+    staff convert route lands on invoice_edit where the prefilled date is
+    just an initial value the user can still change before saving.
     """
+    # The tenant is resolved from the quote's creator, not current_user -
+    # the portal accept path has no logged-in user at all.
+    creator = User.query.get(created_by_id)
+    owner = User.query.get(creator.get_owner_id()) if creator else None
+    due_date = None
+    if owner and owner.default_payment_terms_days is not None:
+        due_date = date.today() + timedelta(days=owner.default_payment_terms_days)
+
     invoice = Invoice(
         invoice_number='PENDING',
         client_id=quote.client_id,
@@ -64,6 +80,7 @@ def create_invoice_from_quote(quote, created_by_id):
         title=quote.title,
         currency=quote.currency,
         tax_rate=quote.tax_rate,
+        due_date=due_date,
         notes=quote.notes,
     )
     db.session.add(invoice)
@@ -102,6 +119,16 @@ def quote_create():
     """Create a new quote"""
     # owner_id scopes the client_id/project_id dropdowns to this user's own records.
     form = QuoteForm(owner_id=current_user.get_owner_id())
+
+    if request.method == 'GET':
+        # Prefill the EMPTY form from the tenant owner's invoice defaults
+        # (set on the /profile invoice-defaults card). GET only - a submitted
+        # form's own values always win, defaults never overwrite user input.
+        owner = User.query.get(current_user.get_owner_id())
+        if owner.default_currency:
+            form.currency.data = owner.default_currency
+        if owner.default_tax_rate is not None:
+            form.tax_rate.data = owner.default_tax_rate
 
     if form.validate_on_submit():
         items = parse_line_items(request.form)
@@ -310,6 +337,18 @@ def invoice_create():
     """Create a new invoice"""
     # owner_id scopes the client_id/project_id dropdowns to this user's own records.
     form = InvoiceForm(owner_id=current_user.get_owner_id())
+
+    if request.method == 'GET':
+        # Prefill the EMPTY form from the tenant owner's invoice defaults
+        # (set on the /profile invoice-defaults card). GET only - a submitted
+        # form's own values always win, defaults never overwrite user input.
+        owner = User.query.get(current_user.get_owner_id())
+        if owner.default_currency:
+            form.currency.data = owner.default_currency
+        if owner.default_tax_rate is not None:
+            form.tax_rate.data = owner.default_tax_rate
+        if owner.default_payment_terms_days is not None:
+            form.due_date.data = date.today() + timedelta(days=owner.default_payment_terms_days)
 
     if form.validate_on_submit():
         items = parse_line_items(request.form)

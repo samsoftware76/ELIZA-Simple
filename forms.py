@@ -160,24 +160,78 @@ class PasswordResetForm(FlaskForm):
     ])
     submit = SubmitField('Reset Password')
 
-class BusinessProfileForm(FlaskForm):
-    """Form for a user to set their own business branding, shown to their
-    clients on the portal and in quote/invoice emails instead of ELIZA's own
-    brand (see User.business_name/business_logo_url).
+# Shared by QuoteForm/InvoiceForm below and InvoiceDefaultsForm - defined
+# before the /profile card forms so InvoiceDefaultsForm can reference it at
+# class-definition time.
+CURRENCY_CHOICES = [('USD', 'USD'), ('UGX', 'UGX'), ('EUR', 'EUR'), ('GBP', 'GBP'), ('KES', 'KES')]
 
-    business_logo_url is no longer a form field - the column it maps to on
-    User still holds a path (not a full URL) written by the /profile upload
-    handler in api/index.py, which does its own extension/content/size
-    checks on the uploaded file before touching the column."""
+
+# ---------------------------------------------------------------------------
+# /profile card forms. Deliberately ONE FlaskForm class PER CARD, each POSTed
+# to its own route: WTForms treats an Optional() field missing from the POST
+# body as blank, so a single combined form split across multiple <form> tags
+# would silently wipe whichever card's fields weren't submitted on every
+# save. Separate form classes make that bug impossible - each handler only
+# ever sees (and writes) its own card's fields.
+# ---------------------------------------------------------------------------
+
+class AccountDetailsForm(FlaskForm):
+    """PERSONAL details card on /profile - writes to current_user's OWN row
+    (a team member edits their own identity here), unlike the tenant-level
+    business/payout/invoice-defaults cards which write to the owner row.
+    Username and email are displayed read-only on the page, not fields here:
+    changing the login email safely needs a verification flow (out of scope).
+    Validators mirror RegistrationForm's for the same fields."""
+    first_name = StringField('First Name', validators=[DataRequired(), Length(max=50)])
+    last_name = StringField('Last Name', validators=[DataRequired(), Length(max=50)])
+    phone = StringField('Phone Number', validators=[Optional(), Length(max=20)])
+    submit = SubmitField('Save Account')
+
+
+class ChangePasswordForm(FlaskForm):
+    """Change-password card on /profile - own row only. The current password
+    is verified server-side with check_password before anything changes; min
+    length 8 matches RegistrationForm."""
+    current_password = PasswordField('Current Password', validators=[DataRequired()])
+    new_password = PasswordField('New Password', validators=[
+        DataRequired(),
+        Length(min=8, message='Password must be at least 8 characters long')
+    ])
+    confirm_new_password = PasswordField('Confirm New Password', validators=[
+        DataRequired(),
+        EqualTo('new_password', message='Passwords must match')
+    ])
+    submit = SubmitField('Change Password')
+
+
+class BusinessIdentityForm(FlaskForm):
+    """Business identity card on /profile (formerly the top half of
+    BusinessProfileForm) - tenant-level, written to the OWNER row via
+    get_owner_id(). Branding shown to the tenant's clients on the portal and
+    in quote/invoice emails instead of ELIZA's own brand (see
+    User.business_name/business_logo_url).
+
+    business_logo_url is not a form field - the column it maps to on User
+    holds a path (not a full URL) written by the profile upload handler in
+    api/index.py, which does its own extension/content/size checks on the
+    uploaded file before touching the column."""
     business_name = StringField('Business Name', validators=[Optional(), Length(max=150)],
                                  description="Shown to your clients instead of your personal name or 'ELIZA'")
     business_logo = FileField('Logo Image', validators=[FileAllowed(['png', 'jpg', 'jpeg', 'gif', 'webp'], 'Images only (png/jpg/jpeg/gif/webp).')],
                                description="Optional: upload a logo image (max 2MB). Leave blank to keep your current logo.")
-    # Manual "pay by bank transfer" details (see User.bank_name etc. in
-    # models/models.py) - all optional, shown to clients on the invoice
-    # portal only once bank_name is set. No new payment gateway: the client
-    # wires the money directly and the freelancer marks the invoice paid
-    # themselves via the existing invoice_mark_paid route.
+    submit = SubmitField('Save Business Identity')
+
+
+class PayoutDetailsForm(FlaskForm):
+    """Payout details card on /profile (formerly the bottom half of
+    BusinessProfileForm) - tenant-level, written to the OWNER row via
+    get_owner_id().
+
+    Manual "pay by bank transfer" details (see User.bank_name etc. in
+    models/models.py) - all optional, shown to clients on the invoice
+    portal only once bank_name is set. No new payment gateway: the client
+    wires the money directly and the freelancer marks the invoice paid
+    themselves via the existing invoice_mark_paid route."""
     bank_name = StringField('Bank Name', validators=[Optional(), Length(max=150)],
                              description="Shown to clients who choose to pay by bank transfer")
     bank_account_name = StringField('Account Name', validators=[Optional(), Length(max=150)])
@@ -198,7 +252,24 @@ class BusinessProfileForm(FlaskForm):
         ('Other', 'Other'),
     ], description="Where you withdraw your PesaPal collections to")
     mobile_money_number = StringField('Mobile Money Number', validators=[Optional(), Length(max=20)])
-    submit = SubmitField('Save')
+    submit = SubmitField('Save Payout Details')
+
+
+class InvoiceDefaultsForm(FlaskForm):
+    """Invoice defaults card on /profile - tenant-level on the OWNER row (see
+    User.default_currency etc. and migrations/add_invoice_defaults.py), but
+    unlike the business/payout cards only the owner THEMSELVES may edit it
+    (team members see a muted note instead). Defaults only prefill the empty
+    quote/invoice forms (and the auto-invoice on quote acceptance) - explicit
+    user input always wins."""
+    default_currency = SelectField('Default Currency', validators=[Optional()],
+                                    choices=[('', 'Not set')] + CURRENCY_CHOICES,
+                                    description="Pre-selected on new quotes and invoices")
+    default_tax_rate = FloatField('Default Tax Rate (%)', validators=[Optional(), NumberRange(min=0, max=100)],
+                                   description="Pre-filled on new quotes and invoices; leave blank for none")
+    default_payment_terms_days = IntegerField('Default Payment Terms (days)', validators=[Optional(), NumberRange(min=0, max=730)],
+                                               description="New invoices get a due date this many days out; also applied when a client accepts a quote")
+    submit = SubmitField('Save Invoice Defaults')
 
 
 class ClientForm(FlaskForm):
@@ -343,7 +414,7 @@ class TaskForm(FlaskForm):
         if due_date.data and due_date.data < datetime.now().date():
             raise ValidationError('Due date cannot be in the past.')
 
-CURRENCY_CHOICES = [('USD', 'USD'), ('UGX', 'UGX'), ('EUR', 'EUR'), ('GBP', 'GBP'), ('KES', 'KES')]
+# CURRENCY_CHOICES is defined further up (above InvoiceDefaultsForm).
 
 
 class QuoteForm(FlaskForm):

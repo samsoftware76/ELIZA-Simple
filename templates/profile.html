@@ -1,105 +1,245 @@
 {% extends "base.html" %}
 
-{% block title %}Business Profile - ELIZA{% endblock %}
+{% block title %}Profile - ELIZA{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    {# Single form wrapping both cards below - business_name/logo and the
-       bank_* fields are all fields on the one BusinessProfileForm, and
-       WTForms treats an Optional() field missing from the POST body as
-       blank, so splitting these into two separate <form> tags would wipe
-       out whichever card's fields weren't submitted on every save. #}
-    <form method="POST" enctype="multipart/form-data">
-        {{ form.hidden_tag() }}
+    {# Five separated cards, each its OWN <form> posting to its OWN route
+       (profile_account / profile_password / profile_business /
+       profile_payout / profile_invoice_defaults in api/index.py). One
+       FlaskForm class per card - see the comment block above the profile
+       forms in forms.py: combining cards into one form means an Optional()
+       field missing from a POST wipes the stored value, so they are never
+       merged. Cards inherit the app-wide 1px #e9ecef border / 8px radius
+       from .card in static/css/custom.css. #}
+    <div style="max-width: 600px; margin: 0 auto;">
 
-        <div class="card" style="max-width: 600px; margin: 0 auto;">
-            <div class="card-header bg-primary text-white">
-                <h2 class="mb-0">Business Profile</h2>
+        <h1 class="h3 mb-1">Profile</h1>
+        <p class="text-muted mb-4">Your personal account, and the business settings your clients see.</p>
+
+        {# ------------------------------------------------------------------
+           ACCOUNT (personal - saves to your OWN user row)
+           ------------------------------------------------------------------ #}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Account</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Your personal details. Team members edit their own here &mdash; this never touches the account owner's details.</p>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" class="form-control" value="{{ current_user.username }}" readonly disabled>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="text" class="form-control" value="{{ current_user.email }}" readonly disabled>
+                    <small class="form-text text-muted">Your login email can't be changed here &mdash; changing it safely needs an email verification step, which isn't available yet.</small>
+                </div>
+                <form method="POST" action="{{ url_for('profile_account') }}">
+                    {{ account_form.hidden_tag() }}
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            {{ account_form.first_name.label }}
+                            {{ account_form.first_name(class="form-control") }}
+                            {% for error in account_form.first_name.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group col-md-6">
+                            {{ account_form.last_name.label }}
+                            {{ account_form.last_name(class="form-control") }}
+                            {% for error in account_form.last_name.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        {{ account_form.phone.label }}
+                        {{ account_form.phone(class="form-control", placeholder="e.g. 0772 123456") }}
+                        {% for error in account_form.phone.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {{ account_form.submit(class="btn btn-primary") }}
+                </form>
+            </div>
+        </div>
+
+        {# ------------------------------------------------------------------
+           CHANGE PASSWORD (personal - your OWN login only)
+           ------------------------------------------------------------------ #}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Change Password</h2>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('profile_password') }}">
+                    {{ password_form.hidden_tag() }}
+                    <div class="form-group">
+                        {{ password_form.current_password.label }}
+                        {{ password_form.current_password(class="form-control", autocomplete="current-password") }}
+                        {% for error in password_form.current_password.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="form-group">
+                        {{ password_form.new_password.label }}
+                        {{ password_form.new_password(class="form-control", autocomplete="new-password") }}
+                        <small class="form-text text-muted">At least 8 characters.</small>
+                        {% for error in password_form.new_password.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="form-group">
+                        {{ password_form.confirm_new_password.label }}
+                        {{ password_form.confirm_new_password(class="form-control", autocomplete="new-password") }}
+                        {% for error in password_form.confirm_new_password.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {{ password_form.submit(class="btn btn-primary") }}
+                </form>
+            </div>
+        </div>
+
+        {# ------------------------------------------------------------------
+           BUSINESS IDENTITY (tenant - saves to the account OWNER's row)
+           ------------------------------------------------------------------ #}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Business Identity</h2>
             </div>
             <div class="card-body">
                 <p class="text-muted">This is what your clients see on the quote/invoice portal and in emails from you &mdash; not ELIZA's own name.</p>
-
-                <div class="form-group">
-                    {{ form.business_name.label }}
-                    {{ form.business_name(class="form-control", placeholder="e.g. Kampala Web Studio") }}
-                    <small class="form-text text-muted">{{ form.business_name.description }}</small>
-                </div>
-                <div class="form-group">
-                    {{ form.business_logo.label }}
-                    {% if current_user.business_logo_url %}
-                    <div class="mb-2">
-                        <img src="{{ url_for('static', filename=current_user.business_logo_url) }}" alt="Current logo" style="max-height: 60px;">
+                <form method="POST" action="{{ url_for('profile_business') }}" enctype="multipart/form-data">
+                    {{ business_form.hidden_tag() }}
+                    <div class="form-group">
+                        {{ business_form.business_name.label }}
+                        {{ business_form.business_name(class="form-control", placeholder="e.g. Kampala Web Studio") }}
+                        <small class="form-text text-muted">{{ business_form.business_name.description }}</small>
+                    </div>
+                    <div class="form-group">
+                        {{ business_form.business_logo.label }}
+                        {% if owner.business_logo_url %}
+                        <div class="mb-2">
+                            <img src="{{ url_for('static', filename=owner.business_logo_url) }}" alt="Current logo" style="max-height: 60px;">
+                        </div>
+                        {% endif %}
+                        {{ business_form.business_logo(class="form-control-file", accept="image/*") }}
+                        {% for error in business_form.business_logo.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                        <small class="form-text text-muted">{{ business_form.business_logo.description }}</small>
+                    </div>
+                    {% if not owner.business_name %}
+                    <div class="alert alert-info">
+                        No business name set yet &mdash; your clients currently see "ELIZA" on your quote/invoice portal links. Set one above.
                     </div>
                     {% endif %}
-                    {{ form.business_logo(class="form-control-file", accept="image/*") }}
-                    {% for error in form.business_logo.errors %}
-                        <div class="text-danger small">{{ error }}</div>
-                    {% endfor %}
-                    <small class="form-text text-muted">{{ form.business_logo.description }}</small>
-                </div>
-                {% if not current_user.business_name %}
-                <div class="alert alert-info">
-                    No business name set yet &mdash; your clients currently see "ELIZA" on your quote/invoice portal links. Set one below.
-                </div>
+                    {{ business_form.submit(class="btn btn-primary") }}
+                </form>
+            </div>
+        </div>
+
+        {# ------------------------------------------------------------------
+           PAYOUT DETAILS (tenant - saves to the account OWNER's row)
+           ------------------------------------------------------------------ #}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Payout Details</h2>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">If set, clients see the bank details on the invoice portal as an alternative to paying via PesaPal &mdash; they wire the money to this account directly, then you mark the invoice paid yourself once it lands.</p>
+                <form method="POST" action="{{ url_for('profile_payout') }}">
+                    {{ payout_form.hidden_tag() }}
+                    <div class="form-group">
+                        {{ payout_form.bank_name.label }}
+                        {{ payout_form.bank_name(class="form-control", placeholder="e.g. Stanbic Bank") }}
+                        <small class="form-text text-muted">{{ payout_form.bank_name.description }}</small>
+                    </div>
+                    <div class="form-group">
+                        {{ payout_form.bank_account_name.label }}
+                        {{ payout_form.bank_account_name(class="form-control", placeholder="e.g. Kampala Web Studio Ltd") }}
+                    </div>
+                    <div class="form-group">
+                        {{ payout_form.bank_account_number.label }}
+                        {{ payout_form.bank_account_number(class="form-control") }}
+                    </div>
+                    <div class="form-group">
+                        {{ payout_form.bank_swift_code.label }}
+                        {{ payout_form.bank_swift_code(class="form-control") }}
+                    </div>
+                    <div class="form-group">
+                        {{ payout_form.bank_transfer_fee.label }}
+                        {{ payout_form.bank_transfer_fee(class="form-control") }}
+                        <small class="form-text text-muted">{{ payout_form.bank_transfer_fee.description }}</small>
+                        {% for error in payout_form.bank_transfer_fee.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <hr>
+                    <h5>Mobile Money (optional)</h5>
+                    <p class="text-muted">For your own reference on the <a href="{{ url_for('wallet') }}">Wallet</a> page: the mobile money account you withdraw your PesaPal collections to from the PesaPal merchant dashboard. ELIZA never holds funds.</p>
+                    <div class="form-group">
+                        {{ payout_form.mobile_money_provider.label }}
+                        {{ payout_form.mobile_money_provider(class="form-control") }}
+                        <small class="form-text text-muted">{{ payout_form.mobile_money_provider.description }}</small>
+                    </div>
+                    <div class="form-group">
+                        {{ payout_form.mobile_money_number.label }}
+                        {{ payout_form.mobile_money_number(class="form-control", placeholder="e.g. 0772 123456") }}
+                        {% for error in payout_form.mobile_money_number.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {{ payout_form.submit(class="btn btn-primary") }}
+                </form>
+            </div>
+        </div>
+
+        {# ------------------------------------------------------------------
+           INVOICE DEFAULTS (tenant, OWNER-ONLY - defaults_form is None for
+           team members and the POST route rejects them server-side too)
+           ------------------------------------------------------------------ #}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Invoice Defaults</h2>
+            </div>
+            <div class="card-body">
+                {% if defaults_form %}
+                <p class="text-muted">Pre-filled on every new quote and invoice (and the invoice created automatically when a client accepts a quote). Only starting values &mdash; you can always change them on the document itself.</p>
+                <form method="POST" action="{{ url_for('profile_invoice_defaults') }}">
+                    {{ defaults_form.hidden_tag() }}
+                    <div class="form-group">
+                        {{ defaults_form.default_currency.label }}
+                        {{ defaults_form.default_currency(class="form-control") }}
+                        <small class="form-text text-muted">{{ defaults_form.default_currency.description }}</small>
+                    </div>
+                    <div class="form-group">
+                        {{ defaults_form.default_tax_rate.label }}
+                        {{ defaults_form.default_tax_rate(class="form-control", placeholder="e.g. 18") }}
+                        <small class="form-text text-muted">{{ defaults_form.default_tax_rate.description }}</small>
+                        {% for error in defaults_form.default_tax_rate.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="form-group">
+                        {{ defaults_form.default_payment_terms_days.label }}
+                        {{ defaults_form.default_payment_terms_days(class="form-control", placeholder="e.g. 14") }}
+                        <small class="form-text text-muted">{{ defaults_form.default_payment_terms_days.description }}</small>
+                        {% for error in defaults_form.default_payment_terms_days.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    {{ defaults_form.submit(class="btn btn-primary") }}
+                </form>
+                {% else %}
+                <p class="text-muted mb-0">The account owner manages the default currency, tax rate, and payment terms for this workspace.</p>
                 {% endif %}
             </div>
         </div>
 
-        <div class="card mt-4" style="max-width: 600px; margin: 0 auto;">
-            <div class="card-header bg-primary text-white">
-                <h2 class="mb-0">Bank Transfer Details (optional)</h2>
-            </div>
-            <div class="card-body">
-                <p class="text-muted">If set, clients see these on the invoice portal as an alternative to paying via PesaPal &mdash; they wire the money to this account directly, then you mark the invoice paid yourself once it lands.</p>
-
-                <div class="form-group">
-                    {{ form.bank_name.label }}
-                    {{ form.bank_name(class="form-control", placeholder="e.g. Stanbic Bank") }}
-                    <small class="form-text text-muted">{{ form.bank_name.description }}</small>
-                </div>
-                <div class="form-group">
-                    {{ form.bank_account_name.label }}
-                    {{ form.bank_account_name(class="form-control", placeholder="e.g. Kampala Web Studio Ltd") }}
-                </div>
-                <div class="form-group">
-                    {{ form.bank_account_number.label }}
-                    {{ form.bank_account_number(class="form-control") }}
-                </div>
-                <div class="form-group">
-                    {{ form.bank_swift_code.label }}
-                    {{ form.bank_swift_code(class="form-control") }}
-                </div>
-                <div class="form-group">
-                    {{ form.bank_transfer_fee.label }}
-                    {{ form.bank_transfer_fee(class="form-control") }}
-                    <small class="form-text text-muted">{{ form.bank_transfer_fee.description }}</small>
-                    {% for error in form.bank_transfer_fee.errors %}
-                        <div class="text-danger small">{{ error }}</div>
-                    {% endfor %}
-                </div>
-
-                <hr>
-                <h5>Mobile Money (optional)</h5>
-                <p class="text-muted">For your own reference on the <a href="{{ url_for('wallet') }}">Wallet</a> page: the mobile money account you withdraw your PesaPal collections to from the PesaPal merchant dashboard. ELIZA never holds funds.</p>
-
-                <div class="form-group">
-                    {{ form.mobile_money_provider.label }}
-                    {{ form.mobile_money_provider(class="form-control") }}
-                    <small class="form-text text-muted">{{ form.mobile_money_provider.description }}</small>
-                </div>
-                <div class="form-group">
-                    {{ form.mobile_money_number.label }}
-                    {{ form.mobile_money_number(class="form-control", placeholder="e.g. 0772 123456") }}
-                    {% for error in form.mobile_money_number.errors %}
-                        <div class="text-danger small">{{ error }}</div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-
-        <div style="max-width: 600px; margin: 1rem auto 0;">
-            {{ form.submit(class="btn btn-primary") }}
-        </div>
-    </form>
+    </div>
 </div>
 {% endblock %}
