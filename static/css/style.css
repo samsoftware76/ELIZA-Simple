@@ -10,15 +10,17 @@
     max-width: fit-content;
 }
 
-/* Primary action buttons */
+/* Primary action buttons - accent orange per the approved design (this
+   file loads AFTER static/style.css, so leaving Bootstrap blue here would
+   silently override the accent defined there) */
 .btn-primary {
-    background-color: #007bff;
-    border-color: #007bff;
+    background-color: #e8491d;
+    border-color: #e8491d;
 }
 
-.btn-primary:hover {
-    background-color: #0069d9;
-    border-color: #0062cc;
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+    background-color: #d13e16;
+    border-color: #d13e16;
 }
 
 /* Secondary action buttons */
@@ -41,15 +43,18 @@ form .btn {
     max-width: fit-content;
 }
 
-/* Card styles */
+/* Card styles - the app-wide standard is border language, not shadows:
+   white surface, 1px #e9ecef border, 8px radius. static/css/custom.css
+   agrees with this (keep them in sync). */
 .card {
-    border-radius: 0.25rem;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    box-shadow: none;
 }
 
 .card-header {
     background-color: #f8f9fa;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+    border-bottom: 1px solid #e9ecef;
 }
 
 /* Table styles */

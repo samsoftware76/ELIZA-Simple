@@ -1,4 +1,6 @@
 """Template filters for the ELIZA application"""
+from datetime import datetime
+
 from markupsafe import Markup, escape
 
 def status_badge(status):
@@ -41,8 +43,37 @@ def billing_status_badge(status):
     }
     return status_map.get(status, 'secondary')
 
+def timeago(value):
+    """Relative time for feed rows: '2 hours ago', 'yesterday', ...
+
+    Model timestamps in this codebase are naive UTC (datetime.utcnow
+    defaults on created_at columns), so this compares against utcnow, not
+    local now - comparing a UTC timestamp against local time would shift
+    every row by the server's UTC offset.
+    Falls back to an absolute date past ~30 days, where relative wording
+    stops being useful.
+    """
+    if not value:
+        return ''
+    seconds = (datetime.utcnow() - value).total_seconds()
+    if seconds < 60:
+        return 'just now'
+    minutes = int(seconds // 60)
+    if minutes < 60:
+        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+    hours = int(seconds // 3600)
+    if hours < 24:
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    days = int(seconds // 86400)
+    if days == 1:
+        return 'yesterday'
+    if days < 30:
+        return f'{days} days ago'
+    return value.strftime('%b %d, %Y')
+
 def register_filters(app):
     """Register all filters with the Flask app"""
     app.jinja_env.filters['status_badge'] = status_badge
     app.jinja_env.filters['nl2br'] = nl2br
     app.jinja_env.filters['billing_status_badge'] = billing_status_badge
+    app.jinja_env.filters['timeago'] = timeago

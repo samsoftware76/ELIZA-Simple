@@ -13,148 +13,161 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     {% block extra_css %}{% endblock %}
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="{{ url_for('home') }}">ELIZA</a>
-            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav mr-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('home') }}"><i class="fas fa-home mr-1"></i> Home</a>
-                    </li>
-                    {% if current_user.is_authenticated %}
-                      {% if current_user.role.value != 'client' %}
-                        <li class="nav-item">
-                            <a class="nav-link{% if request.endpoint == 'clients' or request.endpoint == 'client_detail' or request.endpoint == 'client_create' or request.endpoint == 'client_edit' %} active{% endif %}" href="{{ url_for('clients') }}"><i class="fas fa-users mr-1"></i> Clients</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link{% if request.endpoint == 'projects' or request.endpoint == 'project_detail' or request.endpoint == 'project_create' or request.endpoint == 'project_edit' %} active{% endif %}" href="{{ url_for('projects') }}"><i class="fas fa-project-diagram mr-1"></i> Projects</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link{% if request.endpoint == 'all_tasks' or request.endpoint == 'task_detail' or request.endpoint == 'create_task' %} active{% endif %}" href="{{ url_for('all_tasks') }}"><i class="fas fa-tasks mr-1"></i> Tasks</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link{% if request.endpoint and request.endpoint.startswith('billing.quote') %} active{% endif %}" href="{{ url_for('billing.quotes_list') }}"><i class="fas fa-file-alt mr-1"></i> Quotes</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link{% if request.endpoint and request.endpoint.startswith('billing.invoice') %} active{% endif %}" href="{{ url_for('billing.invoices_list') }}"><i class="fas fa-file-invoice-dollar mr-1"></i> Invoices</a>
-                        </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="reportsDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                <i class="fas fa-chart-bar mr-1"></i> Reports
-                            </a>
-                            <div class="dropdown-menu" aria-labelledby="reportsDropdown">
-                                <a class="dropdown-item" href="{{ url_for('report_project_status') }}"><i class="fas fa-chart-pie mr-1"></i> Project Status</a>
-                                <a class="dropdown-item" href="{{ url_for('report_task_distribution') }}"><i class="fas fa-chart-line mr-1"></i> Task Distribution</a>
-                                <a class="dropdown-item" href="{{ url_for('report_time_tracking') }}"><i class="fas fa-clock mr-1"></i> Time Tracking</a>
-                                <a class="dropdown-item" href="{{ url_for('report_project_timeline') }}"><i class="fas fa-calendar-alt mr-1"></i> Project Timeline</a>
-                                <a class="dropdown-item" href="{{ url_for('report_overdue_tasks') }}"><i class="fas fa-exclamation-triangle mr-1"></i> Overdue Tasks</a>
-                                <a class="dropdown-item" href="{{ url_for('report_deliverables') }}"><i class="fas fa-clipboard-check mr-1"></i> Deliverables Report</a>
-                            </div>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link{% if request.endpoint == 'email.bulk_email' %} active{% endif %}" href="{{ url_for('email.bulk_email') }}"><i class="fas fa-envelope mr-1"></i> Bulk Email</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link{% if request.endpoint == 'subscription.plans' %} active{% endif %}" href="{{ url_for('subscription.plans') }}"><i class="fas fa-credit-card mr-1"></i> Subscription Plans</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link{% if request.endpoint and request.endpoint.startswith('team.') %} active{% endif %}" href="{{ url_for('team.dashboard') }}"><i class="fas fa-user-friends mr-1"></i> Team</a>
-                        </li>
-                        {% if current_user.role.value == 'admin' %}
-                            <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle{% if request.endpoint and request.endpoint.startswith('admin.') %} active{% endif %}" href="#" id="adminDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                    <i class="fas fa-cogs mr-1"></i> Admin
-                                </a>
-                                <div class="dropdown-menu" aria-labelledby="adminDropdown">
-                                    <a class="dropdown-item" href="{{ url_for('admin.dashboard') }}">Dashboard</a>
-                                    <a class="dropdown-item" href="{{ url_for('admin.users') }}">User Management</a>
-                                    <a class="dropdown-item" href="{{ url_for('admin.subscriptions') }}">Subscriptions</a>
-                                    <a class="dropdown-item" href="{{ url_for('admin.system') }}">System Settings</a>
-                                </div>
-                            </li>
-                        {% endif %}
-                      {% endif %}
-                      {% if current_user.role.value == 'client' %}
-                        {# Client-portal nav: the staff nav above is gated off for this
-                        role (see api/index.py's before_request gate - this is cosmetic,
-                        that hook is what actually enforces it). #}
-                        <li class="nav-item">
-                            <a class="nav-link{% if request.endpoint and request.endpoint.startswith('client_portal.') %} active{% endif %}" href="{{ url_for('client_portal.dashboard') }}"><i class="fas fa-tachometer-alt mr-1"></i> Dashboard</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt mr-1"></i> Logout</a>
-                        </li>
-                      {% endif %}
-                    {% endif %}
-                </ul>
-                <ul class="navbar-nav">
-                    {% if current_user.is_authenticated %}
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                                {{ current_user.username }}
-                            </a>
-                            <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navbarDropdown">
-                                {% if current_user.role.value != 'client' %}
-                                {# /profile isn't in the client-portal allowlist (see api/index.py's
-                                before_request gate) - showing this link to a CLIENT login just
-                                bounces them back to their dashboard with nothing happening. #}
-                                <a class="dropdown-item" href="{{ url_for('profile') }}">Profile</a>
-                                <div class="dropdown-divider"></div>
-                                {% endif %}
-                                <a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a>
-                            </div>
-                        </li>
-                    {% else %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('login') }}">Login</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('register') }}">Register</a>
-                        </li>
-                    {% endif %}
-                </ul>
+{# Three chrome modes, one shared content path (the flash block and
+   {% block content %} can only be defined once, so the branches below
+   only open/close different wrappers around the same middle):
+   - staff (authenticated, non-CLIENT role): left sidebar shell
+   - client (CLIENT role): minimal light top bar - the staff sidebar is
+     deliberately withheld; the before_request gate in api/index.py is
+     what actually keeps this role out of staff routes, this is cosmetic
+   - public (unauthenticated): clean centered layout #}
+{% set is_client_role = current_user.is_authenticated and current_user.role.value == 'client' %}
+{% set is_staff = current_user.is_authenticated and not is_client_role %}
+{% set ep = request.endpoint or '' %}
+<body class="{% if is_staff %}layout-staff{% elif is_client_role %}layout-client{% else %}layout-public{% endif %}">
+{% if is_staff %}
+    <div class="app-shell">
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+        <aside class="app-sidebar" id="appSidebar">
+            <a class="sidebar-brand" href="{{ url_for('home') }}">
+                <span class="sidebar-brand-mark">E</span>
+                <span class="sidebar-brand-name">ELIZA</span>
+            </a>
+            <nav class="sidebar-nav">
+                <a class="sidebar-link{% if ep == 'home' %} active{% endif %}" href="{{ url_for('home') }}"><i class="fas fa-home"></i> Dashboard</a>
+
+                <div class="sidebar-section-label">Work</div>
+                <a class="sidebar-link{% if ep in ('clients', 'client_detail', 'client_create', 'client_edit') %} active{% endif %}" href="{{ url_for('clients') }}"><i class="fas fa-users"></i> Clients</a>
+                <a class="sidebar-link{% if ep in ('projects', 'project_detail', 'project_create', 'project_edit') %} active{% endif %}" href="{{ url_for('projects') }}"><i class="fas fa-project-diagram"></i> Projects</a>
+                <a class="sidebar-link{% if ep in ('all_tasks', 'task_detail', 'create_task') %} active{% endif %}" href="{{ url_for('all_tasks') }}"><i class="fas fa-tasks"></i> Tasks</a>
+                <a class="sidebar-link{% if ep == 'email.bulk_email' %} active{% endif %}" href="{{ url_for('email.bulk_email') }}"><i class="fas fa-envelope"></i> Bulk Email</a>
+
+                <div class="sidebar-section-label">Billing</div>
+                <a class="sidebar-link{% if ep.startswith('billing.quote') %} active{% endif %}" href="{{ url_for('billing.quotes_list') }}"><i class="fas fa-file-alt"></i> Quotes</a>
+                <a class="sidebar-link{% if ep.startswith('billing.invoice') %} active{% endif %}" href="{{ url_for('billing.invoices_list') }}"><i class="fas fa-file-invoice-dollar"></i> Invoices</a>
+                <a class="sidebar-link{% if ep == 'subscription.plans' %} active{% endif %}" href="{{ url_for('subscription.plans') }}"><i class="fas fa-credit-card"></i> Plan</a>
+
+                <div class="sidebar-section-label">Insights</div>
+                {# 'report' prefix covers the reports index ('reports') and all six
+                   report_* endpoints - group expanded whenever any of them is active #}
+                {% set reports_active = ep.startswith('report') %}
+                <a class="sidebar-link sidebar-group-toggle{% if reports_active %} active{% endif %}" href="#reportsGroup" data-toggle="collapse" role="button" aria-expanded="{{ 'true' if reports_active else 'false' }}" aria-controls="reportsGroup">
+                    <i class="fas fa-chart-bar"></i> Reports
+                    <i class="fas fa-chevron-right sidebar-caret"></i>
+                </a>
+                <div class="collapse sidebar-sub{% if reports_active %} show{% endif %}" id="reportsGroup">
+                    <a class="sidebar-link{% if ep == 'report_project_status' %} active{% endif %}" href="{{ url_for('report_project_status') }}">Project Status</a>
+                    <a class="sidebar-link{% if ep == 'report_task_distribution' %} active{% endif %}" href="{{ url_for('report_task_distribution') }}">Task Distribution</a>
+                    <a class="sidebar-link{% if ep == 'report_time_tracking' %} active{% endif %}" href="{{ url_for('report_time_tracking') }}">Time Tracking</a>
+                    <a class="sidebar-link{% if ep == 'report_project_timeline' %} active{% endif %}" href="{{ url_for('report_project_timeline') }}">Project Timeline</a>
+                    <a class="sidebar-link{% if ep == 'report_overdue_tasks' %} active{% endif %}" href="{{ url_for('report_overdue_tasks') }}">Overdue Tasks</a>
+                    <a class="sidebar-link{% if ep == 'report_deliverables' %} active{% endif %}" href="{{ url_for('report_deliverables') }}">Deliverables</a>
+                </div>
+                <a class="sidebar-link{% if ep.startswith('team.') %} active{% endif %}" href="{{ url_for('team.dashboard') }}"><i class="fas fa-user-friends"></i> Team</a>
+
+                {% if current_user.role.value == 'admin' %}
+                <div class="sidebar-section-label">Admin</div>
+                <a class="sidebar-link{% if ep == 'admin.dashboard' %} active{% endif %}" href="{{ url_for('admin.dashboard') }}"><i class="fas fa-cogs"></i> Dashboard</a>
+                <a class="sidebar-link{% if ep == 'admin.users' %} active{% endif %}" href="{{ url_for('admin.users') }}"><i class="fas fa-user-shield"></i> Users</a>
+                <a class="sidebar-link{% if ep == 'admin.subscriptions' %} active{% endif %}" href="{{ url_for('admin.subscriptions') }}"><i class="fas fa-receipt"></i> Subscriptions</a>
+                <a class="sidebar-link{% if ep == 'admin.system' %} active{% endif %}" href="{{ url_for('admin.system') }}"><i class="fas fa-sliders-h"></i> System</a>
+                {% endif %}
+            </nav>
+            <div class="sidebar-user">
+                <a class="sidebar-user-link" href="{{ url_for('profile') }}" title="Profile">
+                    <span class="sidebar-avatar">{{ current_user.username[:2]|upper }}</span>
+                    <span class="sidebar-user-info">
+                        <span class="sidebar-user-name">{{ current_user.username }}</span>
+                        {# sidebar_plan_name comes from the context processor in
+                           api/index.py (one cached-on-g query per request);
+                           falls back to the role name when there is no active
+                           subscription #}
+                        <span class="sidebar-user-plan">{{ sidebar_plan_name or current_user.role.value|capitalize }}</span>
+                    </span>
+                </a>
+                <a class="sidebar-logout" href="{{ url_for('logout') }}" title="Logout"><i class="fas fa-sign-out-alt"></i></a>
             </div>
+        </aside>
+        <div class="app-main">
+            <header class="app-topbar">
+                <button class="app-sidebar-toggle" type="button" id="sidebarToggle" aria-label="Toggle navigation" aria-controls="appSidebar" aria-expanded="false"><i class="fas fa-bars"></i></button>
+                {# Default page title reuses the <title> block, minus any
+                   " - ELIZA..." suffix; pages can override page_title later
+                   without touching this shell #}
+                <h1 class="app-page-title">{% block page_title %}{{ self.title().split(' - ')[0]|trim }}{% endblock %}</h1>
+                <div class="app-topbar-actions">{% block page_actions %}{% endblock %}</div>
+            </header>
+            <main class="app-content">
+{% elif is_client_role %}
+    <nav class="client-topbar">
+        <a class="sidebar-brand client-topbar-brand" href="{{ url_for('client_portal.dashboard') }}">
+            <span class="sidebar-brand-mark">E</span>
+            <span class="sidebar-brand-name">ELIZA</span>
+        </a>
+        <div class="client-topbar-nav">
+            <a class="client-topbar-link{% if ep.startswith('client_portal.') %} active{% endif %}" href="{{ url_for('client_portal.dashboard') }}"><i class="fas fa-tachometer-alt mr-1"></i> Dashboard</a>
+            <a class="client-topbar-link" href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt mr-1"></i> Logout</a>
         </div>
     </nav>
-
-    <div class="container mt-4">
-        {# Flash messages, rendered here globally so every page gets them for
-           free. Previously several pages (e.g. redirect targets like
-           clients/detail.html) had to add their own copy of this block by
-           hand, and the client-portal pages never did - so a client
-           approving/rejecting a task, or posting a comment, saw the page
-           silently reload with zero feedback either way, even though the
-           flash() call on the server side was firing correctly.
-           get_flashed_messages() caches the flashes on the request context
-           after the first call, so any page-level block calling it again
-           does NOT render empty - it re-renders the same messages a second
-           time. All page-level copies of this block have been removed in
-           favor of this one; don't add another one to a page that extends
-           this template. #}
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                            <span aria-hidden="true">&times;</span>
-                        </button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-        {% block content %}{% endblock %}
-    </div>
-
-    <footer class="footer mt-5 py-3 bg-light">
-        <div class="container text-center">
-            <span class="text-muted">&copy; 2025 ELIZA Project Management</span>
+    <main class="client-main">
+        <div class="container mt-3">
+{% else %}
+    <nav class="public-topbar">
+        <a class="sidebar-brand public-topbar-brand" href="{{ url_for('home') }}">
+            <span class="sidebar-brand-mark">E</span>
+            <span class="sidebar-brand-name">ELIZA</span>
+        </a>
+        <div class="client-topbar-nav">
+            <a class="client-topbar-link{% if ep == 'login' %} active{% endif %}" href="{{ url_for('login') }}">Login</a>
+            <a class="client-topbar-link{% if ep == 'register' %} active{% endif %}" href="{{ url_for('register') }}">Register</a>
         </div>
-    </footer>
+    </nav>
+    <main class="public-main">
+{% endif %}
+
+        {# Flash messages are rendered globally as toasts - see the
+           #toastStack / #flashData block near the end of <body>, which sits
+           OUTSIDE the three chrome branches so every layout (staff sidebar,
+           client, public) gets them for free. Don't add a page-level flash
+           block to any page extending this template: get_flashed_messages()
+           caches flashes on the request context after the first call, so a
+           second block would re-render the same messages a second time. #}
+        {% block content %}{% endblock %}
+
+{% if is_staff %}
+            </main>
+            <div class="app-footer">&copy; 2025 ELIZA Project Management</div>
+        </div>
+    </div>
+{% elif is_client_role %}
+        </div>
+        <div class="app-footer text-center">&copy; 2025 ELIZA Project Management</div>
+    </main>
+{% else %}
+        <div class="app-footer text-center">&copy; 2025 ELIZA Project Management</div>
+    </main>
+{% endif %}
+
+    {# Toast notifications - single global instance, deliberately OUTSIDE
+       the three chrome branches above so flashes fire identically on the
+       staff, client and public layouts. Server-rendered flashes land in the
+       hidden #flashData list (Jinja-escaped there, moved into the DOM via
+       textContent - never innerHTML) and the script below turns them into
+       stacked top-right toasts on load. Category mapping: success/danger/
+       warning/info pass through; 'error' maps to danger; Flask's default
+       'message' (and anything unknown) maps to info. Danger toasts get a
+       longer 8.4s timer (errors shouldn't vanish mid-read); everything
+       else auto-dismisses after 4.2s. Toast CSS lives in css/custom.css. #}
+    <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+    <div id="flashData" hidden>
+        {%- for category, message in messages %}
+        <span data-category="{{ category }}">{{ message }}</span>
+        {%- endfor %}
+    </div>
+        {% endif %}
+    {% endwith %}
 
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
@@ -186,6 +199,118 @@
         $(function () {
             $('[data-toggle="tooltip"]').tooltip();
         });
+
+        // Off-canvas sidebar toggle for the staff shell below ~992px.
+        // Plain vanilla JS on purpose - the sidebar is position:fixed and
+        // slides in/out via a body class; Bootstrap collapse would animate
+        // height, which is the wrong axis here.
+        (function () {
+            var toggle = document.getElementById('sidebarToggle');
+            var backdrop = document.getElementById('sidebarBackdrop');
+            var sidebar = document.getElementById('appSidebar');
+            if (!toggle || !backdrop || !sidebar) return; // client/public chrome has no sidebar
+            function setOpen(open) {
+                document.body.classList.toggle('sidebar-open', open);
+                toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            }
+            toggle.addEventListener('click', function () {
+                setOpen(!document.body.classList.contains('sidebar-open'));
+            });
+            backdrop.addEventListener('click', function () { setOpen(false); });
+            // Navigating from the drawer should close it (matters for
+            // same-page anchors like the Reports collapse toggle - a real
+            // navigation replaces the page anyway).
+            sidebar.addEventListener('click', function (e) {
+                var link = e.target.closest ? e.target.closest('a:not(.sidebar-group-toggle)') : null;
+                if (link) setOpen(false);
+            });
+        })();
+
+        // Flash-message toasts. Builds each toast with createElement +
+        // textContent (message text never goes through innerHTML), stacks
+        // them top-right, staggers multiple flashes 120ms apart, and
+        // auto-dismisses on a timer mirrored by the 3px countdown bar
+        // (bar duration is set inline so CSS and setTimeout agree).
+        (function () {
+            var stack = document.getElementById('toastStack');
+            if (!stack) return;
+            var ICONS = {
+                success: 'fa-check',
+                danger: 'fa-exclamation',
+                warning: 'fa-exclamation-triangle',
+                info: 'fa-info'
+            };
+            function normalize(cat) {
+                if (cat === 'error') return 'danger';
+                return ICONS[cat] ? cat : 'info'; // Flask default 'message' -> info
+            }
+            function remove(toast) {
+                if (toast.parentNode) toast.parentNode.removeChild(toast);
+            }
+            function dismiss(toast) {
+                if (toast.dataset.leaving) return;
+                toast.dataset.leaving = '1';
+                if (toast._timer) clearTimeout(toast._timer);
+                toast.classList.add('toast-leave');
+                toast.addEventListener('animationend', function () { remove(toast); });
+                setTimeout(function () { remove(toast); }, 450); // fallback if animations are off
+            }
+            function showToast(category, text) {
+                category = normalize(category);
+                var duration = category === 'danger' ? 8400 : 4200;
+                var toast = document.createElement('div');
+                toast.className = 'app-toast app-toast-' + category;
+                toast.setAttribute('role', category === 'danger' ? 'alert' : 'status');
+
+                var icon = document.createElement('span');
+                icon.className = 'app-toast-icon';
+                icon.innerHTML = '<i class="fas ' + ICONS[category] + '"></i>';
+
+                var body = document.createElement('div');
+                body.className = 'app-toast-body';
+                // Title-ish first line: if the message is multi-sentence,
+                // the first sentence becomes the bold line and the rest a
+                // muted second line; short messages are just the bold line.
+                var m = /^(.{0,90}?[.!?])\s+(\S[\s\S]*)$/.exec(text);
+                var title = document.createElement('div');
+                title.className = 'app-toast-title';
+                title.textContent = m ? m[1] : text;
+                body.appendChild(title);
+                if (m) {
+                    var rest = document.createElement('div');
+                    rest.className = 'app-toast-text';
+                    rest.textContent = m[2];
+                    body.appendChild(rest);
+                }
+
+                var close = document.createElement('button');
+                close.type = 'button';
+                close.className = 'app-toast-close';
+                close.setAttribute('aria-label', 'Dismiss');
+                close.innerHTML = '<i class="fas fa-times"></i>';
+                close.addEventListener('click', function () { dismiss(toast); });
+
+                var bar = document.createElement('span');
+                bar.className = 'app-toast-bar';
+                bar.style.animationDuration = duration + 'ms';
+
+                toast.appendChild(icon);
+                toast.appendChild(body);
+                toast.appendChild(close);
+                toast.appendChild(bar);
+                stack.appendChild(toast);
+                toast._timer = setTimeout(function () { dismiss(toast); }, duration);
+            }
+            var data = document.getElementById('flashData');
+            if (data) {
+                var items = data.querySelectorAll('[data-category]');
+                Array.prototype.forEach.call(items, function (el, i) {
+                    setTimeout(function () {
+                        showToast(el.getAttribute('data-category'), (el.textContent || '').trim());
+                    }, i * 120);
+                });
+            }
+        })();
     </script>
     {% block extra_js %}{% endblock %}
 </body>

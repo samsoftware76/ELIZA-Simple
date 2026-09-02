@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, session, abort
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, session, abort, g
 import os
 import logging
 import sys
@@ -32,7 +32,7 @@ load_dotenv(dotenv_path)
 from models import db
 from models.models import User, Client, Project, Task, Comment, TimeEntry, ProjectMember, ActivityLog, TeamMembership, TeamInvite, ClientInvite
 from models.subscription import Subscription, SubscriptionPlan
-from models.billing import Quote, QuoteItem, Invoice, InvoiceItem
+from models.billing import Quote, QuoteItem, Invoice, InvoiceItem, InvoiceStatus
 
 # Import database utilities for improved connection handling
 from utils.db_utils import configure_db_pool, retry_operation, safe_commit, safe_query
@@ -165,21 +165,156 @@ def restrict_client_role_to_portal():
         return
     return redirect(url_for('client_portal.dashboard'))
 
+@app.context_processor
+def inject_sidebar_plan():
+    """Exposes the active subscription's plan name for the sidebar user block
+    in templates/base.html (sidebar_plan_name).
+
+    One query per request for staff users, cached on g so a template that
+    references it more than once doesn't re-query. Failure (or no active
+    subscription) yields None and the template falls back to the role name -
+    the sidebar must never be the thing that 500s a page.
+    """
+    if not current_user.is_authenticated or current_user.role == UserRole.CLIENT:
+        return dict(sidebar_plan_name=None)
+    if not hasattr(g, '_sidebar_plan_name'):
+        plan_name = None
+        try:
+            def get_plan_name():
+                # Same tenant-scoped lookup home() uses: an invited team
+                # member sees the owner account's plan, not "no plan".
+                sub = Subscription.query.filter_by(
+                    user_id=current_user.get_owner_id(), is_active=True
+                ).first()
+                return sub.plan.name if sub and sub.plan else None
+            plan_name = retry_operation(get_plan_name)
+        except Exception:
+            plan_name = None
+        g._sidebar_plan_name = plan_name
+    return dict(sidebar_plan_name=g._sidebar_plan_name)
+
 @app.route('/')
 def home():
-    """Home page"""
-    # If user is logged in, show their active subscription
-    if current_user.is_authenticated:
-        # Use our retry logic for more robust database connections
-        def get_subscription():
-            # tenant isolation: an invited team member must see the owner
-            # account's subscription/plan, not "no plan" for their own row.
-            return Subscription.query.filter_by(user_id=current_user.get_owner_id(), is_active=True).first()
-        
-        subscription = retry_operation(get_subscription)
-        return render_template('index.html', title='Dashboard', subscription=subscription)
-    
-    return render_template('index.html', title='Home')
+    """Home page: KPI dashboard for authenticated staff, marketing blurb otherwise.
+
+    A CLIENT-role login never reaches this - restrict_client_role_to_portal()
+    above redirects the 'home' endpoint to the client portal before this runs.
+    """
+    if not current_user.is_authenticated:
+        return render_template('index.html', title='Home')
+
+    # tenant isolation: every query below is scoped to the owner account's
+    # data via get_owner_id(), so an invited team member sees the owner's
+    # dashboard (and subscription), never their own empty slice.
+    owner_id = current_user.get_owner_id()
+    today = datetime.now().date()
+
+    def get_subscription():
+        return Subscription.query.filter_by(user_id=owner_id, is_active=True).first()
+
+    subscription = retry_operation(get_subscription)
+
+    def load_dashboard():
+        # --- KPI: active projects, with a cheap "what's moving" subline
+        # derived from task statuses inside those projects.
+        active_projects_count = Project.query.filter_by(
+            owner_id=owner_id, status=ProjectStatus.IN_PROGRESS).count()
+        tasks_in_progress = Task.query.join(Project).filter(
+            Project.owner_id == owner_id,
+            Project.status == ProjectStatus.IN_PROGRESS,
+            Task.status == TaskStatus.IN_PROGRESS).count()
+        tasks_in_review = Task.query.join(Project).filter(
+            Project.owner_id == owner_id,
+            Project.status == ProjectStatus.IN_PROGRESS,
+            Task.status == TaskStatus.REVIEW).count()
+
+        # --- KPI: outstanding invoices (status 'sent' = awaiting payment).
+        # Invoice has no owner_id of its own - scope through Client, same as
+        # billing.invoices_list. total is a Python property over line items,
+        # so the (small) sent set is summed in Python, grouped by currency
+        # since amounts in different currencies must never be added together.
+        sent_invoices = Invoice.query.join(Client).filter(
+            Client.owner_id == owner_id,
+            Invoice.status == InvoiceStatus.SENT).all()
+        outstanding_by_currency = {}
+        for inv in sent_invoices:
+            code = inv.currency or 'USD'
+            outstanding_by_currency[code] = round(
+                outstanding_by_currency.get(code, 0.0) + inv.total, 2)
+        if outstanding_by_currency:
+            dominant_currency, dominant_amount = max(
+                outstanding_by_currency.items(), key=lambda kv: kv[1])
+            outstanding_display = f"{dominant_currency} {dominant_amount:,.2f}"
+        else:
+            outstanding_display = '0.00'
+        extra_currencies = max(len(outstanding_by_currency) - 1, 0)
+
+        # --- KPI: hours logged this calendar month (TimeEntry.duration is
+        # hours). Task has no owner_id - join through Project, same pattern
+        # as report_time_tracking().
+        month_start = datetime(today.year, today.month, 1)
+        hours_this_month = db.session.query(
+            db.func.coalesce(db.func.sum(TimeEntry.duration), 0.0)
+        ).join(Task, TimeEntry.task_id == Task.id
+        ).join(Project, Task.project_id == Project.id
+        ).filter(
+            Project.owner_id == owner_id,
+            TimeEntry.start_time >= month_start
+        ).scalar() or 0.0
+
+        # --- KPI: overdue tasks (same definition as report_overdue_tasks()).
+        overdue_tasks = Task.query.join(Project).filter(
+            Project.owner_id == owner_id,
+            Task.due_date < today,
+            Task.status != TaskStatus.COMPLETED
+        ).order_by(Task.due_date).all()
+        overdue_count = len(overdue_tasks)
+        oldest_overdue_days = (today - overdue_tasks[0].due_date).days if overdue_tasks else 0
+
+        # --- Projects-in-progress panel. ProjectStatus has no REVIEW value
+        # (that's a task status), so this is the IN_PROGRESS set, most
+        # recently touched first. Progress = completed/total tasks, via the
+        # same calculate_project_progress() the reports use.
+        progress_projects = Project.query.filter_by(
+            owner_id=owner_id, status=ProjectStatus.IN_PROGRESS
+        ).order_by(Project.updated_at.desc()).limit(5).all()
+        project_cards = [
+            {'project': p, 'progress': calculate_project_progress(p)}
+            for p in progress_projects
+        ]
+
+        # --- Recent activity. The == filter also drops pre-migration rows
+        # whose owner_id is NULL (SQL NULL never equals anything), which is
+        # exactly what we want: those rows can't be attributed to a tenant.
+        recent_activity = ActivityLog.query.filter(
+            ActivityLog.owner_id == owner_id
+        ).order_by(ActivityLog.created_at.desc()).limit(8).all()
+
+        # For the brand-new-account welcome state.
+        client_count = Client.query.filter_by(owner_id=owner_id).count()
+        project_count = Project.query.filter_by(owner_id=owner_id).count()
+
+        return {
+            'active_projects_count': active_projects_count,
+            'tasks_in_progress': tasks_in_progress,
+            'tasks_in_review': tasks_in_review,
+            'outstanding_display': outstanding_display,
+            'outstanding_invoice_count': len(sent_invoices),
+            'extra_currencies': extra_currencies,
+            'hours_this_month': round(hours_this_month, 1),
+            'month_name': today.strftime('%B'),
+            'overdue_count': overdue_count,
+            'oldest_overdue_days': oldest_overdue_days,
+            'project_cards': project_cards,
+            'recent_activity': recent_activity,
+            'client_count': client_count,
+            'project_count': project_count,
+            'has_data': client_count > 0 or project_count > 0,
+        }
+
+    stats = retry_operation(load_dashboard)
+    return render_template('index.html', title='Dashboard',
+                           subscription=subscription, stats=stats)
 
 @app.route('/test-email')
 @login_required

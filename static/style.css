@@ -17,28 +17,9 @@ body {
     padding: 0 15px;
 }
 
-/* Navbar Customization */
-.navbar-dark.bg-dark {
-    background-color: #343a40 !important;
-}
-
-.navbar-brand {
-    font-weight: bold;
-    font-size: 1.5rem;
-    color: #e8491d !important;
-}
-
-/* Footer */
-.footer {
-    background-color: #343a40 !important;
-    color: #fff;
-    padding: 1rem 0;
-    margin-top: auto;
-}
-
-.footer .text-muted {
-    color: #adb5bd !important;
-}
+/* The dark top navbar and full-width dark footer were replaced by the
+   sidebar shell / light top bars in templates/base.html (styles in
+   static/css/custom.css); their rules were removed from here. */
 
 /* Authentication Forms */
 .auth-container {
@@ -50,8 +31,8 @@ body {
 
 .auth-form {
     background: white;
+    border: 1px solid #e9ecef;
     border-radius: 8px;
-    box-shadow: 0 0 20px rgba(0,0,0,0.1);
     padding: 2rem;
     width: 100%;
     max-width: 500px;
