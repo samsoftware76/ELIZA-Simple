@@ -38,6 +38,13 @@
             <div class="status-banner accepted"><i class="fas fa-check-circle mr-2"></i>This contract was signed{% if contract.signed_at %} on {{ contract.signed_at.strftime('%B %d, %Y') }}{% endif %}.</div>
         {% elif contract.status == 'declined' %}
             <div class="status-banner declined"><i class="fas fa-times-circle mr-2"></i>This contract was declined{% if contract.declined_at %} on {{ contract.declined_at.strftime('%B %d, %Y') }}{% endif %}.</div>
+        {% elif contract.status == 'voided' %}
+            {# Withdrawn by the sender. The page deliberately still renders
+               (a 404 would just look broken to someone opening a link they
+               were emailed), but is_signable is False so no signing UI
+               appears below - and api/portal.py refuses a sign/decline POST
+               for a voided contract regardless of what this page shows. #}
+            <div class="status-banner voided"><i class="fas fa-ban mr-2"></i>This contract has been withdrawn by the sender{% if contract.voided_at %} on {{ contract.voided_at.strftime('%B %d, %Y') }}{% endif %} and can no longer be signed. Please contact them if you were expecting to sign it &mdash; they may send you a revised version.</div>
         {% elif contract.status == 'sent' %}
             <div class="status-banner sent"><i class="fas fa-pen-nib mr-2"></i>This contract is awaiting your signature. Please review it below.</div>
         {% endif %}

@@ -32,7 +32,7 @@ load_dotenv(dotenv_path)
 from models import db
 from models.models import User, Client, Project, Task, Comment, TimeEntry, ProjectMember, ActivityLog, TeamMembership, TeamInvite, ClientInvite
 from models.subscription import Subscription, SubscriptionPlan
-from models.billing import Quote, QuoteItem, Invoice, InvoiceItem, InvoiceStatus
+from models.billing import Quote, QuoteItem, Invoice, InvoiceItem, InvoiceStatus, Contract, ContractStatus
 
 # Import database utilities for improved connection handling
 from utils.db_utils import configure_db_pool, retry_operation, safe_commit, safe_query
@@ -1305,6 +1305,67 @@ def project_create():
     
     return render_template('projects/form.html', form=form, project=None, now=datetime.now())
 
+# How many open task titles the Mark Complete warning lists by name before it
+# collapses the rest into "+N more" - enough to recognise what's outstanding,
+# short enough that the modal never turns into a scrolling task list.
+COMPLETION_TASK_PREVIEW = 5
+
+
+def _project_completion_summary(project):
+    """What is still open on this project, for the Mark Complete warning.
+
+    Computed server-side (never in the template) and scoped to this one
+    project, which the caller has already ownership-checked - so nothing here
+    re-derives tenancy, it all hangs off project.id.
+
+    It WARNS, it never blocks: the confirm button proceeds whatever this says.
+    The user knows their business better than the app does - they may well be
+    closing a project with an invoice still out on purpose.
+
+    Three things count as outstanding:
+      * tasks not COMPLETED (titles previewed, rest counted)
+      * invoices still awaiting payment - status SENT covers overdue too,
+        since is_overdue is a derived property of a SENT invoice, not a
+        separate status (see models/billing.py)
+      * contracts still awaiting a signature - DRAFT or SENT. Declined and
+        voided contracts are deliberately excluded: those are settled
+        outcomes, not loose ends.
+    Invoice totals are grouped BY CURRENCY, never summed across currencies -
+    same rule as the outstanding-invoices KPI in home() above.
+    """
+    open_tasks = [t for t in project.tasks if t.status != TaskStatus.COMPLETED]
+
+    unpaid_invoices = Invoice.query.filter(
+        Invoice.project_id == project.id,
+        Invoice.status == InvoiceStatus.SENT
+    ).order_by(Invoice.id).all()
+    unpaid_totals = {}
+    for inv in unpaid_invoices:
+        code = inv.currency or 'USD'
+        unpaid_totals[code] = round(unpaid_totals.get(code, 0.0) + inv.total, 2)
+    # Pre-formatted here in the same "CODE 1,234.56" shape home() uses, so the
+    # template doesn't have to reinvent currency formatting per row.
+    unpaid_totals_display = [f"{code} {amount:,.2f}" for code, amount in sorted(unpaid_totals.items())]
+
+    unsigned_contracts = Contract.query.filter(
+        Contract.project_id == project.id,
+        Contract.status.in_([ContractStatus.DRAFT, ContractStatus.SENT])
+    ).order_by(Contract.id).all()
+
+    return {
+        'open_tasks': open_tasks[:COMPLETION_TASK_PREVIEW],
+        'open_task_count': len(open_tasks),
+        'open_task_overflow': max(0, len(open_tasks) - COMPLETION_TASK_PREVIEW),
+        'unpaid_invoices': unpaid_invoices,
+        'unpaid_invoice_count': len(unpaid_invoices),
+        'unpaid_totals': unpaid_totals,
+        'unpaid_totals_display': unpaid_totals_display,
+        'unsigned_contracts': unsigned_contracts,
+        'unsigned_contract_count': len(unsigned_contracts),
+        'has_outstanding': bool(open_tasks or unpaid_invoices or unsigned_contracts),
+    }
+
+
 @app.route('/projects/<int:project_id>')
 @login_required
 def project_detail(project_id):
@@ -1320,7 +1381,12 @@ def project_detail(project_id):
     # platform account (see TaskForm.assigned_to in forms.py for the same
     # simplification).
     users = [current_user]
-    return render_template('projects/detail.html', project=project, users=users, now=datetime.now())
+    # is_completed is resolved here rather than compared in the template, so
+    # the page never has to know the enum's spelling (and never blows up on a
+    # project whose status is somehow NULL).
+    return render_template('projects/detail.html', project=project, users=users, now=datetime.now(),
+                           is_completed=(project.status == ProjectStatus.COMPLETED),
+                           completion=_project_completion_summary(project))
 
 @app.route('/projects/<int:project_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -1359,6 +1425,93 @@ def project_edit(project_id):
             flash(f'Error updating project: {str(e)}', 'danger')
     
     return render_template('projects/form.html', form=form, project=project, now=datetime.now())
+
+@app.route('/projects/<int:project_id>/complete', methods=['POST'])
+@login_required
+def project_complete(project_id):
+    """One-click "this project is done".
+
+    Tasks got Submit for Review -> Mark Complete for exactly this reason; a
+    project had no equivalent, so the only way to close one was the edit
+    form's status dropdown - the same friction. The warning about what's
+    still open lives in the confirmation modal on the detail page (see
+    _project_completion_summary above); it warns and never blocks, so this
+    route deliberately has no "you still have open tasks" guard.
+    """
+    project = Project.query.get_or_404(project_id)
+    # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
+    # and confirm another tenant's project id.
+    if project.owner_id != current_user.get_owner_id():
+        abort(404)
+
+    if project.status == ProjectStatus.COMPLETED:
+        flash(f'Project "{project.title}" is already marked complete.', 'info')
+        return redirect(url_for('project_detail', project_id=project.id))
+
+    try:
+        project.status = ProjectStatus.COMPLETED
+
+        # Log the activity - same paired user_id/owner_id pattern as every
+        # other status-affecting ActivityLog call in this file.
+        activity = ActivityLog(
+            user_id=current_user.id,
+            owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
+            action_type='status_changed',
+            entity_type='project',
+            entity_id=project.id,
+            description=f'Marked project as complete: {project.title}'
+        )
+        db.session.add(activity)
+        db.session.commit()
+        log_event('project_completed', user_id=current_user.id, project_id=project.id)
+
+        flash(f'Project "{project.title}" has been marked complete.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error completing project: {str(e)}', 'danger')
+
+    return redirect(url_for('project_detail', project_id=project.id))
+
+@app.route('/projects/<int:project_id>/reopen', methods=['POST'])
+@login_required
+def project_reopen(project_id):
+    """Undo a completion - projects do come back.
+
+    Back to IN_PROGRESS rather than the project's previous status: the old
+    status isn't recorded anywhere, and a project someone is deliberately
+    reopening is by definition being worked on again.
+    """
+    project = Project.query.get_or_404(project_id)
+    # 404 (not 403) so a caller can't distinguish "not yours" from "doesn't exist"
+    # and confirm another tenant's project id.
+    if project.owner_id != current_user.get_owner_id():
+        abort(404)
+
+    if project.status != ProjectStatus.COMPLETED:
+        flash(f'Project "{project.title}" is not completed, so there is nothing to reopen.', 'info')
+        return redirect(url_for('project_detail', project_id=project.id))
+
+    try:
+        project.status = ProjectStatus.IN_PROGRESS
+
+        activity = ActivityLog(
+            user_id=current_user.id,
+            owner_id=current_user.get_owner_id(),  # tenant isolation: activity log entries belong to the acting tenant
+            action_type='status_changed',
+            entity_type='project',
+            entity_id=project.id,
+            description=f'Reopened project: {project.title}'
+        )
+        db.session.add(activity)
+        db.session.commit()
+        log_event('project_reopened', user_id=current_user.id, project_id=project.id)
+
+        flash(f'Project "{project.title}" has been reopened.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error reopening project: {str(e)}', 'danger')
+
+    return redirect(url_for('project_detail', project_id=project.id))
 
 @app.route('/projects/<int:project_id>/delete')
 @login_required

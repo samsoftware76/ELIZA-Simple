@@ -13,8 +13,35 @@
 
     <div class="page-header">
         <div>
-            <h1>{{ contract.contract_number }} <span class="badge badge-{{ contract.status|billing_status_badge }}">{{ contract.status|capitalize }}</span></h1>
+            <h1>{{ contract.contract_number }}
+                <span class="badge badge-{{ contract.status|billing_status_badge }}">{{ contract.status|capitalize }}</span>
+                {# Version is always shown, including v1, so the number means
+                   the same thing on every contract instead of only appearing
+                   once a chain exists. #}
+                <span class="badge badge-light border">Version {{ contract.version_number }}</span>
+            </h1>
             <p class="text-muted mb-0">{{ contract.title }}</p>
+            {# The amendment chain, both directions. Each link points at the
+               other document's detail page - they are separate contracts,
+               and the older one is permanent history. #}
+            {% if contract.supersedes %}
+            <p class="mb-0 mt-1">
+                <small class="text-muted">
+                    <i class="fas fa-code-branch"></i>
+                    Amends <a href="{{ url_for('contracts.contract_detail', contract_id=contract.supersedes.id) }}">{{ contract.supersedes.contract_number }}</a>
+                    (version {{ contract.supersedes.version_number }}) &mdash; that contract is unchanged.
+                </small>
+            </p>
+            {% endif %}
+            {% if contract.latest_amendment %}
+            <p class="mb-0 mt-1">
+                <small class="text-muted">
+                    <i class="fas fa-arrow-right"></i>
+                    Superseded by <a href="{{ url_for('contracts.contract_detail', contract_id=contract.latest_amendment.id) }}">{{ contract.latest_amendment.contract_number }}</a>
+                    (version {{ contract.latest_amendment.version_number }})
+                </small>
+            </p>
+            {% endif %}
         </div>
         {# page-actions (wraps on phones) instead of .btn-group, which
            can't wrap and squashed the heading on narrow screens. #}
@@ -38,6 +65,25 @@
                     <button type="submit" class="btn btn-outline-primary"><i class="fas fa-paper-plane"></i> Re-send</button>
                 </form>
             {% endif %}
+            {% if contract.is_amendable %}
+                {# The escape hatch for immutability: clones this contract into
+                   a new draft that supersedes it and opens that draft's edit
+                   page. This contract is not touched. #}
+                <form method="POST" action="{{ url_for('contracts.contract_amend', contract_id=contract.id) }}" class="d-inline"
+                      onsubmit="return confirmAndDisable(this, 'Create a new draft version of this contract? This contract stays exactly as it is - you will edit and send the new version.')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-info"><i class="fas fa-code-branch"></i> Amend</button>
+                </form>
+            {% endif %}
+            {% if contract.is_voidable %}
+                {# Sent-but-unsigned only. Withdraws the contract so the link
+                   already in the client's inbox stops accepting a signature. #}
+                <form method="POST" action="{{ url_for('contracts.contract_void', contract_id=contract.id) }}" class="d-inline"
+                      onsubmit="return confirmAndDisable(this, 'Void this contract? The client link stays reachable but shows it was withdrawn, and it can no longer be signed.')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-warning"><i class="fas fa-ban"></i> Void</button>
+                </form>
+            {% endif %}
             {% if contract.status != 'signed' %}
                 {# POST-only delete with CSRF (not the legacy GET-delete pattern).
                    Never offered on a signed contract - a legal record the route
@@ -53,6 +99,26 @@
 
     <div class="row">
         <div class="col-md-8">
+            {% if contract.status == 'voided' %}
+            <div class="alert alert-secondary">
+                <i class="fas fa-ban"></i> <strong>Voided.</strong>
+                This contract was withdrawn{% if contract.voided_at %} on {{ contract.voided_at.strftime('%b %d, %Y %H:%M') }} UTC{% endif %}.
+                Its client link still opens, but shows the client it was withdrawn and offers no way to sign it.
+            </div>
+            {% endif %}
+            {% if contract.latest_amendment %}
+            {# The muted "this is history now" note. The forward link lives in
+               the page header above; this explains what the older document
+               still is, since it is deliberately left exactly as it was. #}
+            <div class="alert alert-light border">
+                <i class="fas fa-history text-muted"></i>
+                <small class="text-muted">
+                    This is an earlier version, kept unchanged as a permanent record &mdash; its status, signature and audit trail are
+                    exactly as they were. The current version is
+                    <a href="{{ url_for('contracts.contract_detail', contract_id=contract.latest_amendment.id) }}">{{ contract.latest_amendment.contract_number }}</a>.
+                </small>
+            </div>
+            {% endif %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header"><h5 class="mb-0">Contract Terms{% if contract.status != 'draft' %} <small class="text-muted">(frozen at send time)</small>{% endif %}</h5></div>
                 {# Once sent, body_snapshot is the frozen legal text the client
@@ -96,6 +162,8 @@
                     {% if contract.sent_at %}<p><strong>Sent:</strong> {{ contract.sent_at.strftime('%b %d, %Y %H:%M') }}</p>{% endif %}
                     {% if contract.signed_at %}<p><strong>Signed:</strong> {{ contract.signed_at.strftime('%b %d, %Y %H:%M') }}</p>{% endif %}
                     {% if contract.declined_at %}<p><strong>Declined:</strong> {{ contract.declined_at.strftime('%b %d, %Y %H:%M') }}</p>{% endif %}
+                    {% if contract.voided_at %}<p><strong>Voided:</strong> {{ contract.voided_at.strftime('%b %d, %Y %H:%M') }}</p>{% endif %}
+                    <p class="mb-0"><strong>Version:</strong> {{ contract.version_number }}{% if contract.supersedes %} (amends {{ contract.supersedes.contract_number }}){% endif %}</p>
                 </div>
             </div>
 
@@ -112,7 +180,11 @@
                             </button>
                         </div>
                     </div>
+                    {% if contract.status == 'voided' %}
+                    <small class="text-muted d-block mt-2">This link still opens for the client, but shows that the contract was withdrawn &mdash; it can no longer be signed.</small>
+                    {% else %}
                     <small class="text-muted d-block mt-2">Share this link with the client (WhatsApp, SMS, email) &mdash; they can review and sign there, no login needed.</small>
+                    {% endif %}
                 </div>
             </div>
             {% else %}

@@ -13,6 +13,12 @@ Immutability guarantee: a contract is editable ONLY while draft. At send
 time body_snapshot is frozen to a copy of body - that snapshot is the legal
 text the client signs - and every later edit attempt is refused. A SIGNED
 contract can never be deleted: it's a legal record.
+
+That immutability is deliberate and stays. The escape hatches around it are
+AMEND (contract_amend below - clone a settled contract into a new draft that
+supersedes it, leaving the original untouched) and VOID (contract_void -
+withdraw a sent, unsigned contract so its portal link stops accepting a
+signature). Neither one ever rewrites a contract the client has already seen.
 """
 from datetime import datetime
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, abort
@@ -20,7 +26,7 @@ from flask_login import login_required, current_user
 
 from models import db
 from models.models import Client, Project, ActivityLog
-from models.billing import Contract, ContractStatus
+from models.billing import Contract, ContractStatus, generate_public_token
 from forms import ContractForm
 from utils.email_utils import send_contract_email
 from utils.document_print import build_contract_print_context
@@ -194,6 +200,12 @@ def contract_send(contract_id):
     # Contract has no owner_id of its own - ownership is via its required client.
     if contract.client.owner_id != current_user.get_owner_id():
         abort(404)
+    if contract.status == ContractStatus.VOIDED:
+        # Distinct message from the "already responded to" one below: a voided
+        # contract wasn't answered by the client, it was withdrawn by this
+        # user, and the way forward is a new version rather than a re-send.
+        flash('This contract has been voided and cannot be sent. Amend it to issue a new version.', 'warning')
+        return redirect(url_for('contracts.contract_detail', contract_id=contract.id))
     if contract.status not in (ContractStatus.DRAFT, ContractStatus.SENT):
         flash('This contract has already been responded to and cannot be re-sent.', 'warning')
         return redirect(url_for('contracts.contract_detail', contract_id=contract.id))
@@ -221,6 +233,118 @@ def contract_send(contract_id):
     return redirect(url_for('contracts.contract_detail', contract_id=contract.id))
 
 
+@contracts_bp.route('/contracts/<int:contract_id>/amend', methods=['POST'])
+@login_required
+def contract_amend(contract_id):
+    """Clone a settled contract into a NEW draft that supersedes it.
+
+    This is the escape hatch that lets the immutability rule above stay
+    absolute. Editing a sent contract is refused forever (a signature is
+    meaningless if the text can change under it), so changing the terms means
+    issuing a new document: same client/project/title, the body the client
+    actually saw as its starting point, a fresh contract number and a fresh
+    public token, version = original + 1, and supersedes_id pointing back at
+    the original.
+
+    The ORIGINAL IS LEFT COMPLETELY UNTOUCHED - status, signature, audit
+    trail, token and all. It is permanent history; the amendment is a
+    separate document that happens to know what it replaces.
+
+    The new contract starts from body_snapshot when there is one (what was
+    actually sent) and falls back to body only if there somehow isn't, so the
+    amendment begins from the text the client read, not a working copy.
+    """
+    contract = Contract.query.get_or_404(contract_id)
+    # Contract has no owner_id of its own - ownership is via its required client.
+    if contract.client.owner_id != current_user.get_owner_id():
+        abort(404)
+    if not contract.is_amendable:
+        flash('Only a sent, signed or declined contract can be amended.', 'warning')
+        return redirect(url_for('contracts.contract_detail', contract_id=contract.id))
+
+    try:
+        amendment = Contract(
+            contract_number='PENDING',
+            client_id=contract.client_id,
+            project_id=contract.project_id,
+            created_by_id=current_user.id,
+            title=contract.title,
+            # What was actually sent, not the working copy.
+            body=contract.body_snapshot or contract.body,
+            status=ContractStatus.DRAFT,
+            supersedes_id=contract.id,
+            version=contract.version_number + 1,
+            # Explicit fresh token rather than relying on the column default -
+            # the old token must never be reused: it is in the client's inbox
+            # and still points at the original document, which stays live.
+            public_token=generate_public_token(),
+        )
+        db.session.add(amendment)
+        db.session.flush()  # assigns amendment.id for numbering, still inside the transaction
+        amendment.contract_number = f"CT-{amendment.id:05d}"
+
+        _log_contract_activity(
+            'amended', amendment,
+            f'Amended contract {contract.contract_number} as {amendment.contract_number} '
+            f'(version {amendment.version_number})')
+        db.session.commit()
+        log_event('contract_amended', user_id=current_user.id,
+                  contract_id=amendment.id, supersedes_id=contract.id, version=amendment.version_number)
+        flash(f'{amendment.contract_number} created as version {amendment.version_number} of '
+              f'{contract.contract_number}. Edit the terms below, then send it.', 'success')
+        # Straight to the edit page: the whole point of amending is changing
+        # the terms, and the amendment is a draft so editing is allowed again.
+        return redirect(url_for('contracts.contract_edit', contract_id=amendment.id))
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error amending contract {contract_id}: {str(e)}")
+        flash(f'Error amending contract: {str(e)}', 'danger')
+
+    return redirect(url_for('contracts.contract_detail', contract_id=contract.id))
+
+
+@contracts_bp.route('/contracts/<int:contract_id>/void', methods=['POST'])
+@login_required
+def contract_void(contract_id):
+    """Withdraw a SENT, unsigned contract.
+
+    The client keeps the emailed link, so voiding cannot just delete the row:
+    the portal page still renders (with a clear "withdrawn" banner - a 404
+    would just look broken) but is_signable is False, and api/portal.py's
+    sign/decline routes re-check that server-side and refuse.
+
+    A SIGNED contract is never voided - it is a legal record, and the answer
+    there is an amendment (a new document) or a written termination, not
+    unwinding the signature.
+    """
+    contract = Contract.query.get_or_404(contract_id)
+    # Contract has no owner_id of its own - ownership is via its required client.
+    if contract.client.owner_id != current_user.get_owner_id():
+        abort(404)
+    if contract.status == ContractStatus.SIGNED:
+        flash('A signed contract is a legal record and cannot be voided. Amend it to issue a new version instead.', 'danger')
+        return redirect(url_for('contracts.contract_detail', contract_id=contract.id))
+    if not contract.is_voidable:
+        flash('Only a sent contract that has not been signed can be voided.', 'warning')
+        return redirect(url_for('contracts.contract_detail', contract_id=contract.id))
+
+    try:
+        contract.status = ContractStatus.VOIDED
+        contract.voided_at = datetime.utcnow()
+        _log_contract_activity(
+            'voided', contract,
+            f'Voided contract {contract.contract_number} - withdrawn before signature')
+        db.session.commit()
+        log_event('contract_voided', user_id=current_user.id, contract_id=contract.id)
+        flash(f'Contract {contract.contract_number} has been voided. Its client link can no longer be signed.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error voiding contract {contract_id}: {str(e)}")
+        flash(f'Error voiding contract: {str(e)}', 'danger')
+
+    return redirect(url_for('contracts.contract_detail', contract_id=contract.id))
+
+
 @contracts_bp.route('/contracts/<int:contract_id>/delete', methods=['POST'])
 @login_required
 def contract_delete(contract_id):
@@ -234,6 +358,16 @@ def contract_delete(contract_id):
         abort(404)
     if contract.status == ContractStatus.SIGNED:
         flash('A signed contract is a legal record and cannot be deleted.', 'danger')
+        return redirect(url_for('contracts.contract_detail', contract_id=contract.id))
+    if contract.superseded_by:
+        # A later version points at this one via supersedes_id. Deleting it
+        # would either fail on the foreign key or (worse, if that pointer were
+        # ever nulled) silently orphan the amendment chain, so refuse and say
+        # which version depends on it. Delete the amendment first if the whole
+        # chain really is meant to go.
+        newer = contract.latest_amendment
+        flash(f'This contract cannot be deleted because {newer.contract_number} amends it. '
+              f'Delete the newer version first.', 'danger')
         return redirect(url_for('contracts.contract_detail', contract_id=contract.id))
     try:
         _log_contract_activity('deleted', contract, f'Deleted contract: {contract.contract_number} - {contract.title}')

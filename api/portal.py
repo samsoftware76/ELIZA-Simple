@@ -238,6 +238,12 @@ def sign_contract(token):
     if contract.status == ContractStatus.SIGNED:
         flash('This contract has already been signed - the original signature is kept on record.', 'info')
         return redirect(url_for('portal.view_contract', token=token))
+    if contract.status == ContractStatus.VOIDED:
+        # The client still holds the emailed link, so this is a normal thing
+        # to hit, not an attack - say plainly that it was withdrawn rather
+        # than the generic "can no longer be responded to" below.
+        flash('This contract has been withdrawn by the sender and can no longer be signed.', 'warning')
+        return redirect(url_for('portal.view_contract', token=token))
     if not contract.is_signable:
         flash('This contract can no longer be responded to.', 'warning')
         return redirect(url_for('portal.view_contract', token=token))
@@ -289,6 +295,11 @@ def sign_contract(token):
 def decline_contract(token):
     """Client declines the contract, optionally with a reason (mirrors quote decline)"""
     contract = Contract.query.filter_by(public_token=token).first_or_404()
+    if contract.status == ContractStatus.VOIDED:
+        # Same reasoning as sign_contract above - the withdrawn contract's
+        # link is still in the client's inbox, so name what happened.
+        flash('This contract has been withdrawn by the sender - there is nothing left to respond to.', 'warning')
+        return redirect(url_for('portal.view_contract', token=token))
     if not contract.is_signable:
         flash('This contract can no longer be responded to.', 'warning')
         return redirect(url_for('portal.view_contract', token=token))

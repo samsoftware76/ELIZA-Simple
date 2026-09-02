@@ -30,7 +30,15 @@
                 <tbody>
                     {% for contract in contracts %}
                         <tr>
-                            <td><a href="{{ url_for('contracts.contract_detail', contract_id=contract.id) }}">{{ contract.contract_number }}</a></td>
+                            <td>
+                                <a href="{{ url_for('contracts.contract_detail', contract_id=contract.id) }}">{{ contract.contract_number }}</a>
+                                {# Only shown from v2 up: a "v1" marker on every
+                                   original would be noise, while "v2" is the
+                                   thing worth spotting in a list. #}
+                                {% if contract.version_number > 1 %}
+                                <span class="badge badge-light border" title="Amends {{ contract.supersedes.contract_number if contract.supersedes else 'an earlier contract' }}">v{{ contract.version_number }}</span>
+                                {% endif %}
+                            </td>
                             <td>{{ contract.client.name }}</td>
                             <td>{{ contract.title }}</td>
                             <td>

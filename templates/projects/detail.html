@@ -14,6 +14,21 @@
     <div class="page-header">
         <h1>{{ project.title }}</h1>
         <div class="page-actions">
+            {# Mark Complete / Reopen live in .page-actions so they inherit the
+               responsive wrapping from the polish pass. Both are POST with
+               CSRF; Mark Complete goes through the warning modal below rather
+               than firing straight away. #}
+            {% if is_completed %}
+            <form method="POST" action="{{ url_for('project_reopen', project_id=project.id) }}" class="d-inline"
+                  onsubmit="return confirmAndDisable(this, 'Reopen this project? It goes back to In Progress.')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-secondary"><i class="fas fa-undo"></i> Reopen</button>
+            </form>
+            {% else %}
+            <button type="button" class="btn btn-success" data-toggle="modal" data-target="#completeProjectModal">
+                <i class="fas fa-check"></i> Mark Complete
+            </button>
+            {% endif %}
             <a href="{{ url_for('project_edit', project_id=project.id) }}" class="btn btn-outline-primary">
                 <i class="fas fa-edit"></i> Edit
             </a>
@@ -322,5 +337,77 @@
             </div>
         </div>
     </div>
+
+    {% if not is_completed %}
+    {# Smart warning, Bootstrap 4 (data-toggle/data-target/data-dismiss - this
+       app is on BS 4.5.2, never data-bs-*). Everything listed here was
+       computed server-side in project_detail() and scoped to this project.
+       It WARNS, it never blocks - the confirm button always proceeds. #}
+    <div class="modal fade" id="completeProjectModal" tabindex="-1" role="dialog" aria-labelledby="completeProjectModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <form method="POST" action="{{ url_for('project_complete', project_id=project.id) }}"
+                  onsubmit="return confirmAndDisable(this)">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="completeProjectModalLabel">Mark "{{ project.title }}" complete?</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    </div>
+                    <div class="modal-body">
+                        {% if completion.has_outstanding %}
+                        <p class="mb-2">This project still has a few things open:</p>
+                        <ul class="list-unstyled mb-3">
+                            {% if completion.open_task_count %}
+                            <li class="mb-2">
+                                <i class="fas fa-tasks text-warning"></i>
+                                <strong>{{ completion.open_task_count }} unfinished task{% if completion.open_task_count != 1 %}s{% endif %}</strong>
+                                <ul class="text-muted small mb-0">
+                                    {% for task in completion.open_tasks %}
+                                    <li>{{ task.title }} <span class="text-muted">({{ task.status.value }})</span></li>
+                                    {% endfor %}
+                                    {% if completion.open_task_overflow %}
+                                    <li>+{{ completion.open_task_overflow }} more</li>
+                                    {% endif %}
+                                </ul>
+                            </li>
+                            {% endif %}
+                            {% if completion.unpaid_invoice_count %}
+                            <li class="mb-2">
+                                <i class="fas fa-file-invoice-dollar text-warning"></i>
+                                <strong>{{ completion.unpaid_invoice_count }} unpaid invoice{% if completion.unpaid_invoice_count != 1 %}s{% endif %}</strong>
+                                <span class="text-muted small">&mdash; {{ completion.unpaid_totals_display|join(', ') }} outstanding</span>
+                            </li>
+                            {% endif %}
+                            {% if completion.unsigned_contract_count %}
+                            <li class="mb-2">
+                                <i class="fas fa-file-signature text-warning"></i>
+                                <strong>{{ completion.unsigned_contract_count }} contract{% if completion.unsigned_contract_count != 1 %}s{% endif %} not signed</strong>
+                                <span class="text-muted small">&mdash;
+                                    {% for contract in completion.unsigned_contracts %}{{ contract.contract_number }}{% if not loop.last %}, {% endif %}{% endfor %}
+                                </span>
+                            </li>
+                            {% endif %}
+                        </ul>
+                        <p class="text-muted small mb-0">
+                            That's fine if it's deliberate &mdash; you know your business better than this app does.
+                            Completing the project doesn't change any of them.
+                        </p>
+                        {% else %}
+                        <p class="mb-0">
+                            <i class="fas fa-check-circle text-success"></i>
+                            Everything's wrapped up &mdash; no unfinished tasks, no unpaid invoices, no unsigned contracts.
+                            Nice work.
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success"><i class="fas fa-check"></i> Mark Complete</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

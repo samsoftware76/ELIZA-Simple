@@ -171,12 +171,23 @@ class Invoice(db.Model):
 
 
 class ContractStatus:
+    """Plain constants over Contract.status, which is a VARCHAR(20) column -
+    NOT a Postgres enum type like ProjectStatus/TaskStatus/UserRole in
+    models/models.py. Adding a value here therefore needs no enum DDL at all:
+    the database already accepts any string that fits, so VOIDED below is a
+    pure application-level addition (same as QuoteStatus/InvoiceStatus above).
+    """
     DRAFT = 'draft'
     SENT = 'sent'
     SIGNED = 'signed'
     DECLINED = 'declined'
+    # Withdrawn by the sender before it was signed. A terminal state: the
+    # contract can no longer be signed, declined, re-sent or edited, and its
+    # public link keeps rendering (so the client sees a clear "withdrawn"
+    # banner rather than a confusing 404) but offers no signing UI.
+    VOIDED = 'voided'
 
-    CHOICES = [DRAFT, SENT, SIGNED, DECLINED]
+    CHOICES = [DRAFT, SENT, SIGNED, DECLINED, VOIDED]
 
 
 class Contract(db.Model):
@@ -210,10 +221,25 @@ class Contract(db.Model):
     # Frozen copy of body taken AT SEND TIME - what the client actually signs.
     body_snapshot = db.Column(db.Text)
 
+    # Amendment chain (see migrations/add_contract_amendments.py). A sent /
+    # signed / declined contract is immutable - that is the whole point of a
+    # signature - so "changing" one means issuing a NEW contract that points
+    # back at the one it replaces. supersedes_id is that pointer (self-
+    # referential FK, nullable: an original amends nothing), and version is
+    # its position in the chain: 1 for an original, N+1 for an amendment of a
+    # version-N contract. version is nullable at the DB level (additive
+    # migration, DEFAULT 1 backfills existing rows) - read it through
+    # version_number below, never raw, so a NULL still prints as 1.
+    supersedes_id = db.Column(db.Integer, db.ForeignKey('contracts.id'), nullable=True)
+    version = db.Column(db.Integer, default=1)
+
     sent_at = db.Column(db.DateTime)
     signed_at = db.Column(db.DateTime)
     declined_at = db.Column(db.DateTime)
     decline_reason = db.Column(db.Text)
+    # When the sender withdrew this contract (status VOIDED). Never set on a
+    # signed contract - api/contracts.py refuses to void one.
+    voided_at = db.Column(db.DateTime)
 
     # Signature audit trail (stage-2 portal signing flow writes these).
     signer_name = db.Column(db.String(150))
@@ -232,10 +258,78 @@ class Contract(db.Model):
     project = db.relationship('Project', foreign_keys=[project_id], backref='contracts')
     created_by = db.relationship('User', foreign_keys=[created_by_id])
 
+    # Self-referential amendment link, navigable both ways:
+    #   contract.supersedes     -> the older contract this one amends (or None)
+    #   contract.superseded_by  -> the newer contract(s) amending this one
+    # remote_side=[id] is what tells SQLAlchemy which end of contracts.id <->
+    # contracts.supersedes_id is the "one" side; without it a self-referential
+    # FK is ambiguous and the mapper can't be configured at all (the same
+    # class of registry-wide failure as the AmbiguousForeignKeys lesson on
+    # ActivityLog in models/models.py, which is also why foreign_keys= is
+    # spelled out here alongside it).
+    # superseded_by is a LIST, not uselist=False: nothing stops an owner
+    # amending the same original twice (the original is left untouched and
+    # stays amendable), and a scalar relationship would emit a warning and
+    # silently drop one of them. latest_amendment below is what display code
+    # uses when it wants the single newest one.
+    supersedes = db.relationship(
+        'Contract',
+        remote_side=[id],
+        foreign_keys=[supersedes_id],
+        backref=db.backref('superseded_by', lazy=True),
+    )
+
+    @property
+    def version_number(self):
+        """This contract's version, treating a NULL as 1.
+
+        The version column is nullable (additive migration), so every display
+        and every increment goes through this instead of reading .version raw.
+        """
+        return self.version or 1
+
+    @property
+    def latest_amendment(self):
+        """The newest contract superseding this one, or None.
+
+        Highest version wins, id as the tiebreaker - so "Superseded by" always
+        points at the most recent amendment even in the rare case an owner
+        amended the same original more than once.
+        """
+        if not self.superseded_by:
+            return None
+        return sorted(self.superseded_by, key=lambda c: (c.version_number, c.id))[-1]
+
     @property
     def is_signable(self):
-        """Whether the client can still sign/decline this contract via the portal."""
+        """Whether the client can still sign/decline this contract via the portal.
+
+        VOIDED is excluded automatically by this equality check - a withdrawn
+        contract is no longer SENT - which is exactly what stops the portal
+        rendering any signing UI for it. api/portal.py's sign/decline routes
+        re-check this server-side rather than trusting the hidden UI.
+        """
         return self.status == ContractStatus.SENT
+
+    @property
+    def is_voidable(self):
+        """Whether the sender can still withdraw this contract.
+
+        Only a SENT (i.e. not yet signed or declined) contract - a signed one
+        is a legal record, and a draft can simply be deleted.
+        """
+        return self.status == ContractStatus.SENT
+
+    @property
+    def is_amendable(self):
+        """Whether a new draft version can be cloned off this contract.
+
+        Anything that has actually gone out to the client and reached a
+        settled state: sent (awaiting signature), signed, or declined. A draft
+        is still directly editable, and a voided contract was withdrawn
+        deliberately - amend the version that superseded it instead.
+        """
+        return self.status in (ContractStatus.SENT, ContractStatus.SIGNED, ContractStatus.DECLINED)
 
     def __repr__(self):
         return f'<Contract {self.contract_number}>'

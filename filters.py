@@ -4,15 +4,28 @@ from datetime import datetime
 from markupsafe import Markup, escape
 
 def status_badge(status):
-    """Convert a status name to a Bootstrap badge class"""
+    """Convert a ProjectStatus/TaskStatus (or its .name) to a Bootstrap badge class.
+
+    Accepts the enum member itself as well as the plain name string. Most call
+    sites pass the enum directly (`project.status|status_badge`) while a few
+    pass `.name` - and an enum member never matched a string key, so every one
+    of the former silently fell through to the default 'secondary' and every
+    project/task badge in the app rendered grey regardless of status. Reading
+    .name when it exists is what makes the map actually apply; the .name call
+    sites behave exactly as before.
+    """
     status_map = {
         'PENDING': 'secondary',
         'IN_PROGRESS': 'primary',
         'COMPLETED': 'success',
         'ON_HOLD': 'warning',
-        'CANCELLED': 'danger'
+        'CANCELLED': 'danger',
+        # TaskStatus members that ProjectStatus doesn't share.
+        'TODO': 'secondary',
+        'REVIEW': 'info',
     }
-    return status_map.get(status, 'secondary')
+    key = getattr(status, 'name', status)
+    return status_map.get(key, 'secondary')
 
 def nl2br(value):
     """Convert newlines to <br> tags.
@@ -41,6 +54,9 @@ def billing_status_badge(status):
         'signed': 'success',
         'declined': 'danger',
         'cancelled': 'danger',
+        # A withdrawn contract isn't a failure (that's 'declined', red) and
+        # isn't in play either - dark reads as "closed, deliberately".
+        'voided': 'dark',
     }
     return status_map.get(status, 'secondary')
 

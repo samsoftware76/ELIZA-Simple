@@ -67,6 +67,10 @@
         .status-banner.accepted, .status-banner.paid { background-color: #d4edda; color: #155724; }
         .status-banner.declined, .status-banner.cancelled { background-color: #f8d7da; color: #721c24; }
         .status-banner.sent { background-color: #fff3cd; color: #856404; }
+        /* Withdrawn by the sender - neutral grey rather than the red of a
+           decline: nothing went wrong on the client's side, the document was
+           simply pulled back before they signed it. */
+        .status-banner.voided { background-color: #e2e3e5; color: #383d41; }
         /* Flash-message toasts - deliberate duplicate of the main app's
            toast CSS (templates/base.html + static/css/custom.css): this
            portal is a standalone base by design and loads neither. */
