@@ -3,6 +3,7 @@ Builds the render context for the shared print/PDF view (templates/print/documen
 from a Quote or Invoice, used by both the staff-facing routes (api/billing.py) and the
 public client portal routes (api/portal.py) so both sides see the exact same document.
 """
+from models import User
 
 
 def build_print_context(doc, doc_type):
@@ -11,7 +12,11 @@ def build_print_context(doc, doc_type):
         doc: a Quote or Invoice instance
         doc_type (str): 'Quote' or 'Invoice'
     """
-    creator = doc.created_by
+    # business_name/business_logo_url are tenant-level fields only ever
+    # written onto the account owner's own row (see /profile) - a document
+    # created by a team member must resolve branding through get_owner_id()
+    # to the owner's row, not the creator's own (normally NULL) row.
+    creator = User.query.get(doc.created_by.get_owner_id()) if doc.created_by else None
     client = doc.client
 
     if doc_type == 'Quote':

@@ -90,28 +90,32 @@
            own - the freelancer marks the invoice paid themselves via the
            existing invoice_mark_paid route once the wire lands. Shown only
            if the invoice's owner has configured bank_name - an unconfigured
-           owner gets nothing here rather than an empty/broken section. #}
-        {% if invoice.created_by and invoice.created_by.bank_name %}
+           owner gets nothing here rather than an empty/broken section.
+           Reads off brand_owner (the tenant owner, resolved in api/portal.py
+           via get_owner_id()) rather than invoice.created_by directly - bank
+           details are a tenant-level setting that only ever lives on the
+           owner's row, not a team member's own (normally NULL) row. #}
+        {% if brand_owner and brand_owner.bank_name %}
         <hr class="my-4">
         <h5>Pay by Bank Transfer</h5>
         <p class="text-muted mb-2">Wire this amount to the account below, then contact us once sent &mdash; we'll mark this invoice paid once received.</p>
         <table class="table table-sm table-borderless mb-3" style="max-width: 420px;">
-            <tr><th class="text-nowrap">Bank Name</th><td>{{ invoice.created_by.bank_name }}</td></tr>
-            {% if invoice.created_by.bank_account_name %}
-            <tr><th class="text-nowrap">Account Name</th><td>{{ invoice.created_by.bank_account_name }}</td></tr>
+            <tr><th class="text-nowrap">Bank Name</th><td>{{ brand_owner.bank_name }}</td></tr>
+            {% if brand_owner.bank_account_name %}
+            <tr><th class="text-nowrap">Account Name</th><td>{{ brand_owner.bank_account_name }}</td></tr>
             {% endif %}
-            {% if invoice.created_by.bank_account_number %}
-            <tr><th class="text-nowrap">Account Number</th><td>{{ invoice.created_by.bank_account_number }}</td></tr>
+            {% if brand_owner.bank_account_number %}
+            <tr><th class="text-nowrap">Account Number</th><td>{{ brand_owner.bank_account_number }}</td></tr>
             {% endif %}
-            {% if invoice.created_by.bank_swift_code %}
-            <tr><th class="text-nowrap">SWIFT/BIC Code</th><td>{{ invoice.created_by.bank_swift_code }}</td></tr>
+            {% if brand_owner.bank_swift_code %}
+            <tr><th class="text-nowrap">SWIFT/BIC Code</th><td>{{ brand_owner.bank_swift_code }}</td></tr>
             {% endif %}
         </table>
-        {% set bank_transfer_total = invoice.total + (invoice.created_by.bank_transfer_fee or 0) %}
+        {% set bank_transfer_total = invoice.total + (brand_owner.bank_transfer_fee or 0) %}
         <p class="font-weight-bold">
             Amount to wire (includes bank transfer fee): {{ '%.2f'|format(bank_transfer_total) }} {{ invoice.currency }}
-            {% if invoice.created_by.bank_transfer_fee %}
-            <small class="text-muted font-weight-normal d-block">Includes a {{ '%.2f'|format(invoice.created_by.bank_transfer_fee) }} {{ invoice.currency }} bank transfer fee</small>
+            {% if brand_owner.bank_transfer_fee %}
+            <small class="text-muted font-weight-normal d-block">Includes a {{ '%.2f'|format(brand_owner.bank_transfer_fee) }} {{ invoice.currency }} bank transfer fee</small>
             {% endif %}
         </p>
         {% endif %}

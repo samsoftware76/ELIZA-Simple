@@ -4,6 +4,7 @@ Email utility functions for the ELIZA Project Management App
 import os
 from flask import render_template, current_app
 from flask_mail import Mail, Message
+from models import User
 import logging
 import os
 
@@ -293,7 +294,13 @@ def send_client_invite_email(invite, accept_url):
     recipients = [invite.invitee_email]
 
     try:
-        inviter_name = invite.inviter.business_name or invite.inviter.get_full_name()
+        # business_name is a tenant-level field only ever written onto the
+        # account owner's own row (see /profile) - client_invite_portal()
+        # lets any team member send this invite, so invite.inviter may be a
+        # team member whose own business_name is NULL. Resolve through
+        # get_owner_id() to the real owner's row before reading it.
+        owner = User.query.get(invite.inviter.get_owner_id())
+        inviter_name = (owner.business_name if owner else None) or invite.inviter.get_full_name()
         text_body = (
             f"Hello,\n\n"
             f"{inviter_name} has invited you to the client portal, where you can see your project status "

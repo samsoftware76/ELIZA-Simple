@@ -21,3 +21,9 @@ uploads/
 
 # Local debugging screenshots (not part of the app)
 /isssues/
+
+# One-off migration safety snapshots - these are raw dumps of live production
+# data (real customer names/emails/phones/addresses) taken before a schema
+# change, never application code. Keep them locally if useful, never commit -
+# git history is forever, and this repo may not always stay private.
+migration_backup_*.json

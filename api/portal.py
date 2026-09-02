@@ -13,7 +13,7 @@ complete payment on a different device than the one that opened the link.
 from datetime import datetime
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 
-from models import db
+from models import db, User
 from models.billing import Quote, Invoice, QuoteStatus, InvoiceStatus
 from api.payment import PesaPalPayment
 from utils.email_utils import send_quote_response_notification, send_invoice_paid_notification
@@ -51,7 +51,12 @@ def _split_name(full_name):
 def view_quote(token):
     """Client-facing quote view: accept or decline"""
     quote = Quote.query.filter_by(public_token=token).first_or_404()
-    return render_template('portal/quote.html', quote=quote, **_brand_context(quote.created_by))
+    # Branding is a tenant-level setting (see /profile) that only ever gets
+    # written onto the account owner's own row - a quote created by a team
+    # member must still resolve branding through get_owner_id() to the
+    # owner's row, or it silently falls back to generic 'ELIZA' branding.
+    owner = User.query.get(quote.created_by.get_owner_id()) if quote.created_by else None
+    return render_template('portal/quote.html', quote=quote, **_brand_context(owner))
 
 
 @portal_bp.route('/quote/<token>/print')
@@ -118,8 +123,14 @@ def view_invoice(token):
     """Client-facing invoice view: pay via PesaPal"""
     invoice = Invoice.query.filter_by(public_token=token).first_or_404()
     pesapal_configured = bool(pesapal.consumer_key and pesapal.consumer_secret)
+    # Branding and bank-transfer details are tenant-level settings (see
+    # /profile) that only ever get written onto the account owner's own row
+    # - an invoice created by a team member must still resolve them through
+    # get_owner_id() to the owner's row, or it silently falls back to
+    # generic 'ELIZA' branding with no bank-transfer section at all.
+    owner = User.query.get(invoice.created_by.get_owner_id()) if invoice.created_by else None
     return render_template('portal/invoice.html', invoice=invoice, pesapal_configured=pesapal_configured,
-                            **_brand_context(invoice.created_by))
+                            brand_owner=owner, **_brand_context(owner))
 
 
 @portal_bp.route('/invoice/<token>/print')
