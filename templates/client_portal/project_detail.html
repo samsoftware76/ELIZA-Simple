@@ -104,9 +104,12 @@
                         {% endif %}
 
                         <h6 class="fw-bold">Comments</h6>
-                        {% if task.comments %}
+                        {# Staff-only comments (is_internal=True) are never shown here at all,
+                           not even redacted - see Comment.is_internal in models/models.py. #}
+                        {% set visible_comments = task.comments|rejectattr('is_internal')|sort(attribute='created_at', reverse=True)|list %}
+                        {% if visible_comments %}
                         <ul class="list-group list-group-flush mb-3">
-                            {% for comment in task.comments|sort(attribute='created_at', reverse=True) %}
+                            {% for comment in visible_comments %}
                             <li class="list-group-item px-0">
                                 <div>
                                     <span class="fw-medium">{{ comment.author.username }}</span>

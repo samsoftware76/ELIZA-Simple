@@ -11,7 +11,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 
 from models import db
-from models.models import User, TeamMembership, TeamInvite, UserRole
+from models.models import User, TeamMembership, TeamInvite, UserRole, ActivityLog
 from models.subscription import Subscription
 from forms import TeamInviteForm
 from utils.email_utils import send_team_invite_email
@@ -73,13 +73,17 @@ def invite():
     owner_id = current_user.get_owner_id()
     form = TeamInviteForm()
     if form.validate_on_submit():
-        # Seat cap: active members + the owner themself + invites already
-        # pending (uninvited seats a pending invite could still fill) - all
-        # counted together so a burst of invites can't outrun a small cap
-        # by sending them before any is individually accepted.
+        # Seat cap: active members + invites already pending (uninvited seats
+        # a pending invite could still fill) - all counted together so a
+        # burst of invites can't outrun a small cap by sending them before
+        # any is individually accepted. The owner is NOT counted here -
+        # max_users is advertised everywhere (plan descriptions in
+        # api/subscription.py, the admin form field in forms.py, the pricing
+        # page in templates/landing.html) as how many people can be INVITED,
+        # not the account's total user count including the owner.
         active_member_count = TeamMembership.query.filter_by(account_owner_id=owner_id, is_active=True).count()
         pending_invite_count = TeamInvite.query.filter_by(inviter_id=owner_id, status='pending').count()
-        seats_used = active_member_count + 1 + pending_invite_count
+        seats_used = active_member_count + pending_invite_count
 
         # 0 means unlimited, and no active subscription also means
         # unlimited - same convention as SubscriptionPlan's other limits
@@ -90,6 +94,47 @@ def invite():
 
         if max_users and seats_used >= max_users:
             flash(f'You have reached your plan\'s limit of {max_users} team members. Upgrade your plan to invite more.', 'danger')
+            return redirect(url_for('team.dashboard'))
+
+        # An email that already has a User account can't go through the
+        # ordinary invite-by-email flow below: accept_invite() in
+        # api/index.py unconditionally refuses to create a second account
+        # for an email that already has one, so the TeamInvite created below
+        # would just sit at status='pending' forever with no signal to the
+        # owner that anything failed. Check up front instead.
+        existing_user = User.query.filter_by(email=form.email.data).first()
+        if existing_user:
+            # remove_member() only ever soft-deletes (is_active=False) and
+            # never touches the User row, so a previously-removed member of
+            # THIS SAME team still has their old TeamMembership row sitting
+            # inactive - reactivate it rather than trying to invite/create a
+            # second account for them. No new TeamInvite/email needed: the
+            # account already exists, it's simply being turned back on.
+            existing_membership = TeamMembership.query.filter_by(
+                account_owner_id=owner_id, member_user_id=existing_user.id
+            ).first()
+            if existing_membership:
+                existing_membership.is_active = True
+                existing_membership.role = UserRole[form.role.data]
+                activity = ActivityLog(
+                    user_id=current_user.id,
+                    owner_id=owner_id,  # tenant isolation: activity log entries belong to the acting tenant
+                    action_type='re-added',
+                    entity_type='team_membership',
+                    entity_id=existing_membership.id,
+                    description=f'Re-added {existing_user.email} to the team'
+                )
+                db.session.add(activity)
+                db.session.commit()
+                flash(f'{existing_user.email} has been re-added to your team.', 'success')
+                return redirect(url_for('team.dashboard'))
+
+            # No membership under THIS owner at all - some other, unrelated
+            # platform account (e.g. someone else's own tenant). Refuse
+            # clearly rather than repeat the silent pending-forever dead end
+            # above. Doesn't solve the harder case of merging platform
+            # accounts - that's out of scope here.
+            flash('An account with this email already exists on ELIZA and cannot be invited as a new team member.', 'danger')
             return redirect(url_for('team.dashboard'))
 
         team_invite = TeamInvite(

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}No Access{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm">
+        <div class="card-body text-center py-5">
+            <h1 class="mb-3">Access No Longer Available</h1>
+            <p class="text-muted mb-4">
+                Your portal access has been removed. If you believe this is a
+                mistake, please contact the business that invited you.
+            </p>
+            <a href="{{ url_for('logout') }}" class="btn btn-primary">Log Out</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

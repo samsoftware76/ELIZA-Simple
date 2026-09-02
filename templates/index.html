@@ -47,7 +47,10 @@
         {% elif active_subscription and active_subscription.is_active and not active_subscription.is_trial %}
             <div class="alert alert-success mt-4">
                 <h4 class="alert-heading mb-1">{{ active_subscription.plan.name }} Plan Active</h4>
-                <p class="mb-0">Your subscription is active until {{ active_subscription.end_date.strftime('%B %d, %Y') }}.</p>
+                {# end_date is nullable (e.g. a plan with no fixed term) - unconditionally
+                   calling .strftime() on None 500s the whole homepage, found while auditing
+                   an unrelated bug this session. #}
+                <p class="mb-0">Your subscription is active{% if active_subscription.end_date %} until {{ active_subscription.end_date.strftime('%B %d, %Y') }}{% endif %}.</p>
             </div>
         {% endif %}
         <div class="mt-4">

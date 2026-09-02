@@ -473,9 +473,16 @@ class Comment(db.Model):
     content = db.Column(db.Text, nullable=False)
     task_id = db.Column(db.Integer, db.ForeignKey('tasks.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # Staff-only vs client-visible. Defaults to True (internal) as the safe
+    # default - an accidental leak of an internal note to a client is worse
+    # than an extra click to mark one shareable. A client-authored comment
+    # (api/client_portal.py add_comment) always sets this False instead: a
+    # client wrote it themselves, so there is no "internal" concept from
+    # their side. See migrations/add_comment_is_internal.py.
+    is_internal = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     author = db.relationship('User', backref='comments')
     

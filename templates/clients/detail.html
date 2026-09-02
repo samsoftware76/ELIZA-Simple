@@ -44,7 +44,14 @@
         </div>
         <div class="card-body">
             {% if client.user_id %}
-                <p class="text-success mb-0"><i class="fas fa-check-circle"></i> Portal access: active</p>
+                <p class="text-success"><i class="fas fa-check-circle"></i> Portal access: active</p>
+                <form method="POST" action="{{ url_for('client_revoke_portal_access', client_id=client.id) }}"
+                      onsubmit="return confirmAndDisable(this, 'Revoke portal access for ' + '{{ client.name }}' + '? They will no longer be able to log in and view this project.')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm mb-0">
+                        <i class="fas fa-user-slash"></i> Revoke Portal Access
+                    </button>
+                </form>
             {% elif pending_invite %}
                 <p class="text-muted mb-0"><i class="fas fa-clock"></i> Invite sent, awaiting response.</p>
             {% elif client.email %}

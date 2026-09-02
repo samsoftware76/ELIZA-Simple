@@ -27,13 +27,39 @@ client_portal_bp = Blueprint('client_portal', __name__, url_prefix='/my')
 
 def _client_or_redirect():
     """Returns (client, None) for a valid CLIENT login, or (None, redirect)
-    if this route was reached some other way. Redirects to 'home' rather
-    than back into this blueprint - a non-CLIENT/unlinked login has no
-    client record to loop back to here."""
+    if this route was reached some other way.
+
+    Redirects to 'client_portal.no_access' rather than 'home' - a CLIENT-role
+    login with no client record to resolve (current_user.client_login is
+    None, e.g. its Client row was deleted, or its portal access was revoked
+    some other way) would otherwise bounce straight back here from home()
+    via the before_request gate (restrict_client_role_to_portal in
+    api/index.py), which only lets CLIENT roles out to endpoints starting
+    with 'client_portal.' - home is not one of them, so the two redirects
+    loop forever. no_access below is in the gate's exempt list precisely so
+    this redirect actually lands somewhere instead of bouncing straight back.
+    A non-CLIENT role reaching this blueprint at all (the gate only keeps
+    CLIENT roles *in* here, it doesn't stop other roles from wandering in)
+    also ends up here, which is a harmless slightly-wrong message for that
+    case but not a loop.
+    """
     if current_user.role != UserRole.CLIENT or current_user.client_login is None:
         flash('That page is not available for your account.', 'danger')
-        return None, redirect(url_for('home'))
+        return None, redirect(url_for('client_portal.no_access'))
     return current_user.client_login, None
+
+
+@client_portal_bp.route('/no-access')
+@login_required
+def no_access():
+    """Dedicated landing page for a CLIENT-role login that no longer resolves
+    to a Client record (see _client_or_redirect above) - exists purely so
+    that dead end has somewhere to go besides looping with home(). Must be
+    in the before_request gate's exempt list (api/index.py) alongside the
+    rest of this blueprint, and reachable without a valid client_login itself
+    (it doesn't call _client_or_redirect) since resolving to None is exactly
+    the case it exists to handle."""
+    return render_template('client_portal/no_access.html')
 
 
 @client_portal_bp.route('')
@@ -122,8 +148,11 @@ def add_comment(task_id):
 
     # Comment.author works with any User regardless of role - a client's
     # comment renders the same way as staff comments on the staff-side task
-    # detail page.
-    comment = Comment(task_id=task.id, user_id=current_user.id, content=content)
+    # detail page. is_internal is always False here - there's no "internal"
+    # concept from the client's side, they wrote it themselves so it's
+    # obviously meant to be seen (see Comment.is_internal in
+    # models/models.py).
+    comment = Comment(task_id=task.id, user_id=current_user.id, content=content, is_internal=False)
     db.session.add(comment)
     db.session.commit()
 

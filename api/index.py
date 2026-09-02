@@ -156,6 +156,11 @@ def restrict_client_role_to_portal():
         return
     if request.endpoint == 'static' or request.endpoint == 'logout':
         return
+    # Exempts the whole client_portal blueprint, including
+    # client_portal.no_access - the safety-net page an orphaned CLIENT login
+    # (client_login resolves to None) gets redirected to instead of home, so
+    # it must stay reachable here or that redirect loops right back into this
+    # gate. See client_portal._client_or_redirect().
     if request.endpoint.startswith('client_portal.'):
         return
     return redirect(url_for('client_portal.dashboard'))
@@ -688,6 +693,40 @@ def client_invite_portal(client_id):
     flash(f'Portal invite sent to {client.email}.', 'success')
     return redirect(url_for('client_detail', client_id=client.id))
 
+@app.route('/clients/<int:client_id>/revoke-portal-access', methods=['POST'])
+@login_required
+def client_revoke_portal_access(client_id):
+    """Unlink a client's portal login, the counterpart client_delete() now
+    demands before it will delete a client with active portal access (see
+    the comment there). Does NOT delete the underlying User row - the
+    (now-orphaned) login just falls back to the client_portal.no_access
+    safety-net page on their next visit, same as any other orphaned
+    CLIENT-role login, rather than being deleted outright."""
+    client = Client.query.get_or_404(client_id)
+    if client.owner_id != current_user.get_owner_id():
+        abort(404)
+
+    if client.user_id is None:
+        flash(f'{client.name} does not have portal access.', 'info')
+        return redirect(url_for('client_detail', client_id=client.id))
+
+    client.user_id = None
+    db.session.commit()
+
+    activity = ActivityLog(
+        user_id=current_user.id,
+        owner_id=current_user.get_owner_id(),
+        action_type='updated',
+        entity_type='client',
+        entity_id=client.id,
+        description=f'Revoked portal access for client: {client.name}'
+    )
+    db.session.add(activity)
+    db.session.commit()
+
+    flash(f'Portal access revoked for {client.name}.', 'success')
+    return redirect(url_for('client_detail', client_id=client.id))
+
 @app.route('/clients/<int:client_id>/send-sms', methods=['POST'])
 @login_required
 def client_send_sms(client_id):
@@ -756,12 +795,24 @@ def client_delete(client_id):
     if client.owner_id != current_user.get_owner_id():
         abort(404)
     client_name = client.name
-    
+
     # Check if client has associated projects
     if client.projects:
         flash(f'Cannot delete client "{client_name}" because it has associated projects. Please delete or reassign the projects first.', 'danger')
         return redirect(url_for('client_detail', client_id=client.id))
-    
+
+    # Refuse rather than orphan an active portal login: deleting the Client
+    # row out from under a CLIENT-role User that still points at it
+    # (client.user_id set) leaves valid credentials with nowhere to resolve -
+    # current_user.client_login becomes None on next login, which used to
+    # send that login into an infinite redirect loop between the staff gate
+    # and the portal blueprint (see client_portal._client_or_redirect and its
+    # /my/no-access fallback below for the safety net covering any other way
+    # a login ends up orphaned).
+    if client.user_id is not None:
+        flash(f'Cannot delete client "{client_name}" because it has an active portal login. Revoke their portal access first.', 'danger')
+        return redirect(url_for('client_detail', client_id=client.id))
+
     # Log the activity before deleting the client
     activity = ActivityLog(
         user_id=current_user.id,
@@ -1598,15 +1649,23 @@ def task_add_comment(task_id):
     if task.project.owner_id != current_user.get_owner_id():
         abort(404)
     content = request.form.get('content')
-    
+
     if not content:
         flash('Comment content is required.', 'danger')
         return redirect(url_for('task_detail', task_id=task_id))
-    
+
+    # Checkbox default-checked in the template (templates/tasks/detail.html) -
+    # an unchecked box simply omits the field from form data entirely, so its
+    # absence (not an explicit 'false' value) means "internal". See
+    # Comment.is_internal in models/models.py for why internal is the safe
+    # default.
+    is_internal = request.form.get('is_internal') is not None
+
     comment = Comment(
         task_id=task_id,
         user_id=current_user.id,
-        content=content
+        content=content,
+        is_internal=is_internal
     )
     
     try:

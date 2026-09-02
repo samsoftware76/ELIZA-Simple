@@ -131,6 +131,12 @@
                             <div class="mb-3">
                                 <textarea name="content" class="form-control" rows="3" placeholder="Write your comment here..." required></textarea>
                             </div>
+                            <div class="form-check mb-3">
+                                <input type="checkbox" class="form-check-input" id="commentIsInternal" name="is_internal" checked>
+                                <label class="form-check-label" for="commentIsInternal">
+                                    Internal note (not visible to client)
+                                </label>
+                            </div>
                             <div class="text-end">
                                 <button type="submit" class="btn btn-primary">Post Comment</button>
                             </div>
@@ -146,6 +152,11 @@
                                 <div>
                                     <span class="fw-medium">{{ comment.author.username }}</span>
                                     <small class="text-muted ms-2">{{ comment.created_at.strftime('%b %d, %Y %H:%M') }}</small>
+                                    {% if comment.is_internal %}
+                                    <span class="badge bg-secondary ms-2">Internal</span>
+                                    {% else %}
+                                    <span class="badge bg-success ms-2">Visible to client</span>
+                                    {% endif %}
                                 </div>
                                 {% if current_user.id == comment.user_id %}
                                 <a href="{{ url_for('task_delete_comment', task_id=task.id, comment_id=comment.id) }}" class="text-danger"
