@@ -71,9 +71,53 @@ def timeago(value):
         return f'{days} days ago'
     return value.strftime('%b %d, %Y')
 
+def approx_display(amount, from_currency):
+    """Approximate display-currency equivalent, e.g. "~ USD 135.20" - or ''.
+
+    Display-layer ONLY (see User.display_currency in models/models.py): the
+    real amount is always rendered by the template itself, this only supplies
+    the muted approximate text shown NEXT TO it. Returns '' (never an error,
+    never an unmarked stale fabrication) unless ALL of:
+    - current_user is authenticated and has display_currency set on their
+      OWN row (a personal preference, deliberately not owner-resolved),
+    - display_currency differs from the amount's real currency,
+    - amount is a real number,
+    - a live-ish rate is available (utils/exchange_rates.get_rate returns
+      None on any failure, which simply hides the conversion).
+
+    Safe to call inside table loops: get_rate() hits a module-level cache,
+    so a whole request costs at most one rate lookup per distinct
+    (from_currency, display_currency) pair, not one per row.
+    """
+    from flask_login import current_user
+    from utils.exchange_rates import get_rate
+    try:
+        if not current_user.is_authenticated:
+            return ''
+        to_currency = getattr(current_user, 'display_currency', None)
+        if not to_currency or not from_currency:
+            return ''
+        if str(to_currency).upper() == str(from_currency).upper():
+            return ''
+        if amount is None:
+            return ''
+        amount = float(amount)
+        rate = get_rate(from_currency, to_currency)
+        if rate is None:
+            return ''
+        return f"~ {to_currency} {amount * rate:,.2f}"
+    except Exception:
+        # A display nicety must never be the thing that 500s a money page.
+        return ''
+
+
 def register_filters(app):
     """Register all filters with the Flask app"""
     app.jinja_env.filters['status_badge'] = status_badge
     app.jinja_env.filters['nl2br'] = nl2br
     app.jinja_env.filters['billing_status_badge'] = billing_status_badge
     app.jinja_env.filters['timeago'] = timeago
+    # A global (not a filter): called as approx_display(amount, currency) in
+    # templates next to real amounts. Returns '' whenever no conversion
+    # should be shown, so call sites just {% if %} on the result.
+    app.jinja_env.globals['approx_display'] = approx_display

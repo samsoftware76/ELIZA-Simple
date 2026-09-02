@@ -246,6 +246,7 @@ def home():
                 outstanding_by_currency.items(), key=lambda kv: kv[1])
             outstanding_display = f"{dominant_currency} {dominant_amount:,.2f}"
         else:
+            dominant_currency, dominant_amount = None, None
             outstanding_display = '0.00'
         extra_currencies = max(len(outstanding_by_currency) - 1, 0)
 
@@ -301,6 +302,11 @@ def home():
             'outstanding_display': outstanding_display,
             'outstanding_invoice_count': len(sent_invoices),
             'extra_currencies': extra_currencies,
+            # Raw dominant amount + currency (None/None when nothing is
+            # outstanding) so the template can offer the display-currency
+            # approx text via approx_display() next to the real figure.
+            'outstanding_currency': dominant_currency,
+            'outstanding_amount': dominant_amount,
             'hours_this_month': round(hours_this_month, 1),
             'month_name': today.strftime('%B'),
             'overdue_count': overdue_count,
@@ -534,6 +540,10 @@ def profile_account():
         current_user.first_name = form.first_name.data
         current_user.last_name = form.last_name.data
         current_user.phone = form.phone.data or None
+        # Personal display-currency preference - own row, display-layer only
+        # (see User.display_currency). The "None (off)" choice submits '' -
+        # store NULL so "off" is one value, matching the other SelectFields.
+        current_user.display_currency = form.display_currency.data or None
         db.session.commit()
         flash('Account details updated.', 'success')
         return redirect(url_for('profile'))

@@ -101,6 +101,18 @@ class User(db.Model, UserMixin):
     default_currency = db.Column(db.String(10))
     default_tax_rate = db.Column(db.Float)
     default_payment_terms_days = db.Column(db.Integer)
+    # PERSONAL display-currency preference (see migrations/add_display_currency.py).
+    # Explicitly NOT owner-resolved, unlike business_name/bank_*/default_* above:
+    # this lives on the user's OWN row and is read directly off current_user,
+    # never through get_owner_id() - a team member can view amounts in their
+    # own currency without changing anything about the tenant's data. Purely
+    # display-layer: stored currencies, PesaPal charges, and every real amount
+    # stay exactly as they are; when set, staff pages show an approximate
+    # converted equivalent NEXT TO the real amount (see filters.approx_display
+    # and utils/exchange_rates.py). NULL means "off" - no conversions shown.
+    # Holds one of forms.DISPLAY_CURRENCY_CHOICES' codes (a deliberately wider
+    # list than the document-currency CURRENCY_CHOICES).
+    display_currency = db.Column(db.String(10))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

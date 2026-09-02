@@ -22,8 +22,12 @@
             <div class="card-body">
                 <div class="dash-kpi-label">Collected (all time)</div>
                 {% if wallet.collected %}
+                    {# Real per-currency amount first; the muted "(~ ...)" is the
+                       viewer's personal display-currency approximation and is
+                       simply absent when off / same currency / no rate. #}
                     {% for code, bucket in wallet.collected.items() %}
-                        <div class="dash-kpi-value wallet-kpi-line">{{ code }} {{ '{:,.2f}'.format(bucket.amount) }}</div>
+                        {% set line_approx = approx_display(bucket.amount, code) %}
+                        <div class="dash-kpi-value wallet-kpi-line">{{ code }} {{ '{:,.2f}'.format(bucket.amount) }}{% if line_approx %} <small class="text-muted">({{ line_approx }})</small>{% endif %}</div>
                     {% endfor %}
                     <div class="dash-kpi-sub">{{ wallet.collected_count }} payment{% if wallet.collected_count != 1 %}s{% endif %} recorded as paid</div>
                 {% else %}
@@ -39,7 +43,8 @@
                 <div class="dash-kpi-label">Collected this month</div>
                 {% if wallet.collected_month %}
                     {% for code, bucket in wallet.collected_month.items() %}
-                        <div class="dash-kpi-value wallet-kpi-line">{{ code }} {{ '{:,.2f}'.format(bucket.amount) }}</div>
+                        {% set line_approx = approx_display(bucket.amount, code) %}
+                        <div class="dash-kpi-value wallet-kpi-line">{{ code }} {{ '{:,.2f}'.format(bucket.amount) }}{% if line_approx %} <small class="text-muted">({{ line_approx }})</small>{% endif %}</div>
                     {% endfor %}
                     {% set month_count = wallet.collected_month.values()|map(attribute='count')|sum %}
                     <div class="dash-kpi-sub">{{ month_count }} payment{% if month_count != 1 %}s{% endif %} this calendar month</div>
@@ -56,7 +61,8 @@
                 <div class="dash-kpi-label">Outstanding</div>
                 {% if wallet.outstanding %}
                     {% for code, bucket in wallet.outstanding.items() %}
-                        <div class="dash-kpi-value wallet-kpi-line">{{ code }} {{ '{:,.2f}'.format(bucket.amount) }}</div>
+                        {% set line_approx = approx_display(bucket.amount, code) %}
+                        <div class="dash-kpi-value wallet-kpi-line">{{ code }} {{ '{:,.2f}'.format(bucket.amount) }}{% if line_approx %} <small class="text-muted">({{ line_approx }})</small>{% endif %}</div>
                     {% endfor %}
                     <div class="dash-kpi-sub">
                         {{ wallet.outstanding_count }} invoice{% if wallet.outstanding_count != 1 %}s{% endif %} awaiting payment{% if wallet.overdue_count > 0 %} &middot; {{ wallet.overdue_count }} overdue{% endif %}
@@ -95,7 +101,10 @@
                                 <tr>
                                     <td><a href="{{ url_for('billing.invoice_detail', invoice_id=invoice.id) }}">{{ invoice.invoice_number }}</a></td>
                                     <td>{{ invoice.client.name }}</td>
-                                    <td class="text-right">{{ invoice.currency }} {{ '{:,.2f}'.format(invoice.total) }}</td>
+                                    {# Loop-safe: approx_display's rate lookups are cached per
+                                       currency pair per process, not fetched per row. #}
+                                    {% set row_approx = approx_display(invoice.total, invoice.currency) %}
+                                    <td class="text-right">{{ invoice.currency }} {{ '{:,.2f}'.format(invoice.total) }}{% if row_approx %} <small class="text-muted text-nowrap d-block">({{ row_approx }})</small>{% endif %}</td>
                                     <td>{{ invoice.payment_method or '—' }}</td>
                                     <td>
                                         {% if invoice.paid_at %}

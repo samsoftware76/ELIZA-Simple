@@ -32,7 +32,11 @@
                             <td><a href="{{ url_for('billing.quote_detail', quote_id=quote.id) }}">{{ quote.quote_number }}</a></td>
                             <td>{{ quote.client.name }}</td>
                             <td>{{ quote.title }}</td>
-                            <td>{{ '%.2f'|format(quote.total) }} {{ quote.currency }}</td>
+                            {# Real amount first; muted approx equivalent (viewer's personal
+                               display_currency) only when approx_display returns non-empty.
+                               Loop-safe: rates are cached per currency pair per process. #}
+                            {% set total_approx = approx_display(quote.total, quote.currency) %}
+                            <td>{{ '%.2f'|format(quote.total) }} {{ quote.currency }}{% if total_approx %} <small class="text-muted text-nowrap">({{ total_approx }})</small>{% endif %}</td>
                             <td>
                                 <span class="badge badge-{{ quote.status|billing_status_badge }}">{{ quote.status|capitalize }}</span>
                                 {% if quote.is_expired %}<span class="badge badge-warning">Expired</span>{% endif %}

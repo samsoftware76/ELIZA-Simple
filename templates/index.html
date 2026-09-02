@@ -104,6 +104,13 @@
                     <div class="card-body">
                         <div class="dash-kpi-label">Outstanding invoices</div>
                         <div class="dash-kpi-value">{{ stats.outstanding_display }}</div>
+                        {# Display-only approximation of the dominant real amount above, in the
+                           viewer's personal display_currency - absent when off / same
+                           currency / no rate available (approx_display returns ''). #}
+                        {% set outstanding_approx = approx_display(stats.outstanding_amount, stats.outstanding_currency) %}
+                        {% if outstanding_approx %}
+                            <div class="dash-kpi-sub text-muted">({{ outstanding_approx }})</div>
+                        {% endif %}
                         <div class="dash-kpi-sub">
                             {% if stats.outstanding_invoice_count > 0 %}
                                 {{ stats.outstanding_invoice_count }} invoice{% if stats.outstanding_invoice_count != 1 %}s{% endif %} awaiting payment{% if stats.extra_currencies > 0 %} &middot; +{{ stats.extra_currencies }} more currenc{% if stats.extra_currencies != 1 %}ies{% else %}y{% endif %}{% endif %}

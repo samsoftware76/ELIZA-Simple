@@ -31,7 +31,11 @@
                             <td><a href="{{ url_for('billing.invoice_detail', invoice_id=invoice.id) }}">{{ invoice.invoice_number }}</a></td>
                             <td>{{ invoice.client.name }}</td>
                             <td>{{ invoice.title }}</td>
-                            <td>{{ '%.2f'|format(invoice.total) }} {{ invoice.currency }}</td>
+                            {# Real amount first; muted approx equivalent (viewer's personal
+                               display_currency) only when approx_display returns non-empty.
+                               Loop-safe: rates are cached per currency pair per process. #}
+                            {% set total_approx = approx_display(invoice.total, invoice.currency) %}
+                            <td>{{ '%.2f'|format(invoice.total) }} {{ invoice.currency }}{% if total_approx %} <small class="text-muted text-nowrap">({{ total_approx }})</small>{% endif %}</td>
                             <td>
                                 {% if invoice.due_date %}
                                     <span class="{% if invoice.is_overdue %}text-danger font-weight-bold{% endif %}">{{ invoice.due_date.strftime('%b %d, %Y') }}</span>

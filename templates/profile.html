@@ -60,6 +60,18 @@
                             <div class="text-danger small">{{ error }}</div>
                         {% endfor %}
                     </div>
+                    {# Personal viewing preference (own row) - display-layer
+                       only, deliberately on THIS card and not the tenant
+                       invoice-defaults card: it never changes any stored
+                       amount, document currency, or what clients pay. #}
+                    <div class="form-group">
+                        {{ account_form.display_currency.label }}
+                        {{ account_form.display_currency(class="form-control") }}
+                        <small class="form-text text-muted">{{ account_form.display_currency.description }}</small>
+                        {% for error in account_form.display_currency.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
                     {{ account_form.submit(class="btn btn-primary") }}
                 </form>
             </div>

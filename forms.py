@@ -165,6 +165,19 @@ class PasswordResetForm(FlaskForm):
 # class-definition time.
 CURRENCY_CHOICES = [('USD', 'USD'), ('UGX', 'UGX'), ('EUR', 'EUR'), ('GBP', 'GBP'), ('KES', 'KES')]
 
+# Display-currency choices for the personal viewing preference on the
+# /profile ACCOUNT card (User.display_currency) - a deliberately SEPARATE,
+# wider list than CURRENCY_CHOICES above. CURRENCY_CHOICES is what a quote/
+# invoice can actually be DENOMINATED in (and what PesaPal is asked to
+# charge), and must not be silently widened by a display feature; this list
+# only controls which approximate equivalent a user likes to see next to
+# real amounts, so it can safely cover more of the world.
+DISPLAY_CURRENCY_CHOICES = CURRENCY_CHOICES + [
+    ('CNY', 'CNY'), ('INR', 'INR'), ('AED', 'AED'), ('ZAR', 'ZAR'),
+    ('NGN', 'NGN'), ('TZS', 'TZS'), ('RWF', 'RWF'), ('CAD', 'CAD'),
+    ('AUD', 'AUD'), ('JPY', 'JPY'),
+]
+
 
 # ---------------------------------------------------------------------------
 # /profile card forms. Deliberately ONE FlaskForm class PER CARD, each POSTed
@@ -185,6 +198,16 @@ class AccountDetailsForm(FlaskForm):
     first_name = StringField('First Name', validators=[DataRequired(), Length(max=50)])
     last_name = StringField('Last Name', validators=[DataRequired(), Length(max=50)])
     phone = StringField('Phone Number', validators=[Optional(), Length(max=20)])
+    # Personal display-currency preference (User.display_currency, own row -
+    # correctly on THIS card, not the tenant-level invoice-defaults card).
+    # Display-layer only: shows an approximate converted equivalent next to
+    # real amounts on staff pages, never changes any stored amount or what
+    # PesaPal charges. Choices come from DISPLAY_CURRENCY_CHOICES, the wide
+    # display-only list - NOT CURRENCY_CHOICES, which stays the narrow
+    # document-currency list.
+    display_currency = SelectField('Display Currency', validators=[Optional()],
+                                    choices=[('', 'None (off)')] + DISPLAY_CURRENCY_CHOICES,
+                                    description="Show an approximate equivalent in this currency next to amounts. Display only - never changes real amounts or what clients are charged.")
     submit = SubmitField('Save Account')
 
 

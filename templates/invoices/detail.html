@@ -69,7 +69,11 @@
                         <tfoot>
                             <tr><td colspan="3" class="text-end">Subtotal</td><td class="text-end">{{ '%.2f'|format(invoice.subtotal) }}</td></tr>
                             <tr><td colspan="3" class="text-end">Tax ({{ invoice.tax_rate|round(2) }}%)</td><td class="text-end">{{ '%.2f'|format(invoice.tax_amount) }}</td></tr>
-                            <tr class="font-weight-bold"><td colspan="3" class="text-end">Total</td><td class="text-end">{{ '%.2f'|format(invoice.total) }} {{ invoice.currency }}</td></tr>
+                            {# approx_display: real amount always first; the muted "(~ XXX 0.00)" is a
+                               display-only approximation from the viewer's personal display_currency
+                               preference - empty string (nothing shown) when off/same-currency/no rate. #}
+                            {% set total_approx = approx_display(invoice.total, invoice.currency) %}
+                            <tr class="font-weight-bold"><td colspan="3" class="text-end">Total</td><td class="text-end">{{ '%.2f'|format(invoice.total) }} {{ invoice.currency }}{% if total_approx %} <small class="text-muted font-weight-normal d-block">({{ total_approx }})</small>{% endif %}</td></tr>
                         </tfoot>
                     </table>
                 </div>
