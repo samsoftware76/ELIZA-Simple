@@ -16,6 +16,10 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from models import db, User
 from models.billing import Quote, Invoice, QuoteStatus, InvoiceStatus
 from api.payment import PesaPalPayment
+# Safe import direction: billing.py never imports portal.py (index.py loads
+# billing first, then portal), so pulling the shared conversion core from
+# there cannot become circular.
+from api.billing import create_invoice_from_quote
 from utils.email_utils import send_quote_response_notification, send_invoice_paid_notification
 from utils.document_print import build_print_context
 from utils.analytics import log_event
@@ -77,12 +81,34 @@ def accept_quote(token):
     try:
         quote.status = QuoteStatus.ACCEPTED
         quote.responded_at = datetime.utcnow()
+
+        # Auto-create the invoice so the client can pay immediately instead of
+        # waiting for the freelancer to convert + send manually. Double-submit /
+        # back-button safety: if this quote already has an invoice (from a
+        # previous accept or a manual staff conversion), reuse the first one
+        # rather than creating a duplicate.
+        invoice = quote.invoices[0] if quote.invoices else None
+        invoice_created = invoice is None
+        if invoice_created:
+            # No logged-in current_user here - portal.py is public - so the
+            # quote's own creator is the staff actor the invoice belongs to.
+            invoice = create_invoice_from_quote(quote, quote.created_by_id)
+        if invoice.status == InvoiceStatus.DRAFT:
+            # Presented for payment right now, so it must satisfy is_payable
+            # (status == sent - see models/billing.py). due_date stays unset,
+            # same as the staff convert route leaves it.
+            invoice.status = InvoiceStatus.SENT
+            invoice.sent_at = datetime.utcnow()
+
         db.session.commit()
         # No logged-in current_user here - portal.py is public - so the quote's
-        # own creator is the user_id this event is attributed to.
+        # own creator is the user_id these events are attributed to.
         log_event('quote_accepted', user_id=quote.created_by_id, quote_id=quote.id)
-        send_quote_response_notification(quote)
-        flash('Thank you! The quote has been accepted.', 'success')
+        if invoice_created:
+            log_event('invoice_created', user_id=quote.created_by_id, invoice_id=invoice.id, quote_id=quote.id)
+        send_quote_response_notification(quote, invoice=invoice)
+        flash('Quote accepted - you can pay this invoice below.', 'success')
+        return redirect(url_for('portal.view_invoice', token=invoice.public_token))
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error accepting quote {token}: {str(e)}")

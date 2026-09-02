@@ -6,7 +6,14 @@
 <div class="card shadow-sm">
     <div class="card-body p-4">
         {% if quote.status == 'accepted' %}
-            <div class="status-banner accepted"><i class="fas fa-check-circle mr-2"></i>You accepted this quote{% if quote.responded_at %} on {{ quote.responded_at.strftime('%B %d, %Y') }}{% endif %}.</div>
+            <div class="status-banner accepted">
+                <i class="fas fa-check-circle mr-2"></i>You accepted this quote{% if quote.responded_at %} on {{ quote.responded_at.strftime('%B %d, %Y') }}{% endif %}.
+                {% if quote.invoices %}
+                <a href="{{ url_for('portal.view_invoice', token=quote.invoices[0].public_token) }}" class="btn btn-sm btn-success ml-2">
+                    <i class="fas fa-file-invoice-dollar mr-1"></i>View &amp; pay invoice
+                </a>
+                {% endif %}
+            </div>
         {% elif quote.status == 'declined' %}
             <div class="status-banner declined"><i class="fas fa-times-circle mr-2"></i>You declined this quote{% if quote.responded_at %} on {{ quote.responded_at.strftime('%B %d, %Y') }}{% endif %}.</div>
         {% elif quote.is_expired %}

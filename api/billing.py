@@ -44,6 +44,42 @@ def parse_line_items(form):
     return items
 
 
+def create_invoice_from_quote(quote, created_by_id):
+    """Shared core of quote -> invoice conversion, used by both the staff
+    convert route below and the client portal's accept-and-pay flow
+    (api/portal.py imports this; billing.py must never import portal.py or
+    that becomes circular).
+
+    Copies title/currency/tax/notes and every line item, links the invoice
+    back to the quote, and assigns the INV-xxxxx number. Adds to the session
+    and flushes (so invoice.id/number exist) but does NOT commit - the caller
+    owns the transaction and decides status/sent_at before committing.
+    """
+    invoice = Invoice(
+        invoice_number='PENDING',
+        client_id=quote.client_id,
+        project_id=quote.project_id,
+        quote_id=quote.id,
+        created_by_id=created_by_id,
+        title=quote.title,
+        currency=quote.currency,
+        tax_rate=quote.tax_rate,
+        notes=quote.notes,
+    )
+    db.session.add(invoice)
+    db.session.flush()  # assigns invoice.id for numbering, still inside the transaction
+    invoice.invoice_number = f"INV-{invoice.id:05d}"
+
+    for item in quote.items:
+        db.session.add(InvoiceItem(
+            invoice_id=invoice.id,
+            description=item.description,
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+        ))
+    return invoice
+
+
 # --------------------------------------------------------------------------
 # Quotes
 # --------------------------------------------------------------------------
@@ -241,29 +277,7 @@ def quote_convert_to_invoice(quote_id):
         return redirect(url_for('billing.quote_detail', quote_id=quote.id))
 
     try:
-        invoice = Invoice(
-            invoice_number='PENDING',
-            client_id=quote.client_id,
-            project_id=quote.project_id,
-            quote_id=quote.id,
-            created_by_id=current_user.id,
-            title=quote.title,
-            currency=quote.currency,
-            tax_rate=quote.tax_rate,
-            notes=quote.notes,
-        )
-        db.session.add(invoice)
-        db.session.flush()
-        invoice.invoice_number = f"INV-{invoice.id:05d}"
-
-        for item in quote.items:
-            db.session.add(InvoiceItem(
-                invoice_id=invoice.id,
-                description=item.description,
-                quantity=item.quantity,
-                unit_price=item.unit_price,
-            ))
-
+        invoice = create_invoice_from_quote(quote, current_user.id)
         db.session.commit()
         flash(f'Invoice {invoice.invoice_number} created from quote {quote.quote_number}. Review it before sending.', 'success')
         return redirect(url_for('billing.invoice_edit', invoice_id=invoice.id))

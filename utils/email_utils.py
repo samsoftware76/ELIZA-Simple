@@ -380,12 +380,16 @@ def send_invoice_email(invoice, portal_url):
         logger.error(f"Failed to send invoice email for {invoice.invoice_number}: {str(e)}")
 
 
-def send_quote_response_notification(quote):
+def send_quote_response_notification(quote, invoice=None):
     """
     Notify the staff member who created a quote that the client has responded to it.
 
     Args:
         quote: The Quote object (status already updated to accepted/declined)
+        invoice: Optional Invoice auto-created from the quote when the client
+            accepted via the portal (see api/portal.py accept_quote) -
+            mentioned in the email so the freelancer knows an invoice was
+            auto-generated and payment was already offered to the client.
     """
     if not quote.created_by or not quote.created_by.email:
         logger.warning(f"Cannot notify quote {quote.quote_number} response: no creator email")
@@ -400,6 +404,8 @@ def send_quote_response_notification(quote):
             f"Hello {quote.created_by.first_name},\n\n"
             f"{quote.client.name} has {'accepted' if accepted else 'declined'} quote {quote.quote_number}: {quote.title}\n"
             + (f"Reason given: {quote.decline_reason}\n" if not accepted and quote.decline_reason else "")
+            + (f"\nInvoice {invoice.invoice_number} was auto-generated from this quote and presented to the client for payment.\n"
+               f"View the invoice here: {current_app.config['BASE_URL']}/invoices/{invoice.id}\n" if accepted and invoice else "")
             + f"\nView it here: {current_app.config['BASE_URL']}/quotes/{quote.id}\n\n"
             f"Thank you,\nELIZA Project Management System"
         )
@@ -407,6 +413,7 @@ def send_quote_response_notification(quote):
             'emails/quote_response_notification.html',
             quote=quote,
             accepted=accepted,
+            invoice=invoice,
             base_url=current_app.config['BASE_URL'],
         )
         send_email(subject, recipients, text_body, html_body)

@@ -31,7 +31,12 @@
         </div>
 
         {% if accepted %}
-        <p>You can now convert this quote into an invoice from the quote's detail page.</p>
+            {% if invoice %}
+            <p>Invoice <strong>{{ invoice.invoice_number }}</strong> was auto-generated from this quote and presented to the client for payment right away &mdash; no further action is needed unless you want to review it.</p>
+            <a href="{{ base_url }}/invoices/{{ invoice.id }}" class="button">View Invoice</a>
+            {% else %}
+            <p>You can now convert this quote into an invoice from the quote's detail page.</p>
+            {% endif %}
         {% endif %}
 
         <a href="{{ base_url }}/quotes/{{ quote.id }}" class="button">View Quote</a>

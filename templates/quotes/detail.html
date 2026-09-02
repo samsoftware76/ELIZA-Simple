@@ -106,12 +106,22 @@
                 <div class="card-header"><h5 class="mb-0">Client Portal Link</h5></div>
                 <div class="card-body">
                     <div class="input-group">
-                        <input type="text" class="form-control form-control-sm" id="portal-link" value="{{ portal_url }}" readonly>
+                        <input type="text" class="form-control form-control-sm" id="portal-link" value="{{ portal_url }}" readonly onclick="this.select()">
                         <div class="input-group-append">
-                            <button class="btn btn-sm btn-outline-secondary" type="button" onclick="copyPortalLink()"><i class="fas fa-copy"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" id="copy-portal-link"
+                                    data-portal-url="{{ portal_url }}" onclick="copyPortalLink(this)">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
                         </div>
                     </div>
-                    <small class="text-muted d-block mt-2">This is the link the client received by email &mdash; share it again if needed.</small>
+                    <small class="text-muted d-block mt-2">Share this link with the client (WhatsApp, SMS, email) &mdash; they can view, accept and pay there, no login needed.</small>
+                </div>
+            </div>
+            {% else %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h5 class="mb-0">Client Portal Link</h5></div>
+                <div class="card-body">
+                    <small class="text-muted">Sending this quote to the client activates its portal link &mdash; you can copy and share it here afterwards.</small>
                 </div>
             </div>
             {% endif %}
@@ -122,11 +132,28 @@
 
 {% block extra_js %}
 <script>
-    function copyPortalLink() {
-        var el = document.getElementById('portal-link');
-        el.select();
-        el.setSelectionRange(0, 99999);
-        document.execCommand('copy');
+    function copyPortalLink(btn) {
+        // URL comes from the data attribute, not an inline-interpolated string.
+        var url = btn.dataset.portalUrl;
+        var done = function () {
+            var original = btn.innerHTML;
+            btn.innerHTML = 'Copied!';
+            btn.disabled = true;
+            setTimeout(function () { btn.innerHTML = original; btn.disabled = false; }, 1500);
+        };
+        var fallback = function () {
+            var el = document.getElementById('portal-link');
+            el.select();
+            el.setSelectionRange(0, 99999);
+            try {
+                if (document.execCommand('copy')) { done(); }
+            } catch (e) { /* leave the text selected for manual copy */ }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(done, fallback);
+        } else {
+            fallback();
+        }
     }
 </script>
 {% endblock %}
