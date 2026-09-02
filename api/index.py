@@ -195,6 +195,14 @@ def inject_sidebar_plan():
         g._sidebar_plan_name = plan_name
     return dict(sidebar_plan_name=g._sidebar_plan_name)
 
+@app.context_processor
+def inject_current_year():
+    """Footer year for every layout branch (templates/base.html and
+    templates/portal/base.html both render under this app, so blueprint
+    templates get it too) - server-rendered so the footer never shows a
+    stale hardcoded year and needs no JS."""
+    return dict(current_year=datetime.now().year)
+
 @app.route('/')
 def home():
     """Home page: KPI dashboard for authenticated staff, marketing blurb otherwise.

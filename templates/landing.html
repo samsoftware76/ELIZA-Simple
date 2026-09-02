@@ -1,5 +1,15 @@
 {% extends "base.html" %}
 
+{# DEAD CODE - NOT WIRED UP. This template is only referenced by
+   api/main.py's main_bp, which is never registered on the app, so no
+   route renders this page; the real logged-out landing is the public
+   branch of templates/index.html. The url_for endpoint names here were
+   fixed (auth.register/auth.login never existed - the endpoints are
+   'register'/'login') so this file no longer 500s if ever wired up, but
+   its content (fabricated testimonials/avatars, missing hero image) needs
+   a rewrite before use. FUTURE DECISION: delete this + api/main.py, or
+   rebuild as a full marketing page. #}
+
 {% block title %}ELIZA - Project Management Made Simple{% endblock %}
 
 {% block meta %}
@@ -34,8 +44,8 @@
                     <h1 class="display-4 fw-bold">Manage Projects with Ease</h1>
                     <p class="lead my-4">ELIZA helps teams organize, track, and manage their work efficiently. Streamline your workflow and boost productivity.</p>
                     <div class="cta-buttons">
-                        <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-lg me-3">Get Started</a>
-                        <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-lg">Sign In</a>
+                        <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg me-3">Get Started</a>
+                        <a href="{{ url_for('login') }}" class="btn btn-outline-secondary btn-lg">Sign In</a>
                     </div>
                 </div>
                 <div class="col-lg-6">
@@ -199,7 +209,7 @@
         <div class="container text-center">
             <h2 class="mb-4">Ready to Get Started?</h2>
             <p class="lead mb-4">Join thousands of teams already using ELIZA to manage their projects efficiently.</p>
-            <a href="{{ url_for('auth.register') }}" class="btn btn-light btn-lg">Sign Up for Free</a>
+            <a href="{{ url_for('register') }}" class="btn btn-light btn-lg">Sign Up for Free</a>
         </div>
     </div>
 </div>

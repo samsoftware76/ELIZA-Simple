@@ -42,9 +42,21 @@
         }
         .portal-footer {
             text-align: center;
-            color: #888;
-            font-size: 0.8rem;
-            padding: 1.5rem 0;
+            color: #adb5bd;
+            font-size: 0.75rem;
+            padding: 1rem 16px 1.25rem;
+            border-top: 1px solid #e9ecef;
+            margin-top: 1.5rem;
+        }
+        /* Touch targets: the sign/decline/pay buttons must be comfortably
+           tappable (>=44px effective height) on touch devices. */
+        @media (pointer: coarse) {
+            .btn {
+                min-height: 44px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
         }
         .status-banner {
             padding: 0.9rem 1.25rem;
@@ -189,11 +201,15 @@
         </div>
     </div>
 
+    {# Client-facing footer: the freelancer's brand leads, ELIZA stays a
+       quiet "Powered by" credit. current_year is server-rendered via the
+       inject_current_year context processor in api/index.py - never a
+       hardcoded year, no JS. #}
     <div class="portal-footer">
         {% if brand_name and brand_name != 'ELIZA' %}
-        &copy; {{ brand_name }} &mdash; powered by ELIZA
+        &copy; {{ current_year }} {{ brand_name }} &mdash; Powered by ELIZA
         {% else %}
-        &copy; ELIZA Project Management
+        &copy; {{ current_year }} ELIZA Project Management
         {% endif %}
     </div>
 

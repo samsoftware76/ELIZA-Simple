@@ -217,16 +217,85 @@
         </div>
     {% endif %}
 {% else %}
-    {# Public (unauthenticated) home - kept as the simple marketing blurb,
-       restyled into the card language. #}
-    <div class="card">
-        <div class="card-body py-5 px-4 text-center">
-            <h1 class="dash-public-title">Welcome to ELIZA Project Management</h1>
-            <p class="lead text-muted">The complete solution for client, project, and task management.</p>
-            <p class="text-muted mb-4">Track time, manage tasks, generate reports, and keep your clients updated - from first contact to final invoice.</p>
-            <a href="{{ url_for('login') }}" class="btn btn-primary mr-2">Log in</a>
-            <a href="{{ url_for('register') }}" class="btn btn-outline-secondary">Register</a>
+    {# ---------------------------------------------------------------
+       Public (unauthenticated) home - the REAL logged-out landing page
+       (templates/landing.html is unregistered dead code, see api/main.py).
+       Mobile-first marketing anatomy in the app's card language. Every
+       claim below maps to a shipped feature: payment links + PesaPal
+       card/mobile-money collection and bank transfer details (portal +
+       wallet), auto-invoice on quote acceptance (billing), branded
+       quotes/invoices/contracts with e-signature (contracts + portal),
+       client portal (client_portal), dashboard/reports/team roles. The
+       14-day free trial line matches templates/subscription/plans.html.
+       No fabricated stats, testimonials or logos. One primary CTA
+       (Create free account), repeated once at the bottom; Login is the
+       secondary link. Styles: .pub-* in static/css/custom.css, with a
+       single entrance reveal that prefers-reduced-motion disables.
+       --------------------------------------------------------------- #}
+    <div class="pub-landing">
+        <section class="pub-hero pub-reveal">
+            <h1 class="pub-hero-title">Clients, projects and getting paid &mdash; managed in one place.</h1>
+            <p class="pub-hero-lead">
+                ELIZA is client, project &amp; money management for freelancers and small teams:
+                run your work, send branded quotes, invoices and contracts, and get paid by card,
+                M&#8209;Pesa/MTN/Airtel mobile money via PesaPal, or direct bank transfer.
+            </p>
+            <div class="pub-hero-cta">
+                <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Create free account</a>
+                <a href="{{ url_for('login') }}" class="pub-hero-login">Already have one? Log in</a>
+            </div>
+            <p class="pub-hero-note">Paid plans include a 14-day free trial &mdash; no credit card needed to start.</p>
+        </section>
+
+        <div class="row pub-benefits">
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="pub-benefit-icon"><i class="fas fa-money-bill-wave"></i></div>
+                        <h2 class="pub-benefit-title">Get paid faster</h2>
+                        <p class="pub-benefit-text">
+                            Send invoices with a secure payment link &mdash; clients pay by card or
+                            M&#8209;Pesa/MTN/Airtel mobile money through PesaPal, or wire your bank account.
+                            Accepted quotes can become invoices automatically.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="pub-benefit-icon"><i class="fas fa-file-signature"></i></div>
+                        <h2 class="pub-benefit-title">Look professional</h2>
+                        <p class="pub-benefit-text">
+                            Branded quotes, invoices and contracts with electronic signature,
+                            plus a client portal where your clients review work, approve quotes
+                            and sign &mdash; under your name and logo.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="pub-benefit-icon"><i class="fas fa-chart-bar"></i></div>
+                        <h2 class="pub-benefit-title">Stay in control</h2>
+                        <p class="pub-benefit-text">
+                            One dashboard for projects, tasks, tracked hours and outstanding
+                            invoices &mdash; with deliverables reports for clients and team roles
+                            when you're not working alone.
+                        </p>
+                    </div>
+                </div>
+            </div>
         </div>
+
+        <section class="pub-cta-bottom card">
+            <div class="card-body text-center">
+                <h2 class="pub-cta-title">Start managing your work in minutes</h2>
+                <p class="text-muted mb-3">From first contact to final invoice.</p>
+                <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Create free account</a>
+            </div>
+        </section>
     </div>
 {% endif %}
 {% endblock %}

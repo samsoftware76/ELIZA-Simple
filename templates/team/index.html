@@ -4,16 +4,25 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="page-header">
         <h1>Team</h1>
     </div>
+
+    {# is_owner comes from team.dashboard() (api/team.py). Members get a
+       READ-ONLY view: the same member list plus the owner marked as Owner,
+       but no Actions column, no pending invites and no invite form. This is
+       presentation only - the invite/revoke/remove POST routes each enforce
+       _require_owner() server-side regardless of what renders here. #}
 
     <div class="card mb-4">
         <div class="card-header bg-primary text-white">
             <h2 class="mb-0 h5">Team Members</h2>
         </div>
         <div class="card-body">
-            {% if memberships %}
+            {% if not is_owner %}
+                <p class="text-muted"><i class="fas fa-info-circle mr-1"></i> Your team is managed by the account owner.</p>
+            {% endif %}
+            {% if memberships or not is_owner %}
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
                         <thead class="thead-dark">
@@ -21,15 +30,23 @@
                                 <th>Name</th>
                                 <th>Email</th>
                                 <th>Role</th>
-                                <th>Actions</th>
+                                {% if is_owner %}<th>Actions</th>{% endif %}
                             </tr>
                         </thead>
                         <tbody>
+                            {% if not is_owner and owner %}
+                                <tr>
+                                    <td>{{ owner.get_full_name() }}</td>
+                                    <td>{{ owner.email }}</td>
+                                    <td><span class="badge badge-dark">Owner</span></td>
+                                </tr>
+                            {% endif %}
                             {% for membership in memberships %}
                                 <tr>
-                                    <td>{{ membership.member.get_full_name() }}</td>
+                                    <td>{{ membership.member.get_full_name() }}{% if membership.member.id == current_user.id %} <span class="text-muted">(you)</span>{% endif %}</td>
                                     <td>{{ membership.member.email }}</td>
                                     <td>{{ membership.role.value.replace('_', ' ')|title }}</td>
+                                    {% if is_owner %}
                                     <td>
                                         <form method="POST" action="{{ url_for('team.remove_member', membership_id=membership.id) }}" class="d-inline"
                                               data-member-name="{{ membership.member.get_full_name() }}"
@@ -40,6 +57,7 @@
                                             </button>
                                         </form>
                                     </td>
+                                    {% endif %}
                                 </tr>
                             {% endfor %}
                         </tbody>
@@ -51,6 +69,7 @@
         </div>
     </div>
 
+    {% if is_owner %}
     <div class="card mb-4">
         <div class="card-header bg-primary text-white">
             <h2 class="mb-0 h5">Pending Invites</h2>
@@ -131,6 +150,7 @@
             </form>
         </div>
     </div>
+    {% endif %}
 </div>
 {% endblock %}
 

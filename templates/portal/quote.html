@@ -78,8 +78,8 @@
 
         {% if quote.is_respondable %}
         <hr class="my-4">
-        <div class="d-flex justify-content-end">
-            <button type="button" class="btn btn-outline-danger mr-2" data-toggle="modal" data-target="#declineModal">
+        <div class="d-flex justify-content-end flex-wrap" style="gap: 8px;">
+            <button type="button" class="btn btn-outline-danger" data-toggle="modal" data-target="#declineModal">
                 <i class="fas fa-times"></i> Decline
             </button>
             <form method="POST" action="{{ url_for('portal.accept_quote', token=quote.public_token) }}"

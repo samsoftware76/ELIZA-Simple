@@ -11,13 +11,15 @@
         </ol>
     </nav>
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="page-header">
         <div>
             <h1>{{ invoice.invoice_number }} <span class="badge badge-{{ invoice.status|billing_status_badge }}">{{ invoice.status|capitalize }}</span>
             {% if invoice.is_overdue %}<span class="badge badge-danger">Overdue</span>{% endif %}</h1>
             <p class="text-muted mb-0">{{ invoice.title }}</p>
         </div>
-        <div class="btn-group">
+        {# page-actions (wraps on phones) instead of .btn-group, which
+           can't wrap and squashed the heading on narrow screens. #}
+        <div class="page-actions">
             {% if invoice.status == 'draft' %}
                 <a href="{{ url_for('billing.invoice_edit', invoice_id=invoice.id) }}" class="btn btn-outline-primary"><i class="fas fa-edit"></i> Edit</a>
                 <form method="POST" action="{{ url_for('billing.invoice_send', invoice_id=invoice.id) }}" class="d-inline"
@@ -52,6 +54,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header"><h5 class="mb-0">Line Items</h5></div>
                 <div class="card-body p-0">
+                    <div class="table-responsive">
                     <table class="table mb-0">
                         <thead class="table-light">
                             <tr><th>Description</th><th class="text-end">Qty</th><th class="text-end">Unit Price</th><th class="text-end">Total</th></tr>
@@ -76,6 +79,7 @@
                             <tr class="font-weight-bold"><td colspan="3" class="text-end">Total</td><td class="text-end">{{ '%.2f'|format(invoice.total) }} {{ invoice.currency }}{% if total_approx %} <small class="text-muted font-weight-normal d-block">({{ total_approx }})</small>{% endif %}</td></tr>
                         </tfoot>
                     </table>
+                    </div>
                 </div>
             </div>
 

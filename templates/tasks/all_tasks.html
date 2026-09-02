@@ -4,9 +4,9 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="page-header">
         <h1>All Tasks</h1>
-        <div>
+        <div class="page-actions">
             <a href="{{ url_for('create_task') }}" class="btn btn-primary btn-sm">Create New Task</a>
             <a href="{{ url_for('report_task_distribution') }}" class="btn btn-info btn-sm">Task Reports</a>
         </div>
@@ -57,7 +57,7 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-12 mt-3">
+                <div class="col-12 mt-3 filter-actions">
                     <button type="submit" class="btn btn-primary btn-sm">Apply Filters</button>
                     <a href="{{ url_for('all_tasks') }}" class="btn btn-secondary btn-sm">Clear Filters</a>
                 </div>

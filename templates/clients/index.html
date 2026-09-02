@@ -4,11 +4,13 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="page-header">
         <h1>Clients</h1>
-        <a href="{{ url_for('client_create') }}" class="btn btn-primary">
-            <i class="fas fa-plus"></i> New Client
-        </a>
+        <div class="page-actions">
+            <a href="{{ url_for('client_create') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> New Client
+            </a>
+        </div>
     </div>
 
     <div class="card mb-4">
@@ -29,7 +31,7 @@
                     <label for="created_before" class="form-label">Created Before</label>
                     <input type="date" name="created_before" id="created_before" class="form-control" value="{{ request.args.get('created_before', '') }}">
                 </div>
-                <div class="col-12 mt-3">
+                <div class="col-12 mt-3 filter-actions">
                     <button type="submit" class="btn btn-primary btn-sm">Search</button>
                     <a href="{{ url_for('clients') }}" class="btn btn-secondary btn-sm">Clear</a>
                 </div>

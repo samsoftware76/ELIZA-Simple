@@ -384,10 +384,122 @@ body.layout-public {
     margin-top: 0 !important;
 }
 
+/* One quiet consistent footer line on every layout branch (staff shell,
+   client top bar, public). The portal (templates/portal/base.html) mirrors
+   this in its own inline stylesheet. */
 .app-footer {
-    padding: 12px 24px 18px;
+    padding: 14px 24px 18px;
     font-size: 12px;
     color: #adb5bd;
+    border-top: 1px solid #e9ecef;
+    margin-top: 16px;
+}
+
+/* static/style.css keeps a legacy `main { max-width: 800px; margin: 20px
+   auto; background: #fff; box-shadow: ... }` rule from the original
+   homepage. All three shell mains are <main> elements, so those leftovers
+   were silently capping the staff content column at 800px and painting a
+   shadowed white slab behind every page. Neutralize them here (this file
+   loads after static/style.css); .public-main keeps its own 960px cap set
+   below. */
+main.app-content,
+main.client-main {
+    max-width: none;
+    margin: 0;
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+}
+
+/* .public-main keeps its own 960px cap and auto margins (defined further
+   down, and main.public-main here would out-rank them) - only strip the
+   legacy white slab. */
+main.public-main {
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Page-header pattern: h1 + action buttons. On phones the old          */
+/* d-flex justify-content-between row squashed the title; this wraps    */
+/* instead, letting the actions drop below the title with a small gap.  */
+/* ------------------------------------------------------------------ */
+.page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px 16px;
+    margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+    margin-bottom: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Action clusters inside a page header (buttons and inline POST forms):
+   wrap with an even gap instead of overflowing. Replaces the unwrappable
+   .btn-group on the billing/contract detail headers. */
+.page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-actions form {
+    margin-bottom: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Filter/search cards (clients index, all-tasks, ...). Fields already  */
+/* stack via col-* classes; on phones the buttons go full width too.    */
+/* ------------------------------------------------------------------ */
+@media (max-width: 575.98px) {
+    .filter-actions .btn {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        margin-right: 0;
+    }
+
+    .filter-actions .btn + .btn {
+        margin-top: 8px;
+    }
+}
+
+/* Several templates use Bootstrap 5's .form-select class, which BS4 does
+   not style at all - so those selects rendered at browser-default width
+   (not full width) and squeezed on phones. Give the class BS4's
+   .form-control box model here rather than editing every template. */
+.form-select {
+    display: block;
+    width: 100%;
+    height: calc(1.5em + 0.75rem + 2px);
+    color: #495057;
+    background-color: #fff;
+}
+
+/* Touch targets: sidebar links, dropdown items and the client top bar
+   links reach >=44px effective height on coarse (touch) pointers. */
+@media (pointer: coarse) {
+    .sidebar-link {
+        padding-top: 12px;
+        padding-bottom: 12px;
+    }
+
+    .dropdown-item {
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+
+    .client-topbar-link {
+        padding-top: 11px;
+        padding-bottom: 11px;
+    }
 }
 
 /* Hamburger - hidden on desktop, shown by the media query below */
@@ -986,4 +1098,124 @@ body.layout-public {
 
 .sidebar-link.active .sidebar-icon-svg {
     color: #d13e16;
+}
+
+/* ------------------------------------------------------------------ */
+/* Public logged-out landing (templates/index.html, public branch).    */
+/* Mobile-first: single column by default, the benefit cards go        */
+/* three-up from md via Bootstrap cols. Design language only - 1px     */
+/* #e9ecef borders, 8px radius, #e8491d used sparingly.                */
+/* ------------------------------------------------------------------ */
+
+.pub-hero {
+    text-align: center;
+    padding: 24px 8px 32px;
+}
+
+.pub-hero-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #212529;
+    line-height: 1.25;
+    margin-bottom: 14px;
+}
+
+.pub-hero-lead {
+    font-size: 16px;
+    color: #6c757d;
+    line-height: 1.6;
+    max-width: 640px;
+    margin: 0 auto 22px;
+}
+
+.pub-hero-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.pub-hero-login {
+    color: #495057;
+    font-size: 14px;
+    text-decoration: underline;
+}
+
+.pub-hero-login:hover,
+.pub-hero-login:focus {
+    color: #d13e16;
+}
+
+.pub-hero-note {
+    font-size: 12px;
+    color: #adb5bd;
+    margin: 14px 0 0;
+}
+
+.pub-benefit-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: #fdece7;
+    color: #d13e16;
+    font-size: 17px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.pub-benefit-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #212529;
+    margin-bottom: 6px;
+}
+
+.pub-benefit-text {
+    font-size: 14px;
+    color: #6c757d;
+    line-height: 1.55;
+    margin-bottom: 0;
+}
+
+.pub-cta-bottom {
+    margin: 8px 0 16px;
+}
+
+.pub-cta-bottom .card-body {
+    padding: 28px 16px;
+}
+
+.pub-cta-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #212529;
+}
+
+@media (min-width: 768px) {
+    .pub-hero {
+        padding: 48px 16px 44px;
+    }
+
+    .pub-hero-title {
+        font-size: 34px;
+    }
+}
+
+/* Single tasteful entrance reveal on the hero only; switched off
+   entirely when the visitor prefers reduced motion. */
+.pub-reveal {
+    animation: pub-fade-up 0.5s ease-out both;
+}
+
+@keyframes pub-fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pub-reveal {
+        animation: none;
+    }
 }

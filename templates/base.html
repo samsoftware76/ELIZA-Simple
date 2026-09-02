@@ -142,17 +142,23 @@
            second block would re-render the same messages a second time. #}
         {% block content %}{% endblock %}
 
+{# One quiet, consistent footer line on every layout branch - muted, small,
+   bordered-top (see .app-footer in css/custom.css). current_year comes from
+   the inject_current_year context processor in api/index.py, so the year is
+   server-rendered and never goes stale (no JS involved). The client-facing
+   portal branch (templates/portal/base.html) carries its own matching
+   footer with the freelancer's brand + "Powered by ELIZA". #}
 {% if is_staff %}
             </main>
-            <div class="app-footer">&copy; 2025 ELIZA Project Management</div>
+            <div class="app-footer">&copy; {{ current_year }} ELIZA Project Management</div>
         </div>
     </div>
 {% elif is_client_role %}
         </div>
-        <div class="app-footer text-center">&copy; 2025 ELIZA Project Management</div>
+        <div class="app-footer text-center">&copy; {{ current_year }} ELIZA Project Management</div>
     </main>
 {% else %}
-        <div class="app-footer text-center">&copy; 2025 ELIZA Project Management</div>
+        <div class="app-footer text-center">&copy; {{ current_year }} ELIZA Project Management</div>
     </main>
 {% endif %}
 

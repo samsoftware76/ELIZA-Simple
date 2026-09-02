@@ -11,12 +11,14 @@
         </ol>
     </nav>
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="page-header">
         <div>
             <h1>{{ contract.contract_number }} <span class="badge badge-{{ contract.status|billing_status_badge }}">{{ contract.status|capitalize }}</span></h1>
             <p class="text-muted mb-0">{{ contract.title }}</p>
         </div>
-        <div class="btn-group">
+        {# page-actions (wraps on phones) instead of .btn-group, which
+           can't wrap and squashed the heading on narrow screens. #}
+        <div class="page-actions">
             <a href="{{ url_for('contracts.contract_print', contract_id=contract.id) }}" class="btn btn-outline-secondary" target="_blank">
                 <i class="fas fa-file-pdf"></i> Print / PDF
             </a>

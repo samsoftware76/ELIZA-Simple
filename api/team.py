@@ -42,24 +42,33 @@ def _require_owner():
 @team_bp.route('/team')
 @login_required
 def dashboard():
-    """Shows active members, pending invites, and the invite form. Owner-only
-    (see _require_owner) - a team member is bounced to the homepage with a
-    flash rather than seeing the management controls.
+    """Owner: full management view (members, pending invites, invite form).
 
-    FOLLOWUP: this means a team member gets no use at all from the "Team"
-    nav link that's visible to them too (see base.html) - a read-only "your
-    teammates" view for non-owners would be a better landing than a bounce,
-    but is out of scope for this batch.
+    Team member: a READ-ONLY view of the same page - the member list plus
+    the owner marked as Owner, with no invite form, no remove/revoke
+    buttons and no pending-invites section (the template branches on
+    is_owner). This is a presentation choice only: the invite/revoke/remove
+    POST routes below all still call _require_owner() themselves, so a
+    member hand-crafting a POST is refused server-side exactly as before.
+    Previously a member clicking the sidebar's Team link was bounced to
+    home with a flash - a dead end for a link they can always see.
     """
-    not_owner = _require_owner()
-    if not_owner:
-        return not_owner
-
     owner_id = current_user.get_owner_id()
+    is_owner = current_user.id == owner_id
     memberships = TeamMembership.query.filter_by(account_owner_id=owner_id, is_active=True).all()
+
+    if not is_owner:
+        # Read-only teammate view: no invite form, no pending invites.
+        owner = User.query.get(owner_id)
+        return render_template('team/index.html', memberships=memberships,
+                               pending_invites=[], form=None,
+                               is_owner=False, owner=owner)
+
     pending_invites = TeamInvite.query.filter_by(inviter_id=owner_id, status='pending').order_by(TeamInvite.created_at.desc()).all()
     form = TeamInviteForm()
-    return render_template('team/index.html', memberships=memberships, pending_invites=pending_invites, form=form)
+    return render_template('team/index.html', memberships=memberships,
+                           pending_invites=pending_invites, form=form,
+                           is_owner=True, owner=current_user)
 
 
 @team_bp.route('/team/invite', methods=['POST'])

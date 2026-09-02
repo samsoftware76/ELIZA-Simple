@@ -9,9 +9,9 @@
             <i class="fas fa-arrow-left"></i> Back to Clients
         </a>
 
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="page-header">
         <h1>{{ client.name }}</h1>
-        <div>
+        <div class="page-actions">
             <a href="{{ url_for('client_edit', client_id=client.id) }}" class="btn btn-outline-primary">
                 <i class="fas fa-edit"></i> Edit
             </a>
