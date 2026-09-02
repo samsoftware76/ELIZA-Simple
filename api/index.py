@@ -514,11 +514,104 @@ def profile():
         owner.bank_account_number = form.bank_account_number.data
         owner.bank_swift_code = form.bank_swift_code.data
         owner.bank_transfer_fee = form.bank_transfer_fee.data
+        # Mobile money payout details - same owner-row pattern. The provider
+        # SelectField's "Not set" choice submits '' - store NULL instead so
+        # "unset" is one value, not two.
+        owner.mobile_money_provider = form.mobile_money_provider.data or None
+        owner.mobile_money_number = form.mobile_money_number.data or None
         db.session.add(owner)
         db.session.commit()
         flash('Business profile updated.', 'success')
         return redirect(url_for('profile'))
     return render_template('profile.html', form=form)
+
+
+@app.route('/wallet')
+@login_required
+def wallet():
+    """Money dashboard: what THIS APP has recorded as paid/outstanding.
+
+    ELIZA never holds funds - PesaPal collects card/mobile-money payments
+    into the merchant account (withdrawn from the PesaPal dashboard, not
+    here), and manual bank transfers land in the freelancer's bank account
+    directly. So there is deliberately NO "balance" figure on this page -
+    the app cannot know PesaPal's real balance and must not fabricate one.
+
+    A CLIENT-role login never reaches this: restrict_client_role_to_portal()
+    above redirects every non-exempt endpoint (this one included) to the
+    client portal before the view runs.
+
+    Tenant isolation: Invoice has no owner_id of its own - every query is
+    scoped through Client.owner_id via get_owner_id(), the same established
+    pattern as billing.invoices_list/quotes_list. Amounts in different
+    currencies are never added together - everything below is grouped
+    strictly by currency code, in Python (invoice.total is a Python property
+    over line items, so SQL SUM isn't available anyway).
+    """
+    owner_id = current_user.get_owner_id()
+    # Payout details live on the owner's row, same rule as profile() above.
+    owner = User.query.get(owner_id)
+
+    def load_wallet():
+        paid_invoices = Invoice.query.join(Client).filter(
+            Client.owner_id == owner_id,
+            Invoice.status == InvoiceStatus.PAID
+        ).order_by(Invoice.paid_at.desc().nullslast()).all()
+
+        # paid_at is set in UTC everywhere it's written (datetime.utcnow),
+        # so "this month" is the current UTC calendar month.
+        now = datetime.utcnow()
+
+        collected = {}        # currency -> {'amount': float, 'count': int}
+        collected_month = {}  # same shape, paid_at within the current month
+        for inv in paid_invoices:
+            code = inv.currency or 'USD'
+            bucket = collected.setdefault(code, {'amount': 0.0, 'count': 0})
+            bucket['amount'] = round(bucket['amount'] + inv.total, 2)
+            bucket['count'] += 1
+            if inv.paid_at and inv.paid_at.year == now.year and inv.paid_at.month == now.month:
+                mbucket = collected_month.setdefault(code, {'amount': 0.0, 'count': 0})
+                mbucket['amount'] = round(mbucket['amount'] + inv.total, 2)
+                mbucket['count'] += 1
+
+        # Outstanding = SENT (awaiting payment). DRAFT isn't owed yet and
+        # CANCELLED never will be - same definition as the home dashboard KPI.
+        sent_invoices = Invoice.query.join(Client).filter(
+            Client.owner_id == owner_id,
+            Invoice.status == InvoiceStatus.SENT
+        ).all()
+        outstanding = {}  # currency -> {'amount': float, 'count': int}
+        overdue_count = 0
+        for inv in sent_invoices:
+            code = inv.currency or 'USD'
+            bucket = outstanding.setdefault(code, {'amount': 0.0, 'count': 0})
+            bucket['amount'] = round(bucket['amount'] + inv.total, 2)
+            bucket['count'] += 1
+            if inv.is_overdue:
+                overdue_count += 1
+
+        return {
+            'collected': collected,
+            'collected_count': sum(b['count'] for b in collected.values()),
+            'collected_month': collected_month,
+            'outstanding': outstanding,
+            'outstanding_count': sum(b['count'] for b in outstanding.values()),
+            'overdue_count': overdue_count,
+            'recent_payments': paid_invoices[:10],
+        }
+
+    wallet_data = retry_operation(load_wallet)
+
+    # Masked account number for the payouts card - last 4 digits only, the
+    # full number never needs to be on this page.
+    masked_account = None
+    if owner and owner.bank_account_number:
+        masked_account = '•••• ' + owner.bank_account_number[-4:]
+
+    return render_template('wallet.html', title='Wallet',
+                           wallet=wallet_data, owner=owner,
+                           masked_account=masked_account)
+
 
 @app.route('/reset-password-request', methods=['GET', 'POST'])
 def reset_password_request():

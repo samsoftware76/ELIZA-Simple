@@ -45,6 +45,10 @@
                 <div class="sidebar-section-label">Billing</div>
                 <a class="sidebar-link{% if ep.startswith('billing.quote') %} active{% endif %}" href="{{ url_for('billing.quotes_list') }}"><i class="fas fa-file-alt"></i> Quotes</a>
                 <a class="sidebar-link{% if ep.startswith('billing.invoice') %} active{% endif %}" href="{{ url_for('billing.invoices_list') }}"><i class="fas fa-file-invoice-dollar"></i> Invoices</a>
+                {# Wallet uses an inline stroke SVG (sized/colored via
+                   .sidebar-icon-svg in css/custom.css to match the FA
+                   icons above) - see wallet() in api/index.py. #}
+                <a class="sidebar-link{% if ep == 'wallet' %} active{% endif %}" href="{{ url_for('wallet') }}"><svg class="sidebar-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path><path d="M18 12a2 2 0 0 0 0 4h4v-4h-4Z"></path></svg> Wallet</a>
                 <a class="sidebar-link{% if ep == 'subscription.plans' %} active{% endif %}" href="{{ url_for('subscription.plans') }}"><i class="fas fa-credit-card"></i> Plan</a>
 
                 <div class="sidebar-section-label">Insights</div>

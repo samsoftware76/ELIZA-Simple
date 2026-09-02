@@ -928,3 +928,62 @@ body.layout-public {
     .app-toast.toast-leave { animation: toast-fade-out .2s ease forwards; }
     .app-toast-bar { animation: none; transform: scaleX(1); }
 }
+
+/* ------------------------------------------------------------------ */
+/* Wallet page (templates/wallet.html) - reuses the dash-kpi card     */
+/* language; these are only the wallet-specific bits.                 */
+/* ------------------------------------------------------------------ */
+
+/* Per-currency amount lines inside a KPI card - slightly smaller than
+   the single dash-kpi-value so two or three currencies stack cleanly. */
+.wallet-kpi-line {
+    font-size: 22px;
+}
+
+.wallet-payments-table th {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #adb5bd;
+    border-top: 0;
+}
+
+.wallet-payments-table td {
+    font-size: 14px;
+    vertical-align: middle;
+}
+
+.wallet-payout-block {
+    margin-bottom: 12px;
+}
+
+.wallet-payout-line {
+    font-size: 15px;
+    font-weight: 600;
+    color: #212529;
+}
+
+.wallet-payout-sub {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.wallet-payout-note {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+/* The Wallet sidebar item uses an inline stroke SVG (there is no
+   suitable wallet glyph in the FA5 free set loaded here) - mirror the
+   .sidebar-link i sizing/colors so it sits identically in the rail. */
+.sidebar-link .sidebar-icon-svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    color: #adb5bd;
+}
+
+.sidebar-link.active .sidebar-icon-svg {
+    color: #d13e16;
+}

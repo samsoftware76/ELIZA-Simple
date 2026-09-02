@@ -79,6 +79,17 @@ class User(db.Model, UserMixin):
     bank_account_number = db.Column(db.String(50))
     bank_swift_code = db.Column(db.String(20))
     bank_transfer_fee = db.Column(db.Float)
+    # Mobile money payout details (see migrations/add_mobile_money_fields.py).
+    # Tenant-level like the bank_* fields above - resolved via get_owner_id()
+    # wherever read/written, not necessarily current_user's own row. All
+    # nullable: purely informational payout details shown on the /wallet
+    # payouts card. ELIZA never holds funds - PesaPal collections are
+    # withdrawn to this number from the PesaPal merchant dashboard, not by
+    # this app. provider is one of the SelectField choices in
+    # forms.BusinessProfileForm (MTN Mobile Money / Airtel Money / M-Pesa /
+    # Other).
+    mobile_money_provider = db.Column(db.String(30))
+    mobile_money_number = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

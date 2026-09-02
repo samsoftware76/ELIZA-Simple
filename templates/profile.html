@@ -77,6 +77,23 @@
                         <div class="text-danger small">{{ error }}</div>
                     {% endfor %}
                 </div>
+
+                <hr>
+                <h5>Mobile Money (optional)</h5>
+                <p class="text-muted">For your own reference on the <a href="{{ url_for('wallet') }}">Wallet</a> page: the mobile money account you withdraw your PesaPal collections to from the PesaPal merchant dashboard. ELIZA never holds funds.</p>
+
+                <div class="form-group">
+                    {{ form.mobile_money_provider.label }}
+                    {{ form.mobile_money_provider(class="form-control") }}
+                    <small class="form-text text-muted">{{ form.mobile_money_provider.description }}</small>
+                </div>
+                <div class="form-group">
+                    {{ form.mobile_money_number.label }}
+                    {{ form.mobile_money_number(class="form-control", placeholder="e.g. 0772 123456") }}
+                    {% for error in form.mobile_money_number.errors %}
+                        <div class="text-danger small">{{ error }}</div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
 

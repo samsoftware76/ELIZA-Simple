@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Wallet - ELIZA{% endblock %}
+
+{% block content %}
+{# ---------------------------------------------------------------
+   Wallet: the money DASHBOARD, not a balance. All numbers come from
+   wallet() in api/index.py, every query scoped through Client.owner_id
+   via current_user.get_owner_id(). ELIZA never holds funds - PesaPal
+   is the vault (withdrawals happen from the PesaPal merchant
+   dashboard) and manual bank transfers land in the freelancer's own
+   bank account - so this page deliberately shows what THIS APP has
+   recorded as paid/outstanding, never a fabricated "balance".
+   Amounts in different currencies are never added together: each card
+   lists one line per currency.
+   --------------------------------------------------------------- #}
+
+{# ------------------------- KPI row ------------------------- #}
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <div class="card dash-kpi h-100">
+            <div class="card-body">
+                <div class="dash-kpi-label">Collected (all time)</div>
+                {% if wallet.collected %}
+                    {% for code, bucket in wallet.collected.items() %}
+                        <div class="dash-kpi-value wallet-kpi-line">{{ code }} {{ '{:,.2f}'.format(bucket.amount) }}</div>
+                    {% endfor %}
+                    <div class="dash-kpi-sub">{{ wallet.collected_count }} payment{% if wallet.collected_count != 1 %}s{% endif %} recorded as paid</div>
+                {% else %}
+                    <div class="dash-kpi-value">0.00</div>
+                    <div class="dash-kpi-sub">No payments recorded yet</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card dash-kpi h-100">
+            <div class="card-body">
+                <div class="dash-kpi-label">Collected this month</div>
+                {% if wallet.collected_month %}
+                    {% for code, bucket in wallet.collected_month.items() %}
+                        <div class="dash-kpi-value wallet-kpi-line">{{ code }} {{ '{:,.2f}'.format(bucket.amount) }}</div>
+                    {% endfor %}
+                    {% set month_count = wallet.collected_month.values()|map(attribute='count')|sum %}
+                    <div class="dash-kpi-sub">{{ month_count }} payment{% if month_count != 1 %}s{% endif %} this calendar month</div>
+                {% else %}
+                    <div class="dash-kpi-value">0.00</div>
+                    <div class="dash-kpi-sub">Nothing collected yet this month</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="card dash-kpi h-100 {% if wallet.overdue_count > 0 %}dash-kpi-danger{% endif %}">
+            <div class="card-body">
+                <div class="dash-kpi-label">Outstanding</div>
+                {% if wallet.outstanding %}
+                    {% for code, bucket in wallet.outstanding.items() %}
+                        <div class="dash-kpi-value wallet-kpi-line">{{ code }} {{ '{:,.2f}'.format(bucket.amount) }}</div>
+                    {% endfor %}
+                    <div class="dash-kpi-sub">
+                        {{ wallet.outstanding_count }} invoice{% if wallet.outstanding_count != 1 %}s{% endif %} awaiting payment{% if wallet.overdue_count > 0 %} &middot; {{ wallet.overdue_count }} overdue{% endif %}
+                    </div>
+                {% else %}
+                    <div class="dash-kpi-value">0.00</div>
+                    <div class="dash-kpi-sub">Nothing awaiting payment</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# --------------------- Panels row --------------------- #}
+<div class="row">
+    <div class="col-lg-7 mb-3">
+        <div class="card h-100">
+            <div class="card-header dash-panel-header">
+                <span>Recent payments</span>
+                <a href="{{ url_for('billing.invoices_list') }}" class="dash-panel-link">All invoices</a>
+            </div>
+            {% if wallet.recent_payments %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 wallet-payments-table">
+                        <thead>
+                            <tr>
+                                <th>Invoice #</th>
+                                <th>Client</th>
+                                <th class="text-right">Amount</th>
+                                <th>Method</th>
+                                <th>Paid on</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for invoice in wallet.recent_payments %}
+                                <tr>
+                                    <td><a href="{{ url_for('billing.invoice_detail', invoice_id=invoice.id) }}">{{ invoice.invoice_number }}</a></td>
+                                    <td>{{ invoice.client.name }}</td>
+                                    <td class="text-right">{{ invoice.currency }} {{ '{:,.2f}'.format(invoice.total) }}</td>
+                                    <td>{{ invoice.payment_method or '—' }}</td>
+                                    <td>
+                                        {% if invoice.paid_at %}
+                                            {{ invoice.paid_at.strftime('%b %d, %Y') }}
+                                        {% else %}
+                                            <span class="text-muted">&mdash;</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="card-body">
+                    <div class="dash-empty">
+                        <p class="mb-0">No payments recorded yet &mdash; payments land here when an invoice is paid via PesaPal or marked paid.</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-lg-5 mb-3">
+        <div class="card h-100">
+            <div class="card-header dash-panel-header">
+                <span>Payouts</span>
+                <a href="{{ url_for('profile') }}" class="dash-panel-link">Edit payout details</a>
+            </div>
+            <div class="card-body">
+                {% if owner and (owner.bank_name or owner.bank_account_number or owner.mobile_money_number or owner.mobile_money_provider) %}
+                    {% if owner.bank_name or owner.bank_account_number %}
+                        <div class="wallet-payout-block">
+                            <div class="dash-kpi-label">Bank account</div>
+                            <div class="wallet-payout-line">{{ owner.bank_name or 'Bank' }}{% if masked_account %} &middot; {{ masked_account }}{% endif %}</div>
+                            {% if owner.bank_account_name %}<div class="wallet-payout-sub">{{ owner.bank_account_name }}</div>{% endif %}
+                        </div>
+                    {% endif %}
+                    {% if owner.mobile_money_provider or owner.mobile_money_number %}
+                        <div class="wallet-payout-block">
+                            <div class="dash-kpi-label">Mobile money</div>
+                            <div class="wallet-payout-line">{{ owner.mobile_money_provider or 'Mobile money' }}{% if owner.mobile_money_number %} &middot; {{ owner.mobile_money_number }}{% endif %}</div>
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="wallet-payout-block">
+                        <p class="mb-1">No payout details set yet.</p>
+                        <p class="text-muted mb-0">Add your bank account and mobile money details on your <a href="{{ url_for('profile') }}">profile</a> so they are on record here.</p>
+                    </div>
+                {% endif %}
+                <hr>
+                <p class="wallet-payout-note mb-0">
+                    ELIZA never holds your money. Card &amp; mobile-money collections are held by
+                    <a href="https://www.pesapal.com" target="_blank" rel="noopener">PesaPal</a> in your merchant
+                    account and are withdrawn to your bank or mobile money from your PesaPal merchant dashboard.
+                    Direct bank transfers arrive in your bank account directly.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

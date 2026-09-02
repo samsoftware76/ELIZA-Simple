@@ -185,6 +185,19 @@ class BusinessProfileForm(FlaskForm):
     bank_swift_code = StringField('SWIFT/BIC Code', validators=[Optional(), Length(max=20)])
     bank_transfer_fee = FloatField('Bank transfer fee', validators=[Optional(), NumberRange(min=0)],
                                     description="Flat amount added to invoices paid this way, e.g. to cover your bank's incoming wire charge")
+    # Mobile money payout details (see User.mobile_money_provider etc. in
+    # models/models.py) - both optional, shown on the /wallet payouts card.
+    # Informational only: ELIZA never holds funds, so this is where YOU
+    # withdraw PesaPal collections to (from the PesaPal merchant dashboard),
+    # not a payment method offered to clients.
+    mobile_money_provider = SelectField('Mobile Money Provider', validators=[Optional()], choices=[
+        ('', 'Not set'),
+        ('MTN Mobile Money', 'MTN Mobile Money'),
+        ('Airtel Money', 'Airtel Money'),
+        ('M-Pesa', 'M-Pesa'),
+        ('Other', 'Other'),
+    ], description="Where you withdraw your PesaPal collections to")
+    mobile_money_number = StringField('Mobile Money Number', validators=[Optional(), Length(max=20)])
     submit = SubmitField('Save')
 
 
