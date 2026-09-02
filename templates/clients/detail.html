@@ -123,6 +123,46 @@
             </div>
         {% endif %}
     </div>
+
+    <div class="mt-5">
+        <h3>Contracts</h3>
+        {# client.contracts comes from the Contract.client backref (models/billing.py) -
+           already scoped to this client, which the route above ownership-checked. #}
+        {% if client.contracts %}
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Contract #</th>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for contract in client.contracts %}
+                            <tr>
+                                <td>{{ contract.contract_number }}</td>
+                                <td>{{ contract.title }}</td>
+                                <td>
+                                    <span class="badge badge-{{ contract.status|billing_status_badge }}">{{ contract.status|capitalize }}</span>
+                                </td>
+                                <td>{{ contract.created_at.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    <a href="{{ url_for('contracts.contract_detail', contract_id=contract.id) }}" class="btn btn-sm btn-info">View</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="alert alert-info">
+                <p>No contracts for this client yet. <a href="{{ url_for('contracts.contract_create') }}">Create a contract</a>.</p>
+            </div>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}
 

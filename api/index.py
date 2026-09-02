@@ -110,6 +110,7 @@ from api.subscription import subscription_bp
 from api.email_routes import email_bp
 from api.admin import admin_bp
 from api.billing import billing_bp
+from api.contracts import contracts_bp
 from api.portal import portal_bp
 from api.team import team_bp
 from api.client_portal import client_portal_bp
@@ -118,6 +119,7 @@ app.register_blueprint(subscription_bp)
 app.register_blueprint(email_bp)
 app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(billing_bp)
+app.register_blueprint(contracts_bp)
 app.register_blueprint(portal_bp)
 app.register_blueprint(team_bp)
 app.register_blueprint(client_portal_bp)

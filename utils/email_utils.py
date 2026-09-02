@@ -380,6 +380,116 @@ def send_invoice_email(invoice, portal_url):
         logger.error(f"Failed to send invoice email for {invoice.invoice_number}: {str(e)}")
 
 
+def send_contract_email(contract, portal_url):
+    """
+    Email a client a link to view and sign a contract via the client portal.
+
+    Same structure as send_quote_email above. NOTE: the portal signing route
+    itself is stage 2 - until it ships, the emailed link 404s. This function
+    exists now so contract_send (api/contracts.py) has its real send path in
+    place, and the link becomes live the moment the portal route lands.
+
+    Args:
+        contract: The Contract object
+        portal_url (str): Fully-qualified tokenized portal link to the contract
+    """
+    if not contract.client.email:
+        logger.warning(f"Cannot send contract {contract.contract_number}: client has no email address")
+        return
+
+    subject = f"[ELIZA] Contract {contract.contract_number}: {contract.title}"
+    recipients = [contract.client.email]
+
+    try:
+        text_body = (
+            f"Hello {contract.client.contact_person},\n\n"
+            f"{contract.created_by.get_full_name()} has sent you a contract to review and sign: {contract.title}\n"
+            f"Contract number: {contract.contract_number}\n\n"
+            f"Review and sign this contract here:\n{portal_url}\n\n"
+            f"Thank you,\nELIZA Project Management Team"
+        )
+        html_body = render_template('emails/contract_notification.html', contract=contract, portal_url=portal_url)
+        send_email(subject, recipients, text_body, html_body)
+        logger.info(f"Contract {contract.contract_number} emailed to {contract.client.email}")
+    except Exception as e:
+        logger.error(f"Failed to send contract email for {contract.contract_number}: {str(e)}")
+
+
+def send_contract_signed_notification(contract):
+    """
+    Notify the staff member who created a contract that the client has signed it.
+
+    Mirrors send_quote_response_notification below: called from the public
+    portal signing route (api/portal.py) after the signature is committed,
+    so the freelancer learns the deal closed without polling the contracts
+    list. Logged-and-swallowed on failure like every send here.
+
+    Args:
+        contract: The Contract object (status already updated to signed)
+    """
+    if not contract.created_by or not contract.created_by.email:
+        logger.warning(f"Cannot notify contract {contract.contract_number} signing: no creator email")
+        return
+
+    subject = f"[ELIZA] Contract {contract.contract_number} signed by {contract.client.name}"
+    recipients = [contract.created_by.email]
+
+    try:
+        signed_at = contract.signed_at.strftime('%B %d, %Y %H:%M UTC') if contract.signed_at else 'just now'
+        text_body = (
+            f"Hello {contract.created_by.first_name},\n\n"
+            f"Good news - {contract.client.name} has signed contract {contract.contract_number}: {contract.title}\n"
+            f"Signed by: {contract.signer_name}\n"
+            f"Signed at: {signed_at}\n\n"
+            f"View it here: {current_app.config['BASE_URL']}/contracts/{contract.id}\n\n"
+            f"Thank you,\nELIZA Project Management System"
+        )
+        html_body = render_template(
+            'emails/contract_response_notification.html',
+            contract=contract,
+            signed=True,
+            base_url=current_app.config['BASE_URL'],
+        )
+        send_email(subject, recipients, text_body, html_body)
+        logger.info(f"Contract {contract.contract_number} signed notification sent to {contract.created_by.email}")
+    except Exception as e:
+        logger.error(f"Failed to send contract signed notification for {contract.contract_number}: {str(e)}")
+
+
+def send_contract_declined_notification(contract):
+    """
+    Notify the staff member who created a contract that the client declined it.
+
+    Args:
+        contract: The Contract object (status already updated to declined)
+    """
+    if not contract.created_by or not contract.created_by.email:
+        logger.warning(f"Cannot notify contract {contract.contract_number} decline: no creator email")
+        return
+
+    subject = f"[ELIZA] Contract {contract.contract_number} declined by {contract.client.name}"
+    recipients = [contract.created_by.email]
+
+    try:
+        text_body = (
+            f"Hello {contract.created_by.first_name},\n\n"
+            f"{contract.client.name} has declined contract {contract.contract_number}: {contract.title}\n"
+            + (f"Reason given: {contract.decline_reason}\n" if contract.decline_reason else "")
+            + f"\nView it here: {current_app.config['BASE_URL']}/contracts/{contract.id}\n\n"
+            f"Thank you,\nELIZA Project Management System"
+        )
+        html_body = render_template(
+            'emails/contract_response_notification.html',
+            contract=contract,
+            signed=False,
+            base_url=current_app.config['BASE_URL'],
+        )
+        send_email(subject, recipients, text_body, html_body)
+        logger.info(f"Contract {contract.contract_number} decline notification sent to {contract.created_by.email}")
+    except Exception as e:
+        logger.error(f"Failed to send contract decline notification for {contract.contract_number}: {str(e)}")
+
+
 def send_quote_response_notification(quote, invoice=None):
     """
     Notify the staff member who created a quote that the client has responded to it.

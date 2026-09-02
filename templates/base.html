@@ -40,6 +40,10 @@
                 <a class="sidebar-link{% if ep in ('clients', 'client_detail', 'client_create', 'client_edit') %} active{% endif %}" href="{{ url_for('clients') }}"><i class="fas fa-users"></i> Clients</a>
                 <a class="sidebar-link{% if ep in ('projects', 'project_detail', 'project_create', 'project_edit') %} active{% endif %}" href="{{ url_for('projects') }}"><i class="fas fa-project-diagram"></i> Projects</a>
                 <a class="sidebar-link{% if ep in ('all_tasks', 'task_detail', 'create_task') %} active{% endif %}" href="{{ url_for('all_tasks') }}"><i class="fas fa-tasks"></i> Tasks</a>
+                {# Contracts uses an inline stroke SVG (same .sidebar-icon-svg
+                   treatment as Wallet below) - a document with a signature
+                   line. Active on every contracts.* endpoint. #}
+                <a class="sidebar-link{% if ep.startswith('contracts.') %} active{% endif %}" href="{{ url_for('contracts.contracts_list') }}"><svg class="sidebar-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 16c1-1.5 2-1.5 3 0s2 1.5 3 0"></path><line x1="8" y1="12" x2="14" y2="12"></line></svg> Contracts</a>
                 <a class="sidebar-link{% if ep == 'email.bulk_email' %} active{% endif %}" href="{{ url_for('email.bulk_email') }}"><i class="fas fa-envelope"></i> Bulk Email</a>
 
                 <div class="sidebar-section-label">Billing</div>

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contract {{ doc_number }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Same browser-print pattern as print/document.html: dark toolbar
+           with a print button, a paper "sheet", and @media print rules that
+           strip the chrome so the browser's Save-as-PDF is the PDF export. */
+        :root {
+            --accent: #2952e3;
+            --ink: #1a1d29;
+            --muted: #6b7280;
+            --line: #e5e7eb;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, Segoe UI, Arial, sans-serif;
+            color: var(--ink);
+            margin: 0;
+            background: #f4f6f9;
+        }
+        .toolbar {
+            background: #212529;
+            padding: 14px 0;
+            text-align: center;
+        }
+        .toolbar button {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .toolbar button:hover { background: #1e3fc4; }
+        .toolbar .hint { color: #aab; font-size: 12px; margin-top: 6px; }
+
+        .sheet {
+            max-width: 800px;
+            margin: 32px auto;
+            background: #fff;
+            padding: 56px 64px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+            border-radius: 4px;
+        }
+
+        .doc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 3px solid var(--accent);
+            padding-bottom: 24px;
+            margin-bottom: 32px;
+        }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand img { height: 44px; }
+        .brand-name { font-size: 22px; font-weight: 700; }
+        .doc-type {
+            text-align: right;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .doc-number { text-align: right; color: var(--muted); font-size: 14px; margin-top: 2px; }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 32px;
+            margin-bottom: 36px;
+        }
+        .meta-block h6 {
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0 0 6px;
+            font-weight: 600;
+        }
+        .meta-block .name { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
+        .meta-block .sub { color: var(--muted); font-size: 13px; line-height: 1.5; }
+        .dates { text-align: right; }
+        .dates div { margin-bottom: 8px; }
+        .dates .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .dates .value { font-weight: 600; font-size: 14px; }
+
+        .status-pill {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-signed { background: #dcfce7; color: #166534; }
+        .status-sent { background: #fef3c7; color: #92400e; }
+        .status-declined { background: #fee2e2; color: #991b1b; }
+        .status-draft { background: #e5e7eb; color: #374151; }
+
+        .contract-body {
+            font-size: 14px;
+            line-height: 1.8;
+            color: #1f2937;
+            margin-bottom: 40px;
+        }
+
+        .signature-block {
+            border-top: 2px solid var(--line);
+            padding-top: 24px;
+            margin-bottom: 32px;
+        }
+        .signature-block h6 {
+            color: var(--muted);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0 0 12px;
+            font-weight: 600;
+        }
+        .signature-block .row { display: flex; gap: 48px; align-items: flex-end; }
+        .signature-block .field { font-size: 14px; margin-bottom: 8px; }
+        .signature-block .field .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: block; }
+        .signature-block .field .value { font-weight: 600; }
+        .signature-block img { max-height: 120px; max-width: 300px; border: 1px solid var(--line); border-radius: 4px; padding: 8px; }
+        .audit-note { color: var(--muted); font-size: 12px; margin-top: 12px; }
+
+        .doc-footer {
+            text-align: center;
+            color: var(--muted);
+            font-size: 12px;
+            padding-top: 24px;
+            border-top: 1px solid var(--line);
+        }
+
+        @media print {
+            body { background: #fff; }
+            .toolbar { display: none; }
+            .sheet { box-shadow: none; margin: 0; padding: 0.4in; max-width: 100%; border-radius: 0; }
+            @page { margin: 0.5in; }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button onclick="window.print()">Download PDF / Print</button>
+        <div class="hint">Use your browser's "Save as PDF" option in the print dialog</div>
+    </div>
+
+    <div class="sheet">
+        <div class="doc-header">
+            <div class="brand">
+                {% if brand_logo_url %}<img src="{{ url_for('static', filename=brand_logo_url) }}" alt="{{ brand_name }}">{% endif %}
+                <span class="brand-name">{{ brand_name }}</span>
+            </div>
+            <div>
+                <div class="doc-type">Contract</div>
+                <div class="doc-number">{{ doc_number }}</div>
+            </div>
+        </div>
+
+        <div class="meta-row">
+            <div class="meta-block">
+                <h6>From</h6>
+                <div class="name">{{ brand_name }}</div>
+                <div class="sub">{{ from_name }}{% if from_email %}<br>{{ from_email }}{% endif %}{% if from_phone %}<br>{{ from_phone }}{% endif %}</div>
+            </div>
+            <div class="meta-block">
+                <h6>Prepared For</h6>
+                <div class="name">{{ client_name }}</div>
+                <div class="sub">{% if client_contact %}{{ client_contact }}<br>{% endif %}{% if client_email %}{{ client_email }}<br>{% endif %}{% if client_phone %}{{ client_phone }}{% endif %}</div>
+            </div>
+            <div class="dates">
+                <div><span class="label">Date</span><br><span class="value">{{ issue_date }}</span></div>
+                <div><span class="status-pill status-{{ status }}">{{ status_label }}</span></div>
+            </div>
+        </div>
+
+        {% if contract.title %}<h3 style="margin-bottom: 20px;">{{ contract.title }}</h3>{% endif %}
+
+        {# The frozen legal text (the caller passes body_snapshot; the staff
+           route falls back to body for a draft preview). nl2br HTML-escapes
+           first (filters.py), so |safe only trusts its own <br> tags. #}
+        <div class="contract-body">{{ body_text|nl2br|safe }}</div>
+
+        {% if contract.status == 'signed' %}
+        <div class="signature-block">
+            <h6>Signature &amp; Audit Trail</h6>
+            <div class="row">
+                <div>
+                    <div class="field"><span class="label">Signed by</span><span class="value">{{ contract.signer_name }}</span></div>
+                    {% if contract.signed_at %}<div class="field"><span class="label">Signed at</span><span class="value">{{ contract.signed_at.strftime('%B %d, %Y %H:%M') }} UTC</span></div>{% endif %}
+                    {% if contract.signer_ip %}<div class="field"><span class="label">IP address</span><span class="value">{{ contract.signer_ip }}</span></div>{% endif %}
+                </div>
+                {% if contract.signature_image %}
+                <div>
+                    <div class="field"><span class="label">Signature</span></div>
+                    {# Stored, size-capped data: URL PNG - self-contained, no external fetch. #}
+                    <img src="{{ contract.signature_image }}" alt="Signature">
+                </div>
+                {% endif %}
+            </div>
+            {% if contract.signer_user_agent %}<div class="audit-note">Signed from: {{ contract.signer_user_agent }}</div>{% endif %}
+        </div>
+        {% endif %}
+
+        <div class="doc-footer">
+            {{ brand_name }} &middot; Contract {{ doc_number }}
+        </div>
+    </div>
+</body>
+</html>

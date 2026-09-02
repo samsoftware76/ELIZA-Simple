@@ -1,0 +1,225 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Contract {{ contract.contract_number }} - ELIZA{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* The frozen contract text - rendered via |nl2br|safe (nl2br HTML-escapes
+       first, see filters.py), styled to read like a document. */
+    .contract-body {
+        background: #fff;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        padding: 1.25rem 1.5rem;
+        line-height: 1.7;
+    }
+    .signature-pad {
+        border: 1px dashed #adb5bd;
+        border-radius: 6px;
+        background: #fff;
+        width: 100%;
+        height: 160px;
+        touch-action: none; /* stop touch drawing from scrolling the page */
+        cursor: crosshair;
+        display: block;
+    }
+    .signature-display {
+        max-width: 320px;
+        max-height: 140px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm">
+    <div class="card-body p-4">
+        {% if contract.status == 'signed' %}
+            <div class="status-banner accepted"><i class="fas fa-check-circle mr-2"></i>This contract was signed{% if contract.signed_at %} on {{ contract.signed_at.strftime('%B %d, %Y') }}{% endif %}.</div>
+        {% elif contract.status == 'declined' %}
+            <div class="status-banner declined"><i class="fas fa-times-circle mr-2"></i>This contract was declined{% if contract.declined_at %} on {{ contract.declined_at.strftime('%B %d, %Y') }}{% endif %}.</div>
+        {% elif contract.status == 'sent' %}
+            <div class="status-banner sent"><i class="fas fa-pen-nib mr-2"></i>This contract is awaiting your signature. Please review it below.</div>
+        {% endif %}
+
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <h3 class="mb-0">{{ contract.title }}</h3>
+                <small class="text-muted">Contract {{ contract.contract_number }}</small>
+            </div>
+        </div>
+
+        <p class="mb-1"><strong>Prepared for:</strong> {{ contract.client.name }}</p>
+        {% if contract.project %}<p class="mb-3"><strong>Project:</strong> {{ contract.project.title }}</p>{% endif %}
+
+        <div class="text-right mb-2">
+            <a href="{{ url_for('portal.print_contract', token=contract.public_token) }}" class="btn btn-sm btn-outline-secondary" target="_blank">
+                <i class="fas fa-file-pdf"></i> Print / Download PDF
+            </a>
+        </div>
+
+        <h6 class="text-muted text-uppercase mt-4" style="letter-spacing: .5px; font-size: .75rem;">Contract Terms</h6>
+        {# body_snapshot ONLY - the legal text frozen at send time - never the
+           live working copy. nl2br HTML-escapes first (filters.py), so |safe
+           only trusts the <br> tags nl2br itself inserted. #}
+        {% if contract.body_snapshot %}
+        <div class="contract-body">{{ contract.body_snapshot|nl2br|safe }}</div>
+        {% else %}
+        <p class="text-muted">This contract hasn't been sent yet. Please check back once you receive the signing email.</p>
+        {% endif %}
+
+        {% if contract.status == 'signed' %}
+        <hr class="my-4">
+        <h6 class="text-muted text-uppercase" style="letter-spacing: .5px; font-size: .75rem;">Signature &amp; Audit Trail</h6>
+        <p class="mb-1"><strong>Signed by:</strong> {{ contract.signer_name }}</p>
+        {% if contract.signed_at %}<p class="mb-1"><strong>Signed at:</strong> {{ contract.signed_at.strftime('%B %d, %Y %H:%M') }} UTC</p>{% endif %}
+        {% if contract.signer_ip %}<p class="mb-1"><strong>IP address:</strong> {{ contract.signer_ip }}</p>{% endif %}
+        {% if contract.signature_image %}
+        <p class="mb-1 mt-2"><strong>Signature:</strong></p>
+        {# Stored, size-capped data: URL PNG - self-contained, no external fetch. #}
+        <img src="{{ contract.signature_image }}" alt="Signature" class="border rounded p-2 bg-white signature-display">
+        {% endif %}
+        {% endif %}
+
+        {% if contract.is_signable %}
+        <hr class="my-4">
+        <h5>Sign this contract</h5>
+        <form method="POST" action="{{ url_for('portal.sign_contract', token=contract.public_token) }}" id="signForm"
+              onsubmit="return prepareSignature(this)">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="signature_image" id="signatureImage" value="">
+
+            <div class="form-group">
+                <label for="signer_name">Your full name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="signer_name" name="signer_name" maxlength="150" required
+                       placeholder="Type your full legal name">
+                <small class="text-muted">Your typed name is your signature.</small>
+            </div>
+
+            <div class="form-group">
+                <label for="signaturePad" class="mb-1">Draw your signature <span class="text-muted">(optional)</span></label>
+                <canvas id="signaturePad" class="signature-pad" width="640" height="160"></canvas>
+                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="clearSignature">
+                    <i class="fas fa-eraser"></i> Clear
+                </button>
+            </div>
+
+            <div class="form-group form-check">
+                <input type="checkbox" class="form-check-input" id="consent" name="consent" value="yes" required>
+                <label class="form-check-label" for="consent">
+                    I agree that my typed name and electronic signature are the legal equivalent of my handwritten signature on this contract.
+                </label>
+            </div>
+
+            <div class="d-flex justify-content-end">
+                <button type="button" class="btn btn-outline-danger mr-2" data-toggle="modal" data-target="#declineModal">
+                    <i class="fas fa-times"></i> Decline
+                </button>
+                <button type="submit" class="btn btn-success"><i class="fas fa-pen-nib"></i> Sign Contract</button>
+            </div>
+        </form>
+
+        <div class="modal fade" id="declineModal" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <form method="POST" action="{{ url_for('portal.decline_contract', token=contract.public_token) }}"
+                      onsubmit="return confirmAndDisable(this)">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Decline Contract</h5>
+                            <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                        </div>
+                        <div class="modal-body">
+                            <label for="reason">Let us know why (optional)</label>
+                            <textarea class="form-control" id="reason" name="reason" rows="3"></textarea>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-danger">Decline Contract</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <p class="text-muted mt-4 mb-0" style="font-size: .8rem;">
+            Electronic signatures are widely legally recognized; consult a lawyer for your jurisdiction's requirements.
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if contract.is_signable %}
+<script>
+    // Vanilla signature pad: mouse + touch drawing on a plain canvas. The
+    // drawn image is optional - the typed name is the required signature -
+    // and is written into the hidden input as a data: URL PNG only at
+    // submit time, only if something was actually drawn.
+    (function () {
+        var canvas = document.getElementById('signaturePad');
+        if (!canvas) return;
+        var ctx = canvas.getContext('2d');
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#1a1d29';
+
+        var drawing = false;
+        var hasDrawn = false;
+
+        function pos(e) {
+            var rect = canvas.getBoundingClientRect();
+            var point = (e.touches && e.touches.length) ? e.touches[0] : e;
+            // The canvas is styled width:100% but has a fixed bitmap size -
+            // scale pointer coordinates into bitmap space so strokes land
+            // under the pointer at any rendered width.
+            return {
+                x: (point.clientX - rect.left) * (canvas.width / rect.width),
+                y: (point.clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+        function start(e) {
+            e.preventDefault();
+            drawing = true;
+            var p = pos(e);
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+        }
+        function move(e) {
+            if (!drawing) return;
+            e.preventDefault();
+            var p = pos(e);
+            ctx.lineTo(p.x, p.y);
+            ctx.stroke();
+            hasDrawn = true;
+        }
+        function end() { drawing = false; }
+
+        canvas.addEventListener('mousedown', start);
+        canvas.addEventListener('mousemove', move);
+        document.addEventListener('mouseup', end);
+        canvas.addEventListener('touchstart', start, { passive: false });
+        canvas.addEventListener('touchmove', move, { passive: false });
+        canvas.addEventListener('touchend', end);
+        canvas.addEventListener('touchcancel', end);
+
+        document.getElementById('clearSignature').addEventListener('click', function () {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            hasDrawn = false;
+            document.getElementById('signatureImage').value = '';
+        });
+
+        // Called from the sign form's onsubmit: copy the drawing (if any)
+        // into the hidden input, then hand off to the shared
+        // confirmAndDisable double-submit guard.
+        window.prepareSignature = function (form) {
+            if (hasDrawn) {
+                document.getElementById('signatureImage').value = canvas.toDataURL('image/png');
+            }
+            return confirmAndDisable(form, 'Sign this contract? This records your name and signature.');
+        };
+    })();
+</script>
+{% endif %}
+{% endblock %}

@@ -490,6 +490,31 @@ class InvoiceForm(FlaskForm):
             self.project_id.choices = [(0, '— No project —')]
 
 
+class ContractForm(FlaskForm):
+    """Form for creating and editing contracts (models/billing.py Contract).
+    Editing is DRAFT-ONLY - after sending, body_snapshot is the frozen legal
+    text and api/contracts.py refuses edits regardless of this form."""
+    client_id = SelectField('Client', coerce=int, validators=[DataRequired()])
+    project_id = SelectField('Project (optional)', coerce=int, validators=[Optional()])
+    title = StringField('Contract Title', validators=[DataRequired(), Length(max=150)])
+    body = TextAreaField('Contract Terms', validators=[DataRequired(), Length(max=50000)],
+                         description="Plain text - line breaks are preserved. This is the text the client will sign.")
+    submit = SubmitField('Save Contract')
+
+    def __init__(self, *args, **kwargs):
+        # Tenant isolation: see ProjectForm.owner_id above - a contract must
+        # only be able to point at this user's own clients/projects.
+        self.owner_id = kwargs.pop('owner_id', None)
+        super(ContractForm, self).__init__(*args, **kwargs)
+        if self.owner_id is not None:
+            self.client_id.choices = [(c.id, c.name) for c in Client.query.filter_by(owner_id=self.owner_id).order_by(Client.name).all()]
+            self.project_id.choices = [(0, '— No project —')] + \
+                [(p.id, p.title) for p in Project.query.filter_by(owner_id=self.owner_id).order_by(Project.title).all()]
+        else:
+            self.client_id.choices = []
+            self.project_id.choices = [(0, '— No project —')]
+
+
 class TimeEntryForm(FlaskForm):
     """Form for tracking time spent on tasks"""
     task_id = HiddenField('Task ID', validators=[DataRequired()])

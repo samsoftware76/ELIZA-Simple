@@ -32,12 +32,13 @@ def nl2br(value):
     return escape(value).replace('\n', Markup('<br>'))
 
 def billing_status_badge(status):
-    """Convert a quote/invoice status string to a Bootstrap badge class"""
+    """Convert a quote/invoice/contract status string to a Bootstrap badge class"""
     status_map = {
         'draft': 'secondary',
         'sent': 'primary',
         'accepted': 'success',
         'paid': 'success',
+        'signed': 'success',
         'declined': 'danger',
         'cancelled': 'danger',
     }

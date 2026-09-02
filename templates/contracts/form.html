@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}
+    {% if contract %}Edit Contract {{ contract.contract_number }}{% else %}New Contract{% endif %} - ELIZA
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="mb-4">
+        <a href="{{ url_for('contracts.contracts_list') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Contracts
+        </a>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h2 class="mb-0">{% if contract %}Edit Contract {{ contract.contract_number }}{% else %}New Contract{% endif %}</h2>
+        </div>
+        <div class="card-body">
+            <form method="POST">
+                {{ form.hidden_tag() }}
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            {{ form.client_id.label }}
+                            {{ form.client_id(class="form-control") }}
+                            {% for error in form.client_id.errors %}<small class="text-danger d-block">{{ error }}</small>{% endfor %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            {{ form.project_id.label }}
+                            {{ form.project_id(class="form-control") }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    {{ form.title.label }}
+                    {{ form.title(class="form-control", placeholder="e.g. Website Redesign - Service Agreement") }}
+                    {% for error in form.title.errors %}<small class="text-danger d-block">{{ error }}</small>{% endfor %}
+                </div>
+
+                <div class="form-group">
+                    {{ form.body.label }}
+                    {{ form.body(class="form-control", rows=16, placeholder="The full contract terms. Plain text - line breaks are preserved exactly as typed.") }}
+                    <small class="text-muted">{{ form.body.description }}</small>
+                    {% for error in form.body.errors %}<small class="text-danger d-block">{{ error }}</small>{% endfor %}
+                </div>
+
+                <div class="form-group mt-4">
+                    <a href="{{ url_for('contracts.contracts_list') }}" class="btn btn-outline-secondary">Cancel</a>
+                    {{ form.submit(class="btn btn-primary") }}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+{% endblock %}

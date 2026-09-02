@@ -170,6 +170,77 @@ class Invoice(db.Model):
         return f'<Invoice {self.invoice_number}>'
 
 
+class ContractStatus:
+    DRAFT = 'draft'
+    SENT = 'sent'
+    SIGNED = 'signed'
+    DECLINED = 'declined'
+
+    CHOICES = [DRAFT, SENT, SIGNED, DECLINED]
+
+
+class Contract(db.Model):
+    """A contract document sent to a client for signature via the same
+    tokenized no-login portal pattern as Quote/Invoice above.
+
+    Immutability guarantee: body is editable ONLY while status is draft. At
+    send time body_snapshot is frozen to a copy of body - that snapshot is
+    the legal text the client actually signs, and api/contracts.py blocks
+    editing once the contract has been sent. The signature/audit fields
+    (signer_name, signature_image, signer_ip, signer_user_agent, signed_at)
+    are written by the stage-2 portal signing flow, never by staff routes.
+    """
+    __tablename__ = 'contracts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    contract_number = db.Column(db.String(20), unique=True, nullable=False)
+
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    title = db.Column(db.String(150), nullable=False)
+    # The contract terms - plain text with line breaks, rendered through the
+    # |nl2br|safe chain (nl2br HTML-escapes first, see filters.py).
+    body = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), default=ContractStatus.DRAFT, nullable=False)
+
+    public_token = db.Column(db.String(64), unique=True, default=generate_public_token, nullable=False)
+
+    # Frozen copy of body taken AT SEND TIME - what the client actually signs.
+    body_snapshot = db.Column(db.Text)
+
+    sent_at = db.Column(db.DateTime)
+    signed_at = db.Column(db.DateTime)
+    declined_at = db.Column(db.DateTime)
+    decline_reason = db.Column(db.Text)
+
+    # Signature audit trail (stage-2 portal signing flow writes these).
+    signer_name = db.Column(db.String(150))
+    signature_image = db.Column(db.Text)  # data: URL PNG from a canvas, capped ~200KB at validation
+    signer_ip = db.Column(db.String(64))
+    signer_user_agent = db.Column(db.String(300))
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # foreign_keys= is explicit on every relationship here (the
+    # AmbiguousForeignKeysError lesson from ActivityLog in models/models.py):
+    # a second FK to any of these tables added later must not silently break
+    # every mapper in the registry.
+    client = db.relationship('Client', foreign_keys=[client_id], backref='contracts')
+    project = db.relationship('Project', foreign_keys=[project_id], backref='contracts')
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+
+    @property
+    def is_signable(self):
+        """Whether the client can still sign/decline this contract via the portal."""
+        return self.status == ContractStatus.SENT
+
+    def __repr__(self):
+        return f'<Contract {self.contract_number}>'
+
+
 class InvoiceItem(db.Model):
     __tablename__ = 'invoice_items'
 

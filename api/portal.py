@@ -14,14 +14,20 @@ from datetime import datetime
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 
 from models import db, User
-from models.billing import Quote, Invoice, QuoteStatus, InvoiceStatus
+from models.models import ActivityLog
+from models.billing import Quote, Invoice, Contract, QuoteStatus, InvoiceStatus, ContractStatus
 from api.payment import PesaPalPayment
 # Safe import direction: billing.py never imports portal.py (index.py loads
 # billing first, then portal), so pulling the shared conversion core from
 # there cannot become circular.
 from api.billing import create_invoice_from_quote
-from utils.email_utils import send_quote_response_notification, send_invoice_paid_notification
-from utils.document_print import build_print_context
+from utils.email_utils import (
+    send_quote_response_notification,
+    send_invoice_paid_notification,
+    send_contract_signed_notification,
+    send_contract_declined_notification,
+)
+from utils.document_print import build_print_context, build_contract_print_context
 from utils.analytics import log_event
 
 portal_bp = Blueprint('portal', __name__, url_prefix='/portal')
@@ -139,6 +145,172 @@ def decline_quote(token):
         flash('Something went wrong recording your response. Please try again.', 'danger')
 
     return redirect(url_for('portal.view_quote', token=token))
+
+
+# --------------------------------------------------------------------------
+# Contracts
+# --------------------------------------------------------------------------
+
+# Signature-image validation bounds for the sign route below. The canvas
+# submits a data:image/png;base64,... URL; ~200KB of image keeps the stored
+# TEXT column (and every later page render embedding it) reasonable.
+_SIGNATURE_PREFIX = 'data:image/png;base64,'
+_SIGNATURE_MAX_LEN = 280 * 1024  # ~200KB of PNG once base64 overhead (~4/3) is accounted for
+
+
+def _client_ip():
+    """Best-effort client IP for the signature audit trail.
+
+    Vercel (and most proxies) put the real client address first in
+    X-Forwarded-For; request.remote_addr there is just the proxy. Falls back
+    to remote_addr for local/dev where no proxy header exists. Audit-trail
+    metadata only - never used for authorization decisions.
+    """
+    forwarded = request.headers.get('X-Forwarded-For', '')
+    if forwarded:
+        first = forwarded.split(',')[0].strip()
+        if first:
+            return first[:64]
+    return (request.remote_addr or '')[:64]
+
+
+def _log_portal_contract_activity(action_type, contract, description):
+    """ActivityLog entry for a portal (no-login) contract action. Same
+    user_id/owner_id pair convention as api/contracts.py's
+    _log_contract_activity, except there is no current_user here - the
+    contract's own creator is the staff actor these entries are attributed
+    to, matching how portal quote accept attributes its analytics events.
+    Adds to the session only - the caller owns the commit."""
+    db.session.add(ActivityLog(
+        user_id=contract.created_by_id,
+        owner_id=contract.created_by.get_owner_id() if contract.created_by else None,
+        action_type=action_type,
+        entity_type='contract',
+        entity_id=contract.id,
+        description=description,
+    ))
+
+
+@portal_bp.route('/contract/<token>')
+def view_contract(token):
+    """Client-facing contract view: review and sign or decline.
+
+    Renders body_snapshot ONLY - the frozen legal text captured at send time
+    - never the live working copy, so what the client reads is exactly what
+    their signature applies to even if a draft edit ever preceded the send.
+    """
+    contract = Contract.query.filter_by(public_token=token).first_or_404()
+    # Branding is a tenant-level setting (see /profile) that only ever gets
+    # written onto the account owner's own row - a contract created by a team
+    # member must still resolve branding through get_owner_id() to the
+    # owner's row, or it silently falls back to generic 'ELIZA' branding.
+    owner = User.query.get(contract.created_by.get_owner_id()) if contract.created_by else None
+    return render_template('portal/contract.html', contract=contract, **_brand_context(owner))
+
+
+@portal_bp.route('/contract/<token>/print')
+def print_contract(token):
+    """Standalone printable/PDF view of a contract (client view, no login).
+
+    Prints the frozen body_snapshot only - a not-yet-sent contract has no
+    snapshot and prints an empty terms section rather than leaking the live
+    working copy to a token holder."""
+    contract = Contract.query.filter_by(public_token=token).first_or_404()
+    return render_template('print/contract.html',
+                           **build_contract_print_context(contract, contract.body_snapshot))
+
+
+@portal_bp.route('/contract/<token>/sign', methods=['POST'])
+def sign_contract(token):
+    """Client signs the contract.
+
+    Guards, in order:
+    - Already SIGNED: idempotent - a double-submit (back button, retry)
+      redirects to the signed view with an info flash and NEVER overwrites
+      the first recorded signature.
+    - Otherwise not signable (draft/declined): refused with a flash.
+    - Signer name and the consent checkbox are required; the drawn signature
+      image is optional, but when present must be a data:image/png data URL
+      under ~200KB.
+    """
+    contract = Contract.query.filter_by(public_token=token).first_or_404()
+
+    if contract.status == ContractStatus.SIGNED:
+        flash('This contract has already been signed - the original signature is kept on record.', 'info')
+        return redirect(url_for('portal.view_contract', token=token))
+    if not contract.is_signable:
+        flash('This contract can no longer be responded to.', 'warning')
+        return redirect(url_for('portal.view_contract', token=token))
+
+    signer_name = (request.form.get('signer_name') or '').strip()[:150]
+    consent = request.form.get('consent')
+    signature_image = (request.form.get('signature_image') or '').strip()
+
+    if not signer_name:
+        flash('Please type your full name to sign the contract.', 'danger')
+        return redirect(url_for('portal.view_contract', token=token))
+    if not consent:
+        flash('Please tick the consent box to sign the contract.', 'danger')
+        return redirect(url_for('portal.view_contract', token=token))
+    if signature_image:
+        if len(signature_image) > _SIGNATURE_MAX_LEN:
+            flash('The drawn signature image is too large. Please clear the signature pad, draw a simpler signature, and try again.', 'danger')
+            return redirect(url_for('portal.view_contract', token=token))
+        if not signature_image.startswith(_SIGNATURE_PREFIX):
+            flash('The drawn signature could not be read. Please clear the signature pad and try again.', 'danger')
+            return redirect(url_for('portal.view_contract', token=token))
+
+    try:
+        contract.status = ContractStatus.SIGNED
+        contract.signer_name = signer_name
+        contract.signature_image = signature_image or None
+        contract.signed_at = datetime.utcnow()
+        contract.signer_ip = _client_ip()
+        contract.signer_user_agent = (request.headers.get('User-Agent') or '')[:300]
+
+        _log_portal_contract_activity(
+            'signed', contract,
+            f'Contract {contract.contract_number} signed by {signer_name} via the client portal')
+        db.session.commit()
+        # No logged-in current_user here - portal.py is public - so the
+        # contract's own creator is the user_id this event is attributed to.
+        log_event('contract_signed', user_id=contract.created_by_id, contract_id=contract.id)
+        send_contract_signed_notification(contract)
+        flash('Contract signed. Thank you!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error signing contract {token}: {str(e)}")
+        flash('Something went wrong recording your signature. Please try again.', 'danger')
+
+    return redirect(url_for('portal.view_contract', token=token))
+
+
+@portal_bp.route('/contract/<token>/decline', methods=['POST'])
+def decline_contract(token):
+    """Client declines the contract, optionally with a reason (mirrors quote decline)"""
+    contract = Contract.query.filter_by(public_token=token).first_or_404()
+    if not contract.is_signable:
+        flash('This contract can no longer be responded to.', 'warning')
+        return redirect(url_for('portal.view_contract', token=token))
+
+    try:
+        contract.status = ContractStatus.DECLINED
+        contract.declined_at = datetime.utcnow()
+        contract.decline_reason = (request.form.get('reason') or '').strip()[:2000]
+
+        _log_portal_contract_activity(
+            'declined', contract,
+            f'Contract {contract.contract_number} declined by {contract.client.name} via the client portal')
+        db.session.commit()
+        log_event('contract_declined', user_id=contract.created_by_id, contract_id=contract.id)
+        send_contract_declined_notification(contract)
+        flash('The contract has been declined.', 'info')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error declining contract {token}: {str(e)}")
+        flash('Something went wrong recording your response. Please try again.', 'danger')
+
+    return redirect(url_for('portal.view_contract', token=token))
 
 
 # --------------------------------------------------------------------------

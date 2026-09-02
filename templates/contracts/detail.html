@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}Contract {{ contract.contract_number }} - ELIZA{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('contracts.contracts_list') }}">Contracts</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ contract.contract_number }}</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>{{ contract.contract_number }} <span class="badge badge-{{ contract.status|billing_status_badge }}">{{ contract.status|capitalize }}</span></h1>
+            <p class="text-muted mb-0">{{ contract.title }}</p>
+        </div>
+        <div class="btn-group">
+            <a href="{{ url_for('contracts.contract_print', contract_id=contract.id) }}" class="btn btn-outline-secondary" target="_blank">
+                <i class="fas fa-file-pdf"></i> Print / PDF
+            </a>
+            {% if contract.status == 'draft' %}
+                <a href="{{ url_for('contracts.contract_edit', contract_id=contract.id) }}" class="btn btn-outline-primary"><i class="fas fa-edit"></i> Edit</a>
+                <form method="POST" action="{{ url_for('contracts.contract_send', contract_id=contract.id) }}" class="d-inline"
+                      data-recipient="{{ contract.client.email or 'the client' }}"
+                      onsubmit="return confirmAndDisable(this, 'Send this contract to ' + this.dataset.recipient + '? The contract text is frozen once sent.')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send to Client</button>
+                </form>
+            {% elif contract.status == 'sent' %}
+                <form method="POST" action="{{ url_for('contracts.contract_send', contract_id=contract.id) }}" class="d-inline"
+                      data-recipient="{{ contract.client.email or 'the client' }}"
+                      onsubmit="return confirmAndDisable(this, 'Re-send this contract to ' + this.dataset.recipient + '?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-primary"><i class="fas fa-paper-plane"></i> Re-send</button>
+                </form>
+            {% endif %}
+            {% if contract.status != 'signed' %}
+                {# POST-only delete with CSRF (not the legacy GET-delete pattern).
+                   Never offered on a signed contract - a legal record the route
+                   refuses to delete regardless. #}
+                <form method="POST" action="{{ url_for('contracts.contract_delete', contract_id=contract.id) }}" class="d-inline"
+                      onsubmit="return confirm('Delete this contract? This cannot be undone.')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger"><i class="fas fa-trash"></i> Delete</button>
+                </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h5 class="mb-0">Contract Terms{% if contract.status != 'draft' %} <small class="text-muted">(frozen at send time)</small>{% endif %}</h5></div>
+                {# Once sent, body_snapshot is the frozen legal text the client
+                   signs - show THAT, never the (unreachable-to-edit-anyway)
+                   working copy. nl2br HTML-escapes first (filters.py), so the
+                   |safe here only trusts the <br> tags nl2br itself inserted. #}
+                <div class="card-body"><p class="mb-0">{{ (contract.body_snapshot or contract.body)|nl2br|safe }}</p></div>
+            </div>
+
+            {% if contract.status == 'declined' and contract.decline_reason %}
+            <div class="alert alert-danger">
+                <strong>Decline reason:</strong> {{ contract.decline_reason }}
+            </div>
+            {% endif %}
+
+            {% if contract.status == 'signed' %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h5 class="mb-0">Signature &amp; Audit Trail</h5></div>
+                <div class="card-body">
+                    <p><strong>Signed by:</strong> {{ contract.signer_name or 'Unknown' }}</p>
+                    {% if contract.signed_at %}<p><strong>Signed at:</strong> {{ contract.signed_at.strftime('%b %d, %Y %H:%M') }} UTC</p>{% endif %}
+                    {% if contract.signer_ip %}<p><strong>IP address:</strong> {{ contract.signer_ip }}</p>{% endif %}
+                    {% if contract.signer_user_agent %}<p><strong>Device:</strong> <small class="text-muted">{{ contract.signer_user_agent }}</small></p>{% endif %}
+                    {% if contract.signature_image %}
+                    <p class="mb-1"><strong>Signature:</strong></p>
+                    <img src="{{ contract.signature_image }}" alt="Client signature" class="border rounded p-2 bg-white" style="max-width: 320px; max-height: 140px;">
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h5 class="mb-0">Details</h5></div>
+                <div class="card-body">
+                    <p><strong>Client:</strong> <a href="{{ url_for('client_detail', client_id=contract.client.id) }}">{{ contract.client.name }}</a></p>
+                    {% if contract.project %}<p><strong>Project:</strong> <a href="{{ url_for('project_detail', project_id=contract.project.id) }}">{{ contract.project.title }}</a></p>{% endif %}
+                    <p><strong>Created by:</strong> {{ contract.created_by.get_full_name() }}</p>
+                    <p><strong>Created:</strong> {{ contract.created_at.strftime('%b %d, %Y') }}</p>
+                    {% if contract.sent_at %}<p><strong>Sent:</strong> {{ contract.sent_at.strftime('%b %d, %Y %H:%M') }}</p>{% endif %}
+                    {% if contract.signed_at %}<p><strong>Signed:</strong> {{ contract.signed_at.strftime('%b %d, %Y %H:%M') }}</p>{% endif %}
+                    {% if contract.declined_at %}<p><strong>Declined:</strong> {{ contract.declined_at.strftime('%b %d, %Y %H:%M') }}</p>{% endif %}
+                </div>
+            </div>
+
+            {% if contract.status != 'draft' %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h5 class="mb-0">Client Portal Link</h5></div>
+                <div class="card-body">
+                    <div class="input-group">
+                        <input type="text" class="form-control form-control-sm" id="portal-link" value="{{ portal_url }}" readonly onclick="this.select()">
+                        <div class="input-group-append">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" id="copy-portal-link"
+                                    data-portal-url="{{ portal_url }}" onclick="copyPortalLink(this)">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-2">Share this link with the client (WhatsApp, SMS, email) &mdash; they can review and sign there, no login needed.</small>
+                </div>
+            </div>
+            {% else %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header"><h5 class="mb-0">Client Portal Link</h5></div>
+                <div class="card-body">
+                    <small class="text-muted">Sending this contract to the client activates its portal link &mdash; you can copy and share it here afterwards.</small>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function copyPortalLink(btn) {
+        // URL comes from the data attribute, not an inline-interpolated string.
+        var url = btn.dataset.portalUrl;
+        var done = function () {
+            var original = btn.innerHTML;
+            btn.innerHTML = 'Copied!';
+            btn.disabled = true;
+            setTimeout(function () { btn.innerHTML = original; btn.disabled = false; }, 1500);
+        };
+        var fallback = function () {
+            var el = document.getElementById('portal-link');
+            el.select();
+            el.setSelectionRange(0, 99999);
+            try {
+                if (document.execCommand('copy')) { done(); }
+            } catch (e) { /* leave the text selected for manual copy */ }
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(done, fallback);
+        } else {
+            fallback();
+        }
+    }
+</script>
+{% endblock %}
