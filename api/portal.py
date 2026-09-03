@@ -400,7 +400,20 @@ def invoice_payment_callback(token):
     back on the same device or PesaPal calls it server-to-server."""
     invoice = Invoice.query.filter_by(public_token=token).first_or_404()
 
-    order_tracking_id = request.args.get('OrderTrackingId') or invoice.pesapal_order_tracking_id
+    # SECURITY: the order tracking id to check must be THIS invoice's own,
+    # server-recorded one (set on invoice by pay_invoice() when its PesaPal
+    # order was created) - never a client-supplied query-string value. A
+    # query param is only ever accepted here if it agrees with the stored
+    # id; a mismatching one is refused outright rather than silently
+    # substituted, so a caller cannot point this endpoint at an unrelated
+    # already-completed PesaPal transaction (their own, on a different
+    # invoice) to get THIS invoice marked paid for free.
+    requested_tracking_id = request.args.get('OrderTrackingId')
+    if (requested_tracking_id and invoice.pesapal_order_tracking_id
+            and requested_tracking_id != invoice.pesapal_order_tracking_id):
+        flash('Invalid payment callback.', 'danger')
+        return redirect(url_for('portal.view_invoice', token=token))
+    order_tracking_id = invoice.pesapal_order_tracking_id or requested_tracking_id
     if not order_tracking_id:
         flash('Invalid payment callback.', 'danger')
         return redirect(url_for('portal.view_invoice', token=token))
@@ -413,6 +426,21 @@ def invoice_payment_callback(token):
 
         pesapal_status = (status.get('payment_status') or '').upper()
         if pesapal_status in ('COMPLETED', 'PAID'):
+            # SECURITY: even a COMPLETED transaction must have actually
+            # cleared for THIS invoice's amount - otherwise a genuinely
+            # completed but unrelated (e.g. much smaller) PesaPal
+            # transaction could be replayed to mark a big invoice paid.
+            try:
+                confirmed_amount = float(status.get('amount'))
+            except (TypeError, ValueError):
+                confirmed_amount = None
+            if confirmed_amount is not None and round(confirmed_amount, 2) < round(invoice.total, 2) - 0.01:
+                current_app.logger.error(
+                    f"Payment callback for invoice {invoice.invoice_number}: PesaPal confirmed amount "
+                    f"{confirmed_amount} is less than invoice total {invoice.total} (order {order_tracking_id}) - refusing to mark paid."
+                )
+                flash('The confirmed payment amount does not match this invoice. Please contact us.', 'danger')
+                return redirect(url_for('portal.view_invoice', token=token))
             if invoice.status != InvoiceStatus.PAID:
                 invoice.status = InvoiceStatus.PAID
                 invoice.paid_at = datetime.utcnow()

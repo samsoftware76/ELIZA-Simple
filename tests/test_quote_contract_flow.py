@@ -368,3 +368,88 @@ def test_amending_a_signed_contract_creates_new_version_and_leaves_original_unto
     assert original.signer_name == original_signer
     assert original.signed_at == original_signed_at
     assert original.public_token == original_public_token
+
+
+# ---------------------------------------------------------------------------
+# Invoice payment callback: must not trust a client-supplied OrderTrackingId
+# over the invoice's own recorded order, or an amount below invoice.total.
+#
+# Bug-hunt finding: invoice_payment_callback() used to do
+# `request.args.get('OrderTrackingId') or invoice.pesapal_order_tracking_id`
+# (preferring the attacker-controlled query string) and never compared the
+# confirmed amount to invoice.total - so anyone who had ever completed ANY
+# PesaPal payment could replay that transaction's id against a totally
+# unrelated invoice's callback URL and get it marked PAID for free.
+# ---------------------------------------------------------------------------
+
+def test_invoice_payment_callback_ignores_mismatched_order_tracking_id(client, owner_user, make_client, make_invoice, monkeypatch):
+    import api.portal as portal_module
+
+    a_client = make_client(owner_user)
+    invoice = make_invoice(a_client, owner_user, items=[{'description': 'Big job', 'quantity': 1, 'unit_price': 5000.0}])
+    invoice.status = InvoiceStatus.SENT
+    # The order actually created for THIS invoice by pay_invoice().
+    invoice.pesapal_order_tracking_id = 'REAL-ORDER-FOR-THIS-INVOICE'
+    db.session.commit()
+    assert invoice.total == 5000.0
+
+    # Even if the attacker's OWN, unrelated, genuinely-completed transaction
+    # reports COMPLETED with a matching amount, it must never be checked at
+    # all for an order id that doesn't match this invoice's own - the
+    # monkeypatch raises if it's ever called, proving the mismatch is
+    # rejected before any PesaPal lookup happens.
+    def _must_not_be_called(order_tracking_id):
+        raise AssertionError(f"get_transaction_status called with {order_tracking_id!r} - mismatch should have been rejected first")
+    monkeypatch.setattr(portal_module.pesapal, 'get_transaction_status', _must_not_be_called)
+
+    resp = client.get(f'/portal/invoice/{invoice.public_token}/payment/callback?OrderTrackingId=ATTACKERS-OWN-OLD-ORDER', follow_redirects=True)
+    assert resp.status_code == 200
+
+    refreshed = Invoice.query.get(invoice.id)
+    assert refreshed.status == InvoiceStatus.SENT, "a mismatched OrderTrackingId must never mark the invoice paid"
+
+
+def test_invoice_payment_callback_rejects_confirmed_amount_below_invoice_total(client, owner_user, make_client, make_invoice, monkeypatch):
+    import api.portal as portal_module
+
+    a_client = make_client(owner_user)
+    invoice = make_invoice(a_client, owner_user, items=[{'description': 'Big job', 'quantity': 1, 'unit_price': 5000.0}])
+    invoice.status = InvoiceStatus.SENT
+    # No order started yet server-side for this invoice - the callback falls
+    # back to the query param, which is exactly the case that must still be
+    # protected by the amount check.
+    invoice.pesapal_order_tracking_id = None
+    db.session.commit()
+
+    # A real, completed PesaPal transaction - just for a tiny amount, not
+    # this $5000 invoice's total.
+    fake_status = {'payment_status': 'COMPLETED', 'payment_method': 'Visa', 'amount': 10.0}
+    monkeypatch.setattr(portal_module.pesapal, 'get_transaction_status', lambda order_tracking_id: fake_status)
+
+    resp = client.get(f'/portal/invoice/{invoice.public_token}/payment/callback?OrderTrackingId=SOME-OTHER-SMALL-PAYMENT', follow_redirects=True)
+    assert resp.status_code == 200
+
+    refreshed = Invoice.query.get(invoice.id)
+    assert refreshed.status == InvoiceStatus.SENT, "a confirmed amount smaller than invoice.total must never mark the invoice paid"
+
+
+def test_invoice_payment_callback_marks_paid_when_tracking_id_and_amount_match(client, owner_user, make_client, make_invoice, monkeypatch):
+    """The fix must not break the legitimate flow: the real order id PesaPal
+    reports back on the redirect, confirmed for the full invoice amount."""
+    import api.portal as portal_module
+
+    a_client = make_client(owner_user)
+    invoice = make_invoice(a_client, owner_user, items=[{'description': 'Consulting', 'quantity': 1, 'unit_price': 250.0}])
+    invoice.status = InvoiceStatus.SENT
+    invoice.pesapal_order_tracking_id = 'REAL-ORDER-ABC'
+    db.session.commit()
+
+    fake_status = {'payment_status': 'COMPLETED', 'payment_method': 'Visa', 'amount': 250.0}
+    monkeypatch.setattr(portal_module.pesapal, 'get_transaction_status', lambda order_tracking_id: fake_status)
+
+    resp = client.get(f'/portal/invoice/{invoice.public_token}/payment/callback?OrderTrackingId=REAL-ORDER-ABC', follow_redirects=True)
+    assert resp.status_code == 200
+
+    refreshed = Invoice.query.get(invoice.id)
+    assert refreshed.status == InvoiceStatus.PAID
+    assert refreshed.paid_at is not None

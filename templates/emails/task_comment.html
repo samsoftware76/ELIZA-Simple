@@ -80,7 +80,7 @@
         <div class="comment">
             <p class="commented-by">{{ commented_by.username }} commented:</p>
             <p class="comment-time">{% if comment.created_at %}{{ comment.created_at.strftime('%B %d, %Y at %H:%M') }}{% else %}Just now{% endif %}</p>
-            <p>{{ comment.content|replace('\n', '<br>')|safe }}</p>
+            <p>{{ comment.content|nl2br|safe }}</p>
         </div>
         
         <p>Reply on the task itself:</p>

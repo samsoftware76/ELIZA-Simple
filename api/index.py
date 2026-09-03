@@ -1574,6 +1574,24 @@ def client_delete(client_id):
         flash(f'"{client_name}" still has projects. Delete or move those first.', 'danger')
         return redirect(url_for('client_detail', client_id=client.id))
 
+    # Quote.client_id / Invoice.client_id / Contract.client_id / ClientInvite.client_id
+    # are all NOT NULL FKs with no cascade (ORM or DB) - deleting a client that
+    # still has any of these would otherwise fail the flush with an unhandled
+    # IntegrityError (NOT NULL violation trying to null the FK), a raw 500.
+    # Same class of bug as the projects check above; just more FKs to guard.
+    if client.quotes:
+        flash(f'"{client_name}" still has quotes. Delete those first.', 'danger')
+        return redirect(url_for('client_detail', client_id=client.id))
+    if client.invoices:
+        flash(f'"{client_name}" still has invoices. Delete those first.', 'danger')
+        return redirect(url_for('client_detail', client_id=client.id))
+    if client.contracts:
+        flash(f'"{client_name}" still has contracts. Delete those first.', 'danger')
+        return redirect(url_for('client_detail', client_id=client.id))
+    if client.invites:
+        flash(f'"{client_name}" still has portal invites on file. Revoke those first.', 'danger')
+        return redirect(url_for('client_detail', client_id=client.id))
+
     # Refuse rather than orphan an active portal login: deleting the Client
     # row out from under a CLIENT-role User that still points at it
     # (client.user_id set) leaves valid credentials with nowhere to resolve -
@@ -1596,12 +1614,18 @@ def client_delete(client_id):
         description=f'Deleted client: {client.name}'
     )
     db.session.add(activity)
-    
-    # Delete the client
-    db.session.delete(client)
-    db.session.commit()
-    
-    flash(f'Client "{client_name}" deleted.', 'success')
+
+    try:
+        # Delete the client
+        db.session.delete(client)
+        db.session.commit()
+        flash(f'Client "{client_name}" deleted.', 'success')
+    except Exception:
+        # Defense in depth alongside the explicit checks above: any other
+        # FK we haven't enumerated must degrade to a friendly error and a
+        # clean rollback, never a raw 500.
+        db.session.rollback()
+        flash(f'Could not delete "{client_name}" because it still has related records.', 'danger')
     return redirect(url_for('clients'))
 
 # Project Management Routes
@@ -1901,7 +1925,17 @@ def project_delete(project_id):
     if project.tasks:
         flash(f'"{project_title}" still has tasks. Delete those first.', 'danger')
         return redirect(url_for('project_detail', project_id=project.id))
-    
+
+    # ProjectMember.project_id is a NOT NULL FK with no cascade (ORM or DB) -
+    # a project can have zero tasks but still have a team member assigned
+    # (the normal state right after creation), and without this check the
+    # delete below would reach the try/except purely via an ugly raw
+    # IntegrityError message instead of the same friendly guard the tasks
+    # check above gives.
+    if project.project_members:
+        flash(f'"{project_title}" still has team members assigned. Remove them first.', 'danger')
+        return redirect(url_for('project_detail', project_id=project.id))
+
     try:
         # Log the activity before deleting the project
         activity = ActivityLog(
@@ -2106,11 +2140,16 @@ def task_delete_comment(task_id, comment_id):
     """Delete a comment from a task"""
     comment = Comment.query.get_or_404(comment_id)
     task = Task.query.get_or_404(task_id)
-    # Task has no owner_id of its own - tenant isolation is via its parent
-    # project. This is separate from the author/admin check below: that one
-    # guards *who may delete this specific comment*, this one guards
-    # *whether this task belongs to the caller's tenant at all*.
-    if task.project.owner_id != current_user.get_owner_id():
+    # Tenant isolation must be anchored to the COMMENT's own task, not the
+    # task_id supplied in the URL - the two are never verified to match
+    # otherwise, so a caller could pair a comment_id from a different
+    # tenant/task with a task_id they legitimately own. This mirrors the
+    # sibling route comment_delete() below, which derives scope from
+    # comment.task.project.owner_id for the same reason. This is separate
+    # from the author/admin check below: that one guards *who may delete
+    # this specific comment*, this one guards *whether the comment's own
+    # task belongs to the caller's tenant at all*.
+    if comment.task_id != task_id or comment.task.project.owner_id != current_user.get_owner_id():
         abort(404)
 
     # Only allow the comment author or an admin to delete the comment

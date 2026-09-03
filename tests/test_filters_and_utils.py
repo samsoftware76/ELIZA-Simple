@@ -58,6 +58,62 @@ def test_nl2br_result_is_safe_markup_not_double_escaped():
 
 
 # ---------------------------------------------------------------------------
+# Email templates - task_assignment.html / task_comment.html escaping fix
+#
+# Both used to render their user-controlled field via
+# |replace('\n', '<br>')|safe, which (unlike nl2br above) never escapes the
+# value first - a <script>/onerror/phishing-link payload rendered live,
+# unescaped, in the recipient's email client. Fixed by switching both to the
+# already-tested nl2br filter.
+# ---------------------------------------------------------------------------
+
+def test_task_assignment_email_escapes_html_in_description(app, owner_user, make_client, make_project, make_task, monkeypatch):
+    import utils.email_utils as email_utils
+
+    a_client = make_client(owner_user)
+    project = make_project(a_client)
+    task = make_task(project, description="<img src=x onerror=alert(document.cookie)>")
+
+    captured = {}
+    monkeypatch.setattr(email_utils.mail, 'send', lambda msg: captured.__setitem__('html', msg.html))
+
+    # A real request context, matching how this is always actually called
+    # (from inside a route handler) - base.html's inject_sidebar_plan()
+    # context processor reads current_user, which is only ever a real
+    # AnonymousUserMixin/User (not None) once a request context exists.
+    with app.test_request_context():
+        email_utils.send_task_assignment_notification(task, owner_user)
+
+    assert 'html' in captured, "the notification must actually render and attempt to send"
+    assert '<img src=x onerror=' not in captured['html']
+    assert '&lt;img src=x onerror=' in captured['html']
+
+
+def test_task_comment_email_escapes_html_in_content(app, owner_user, make_client, make_project, make_task, make_user, db_session, monkeypatch):
+    import utils.email_utils as email_utils
+    from models.models import Comment, UserRole
+
+    a_client = make_client(owner_user)
+    project = make_project(a_client)
+    assignee = make_user(role=UserRole.DEVELOPER)
+    task = make_task(project, assignee_id=assignee.id)
+    comment = Comment(task_id=task.id, user_id=owner_user.id,
+                       content='<a href="https://evil.example">click here</a>', is_internal=False)
+    db_session.add(comment)
+    db_session.commit()
+
+    captured = {}
+    monkeypatch.setattr(email_utils.mail, 'send', lambda msg: captured.__setitem__('html', msg.html))
+
+    with app.test_request_context():
+        email_utils.send_task_comment_notification(task, comment, owner_user)
+
+    assert 'html' in captured, "the assignee must be a recipient, so the notification must actually attempt to send"
+    assert '<a href="https://evil.example">' not in captured['html']
+    assert '&lt;a href=' in captured['html']
+
+
+# ---------------------------------------------------------------------------
 # status_badge() - enum-vs-.name call-site mismatch fix
 # ---------------------------------------------------------------------------
 

@@ -287,12 +287,27 @@ def delete_user():
         if user.id == current_user.id:
             flash('You cannot delete your own account.', 'danger')
             return redirect(url_for('admin.users'))
-        
-        # Delete the user
-        db.session.delete(user)
-        db.session.commit()
-        
-        flash(f'User {user.username} deleted.', 'success')
+
+        try:
+            # Delete the user
+            db.session.delete(user)
+            db.session.commit()
+            flash(f'User {user.username} deleted.', 'success')
+        except Exception:
+            # ActivityLog.user_id, Comment.user_id, TimeEntry.user_id,
+            # TeamMembership.account_owner_id/member_user_id,
+            # Subscription.user_id, Quote/Invoice/Contract.created_by_id and
+            # TeamInvite/ClientInvite.inviter_id are all NOT NULL FKs to
+            # users.id with no cascade (ORM or DB) - deleting any user who
+            # has ever done anything in the app raised an unhandled
+            # IntegrityError here (a raw 500). Deciding what SHOULD happen
+            # to that history (reassign, block, soft-delete...) is a real
+            # product decision, not something to guess at in a bug-hunt
+            # pass - so this at minimum degrades to a clean rollback and a
+            # friendly message instead of crashing.
+            db.session.rollback()
+            flash(f'Could not delete {user.username}: they still have related records '
+                  f'(activity, comments, time entries, invoices, or a team membership).', 'danger')
     
     return redirect(url_for('admin.users'))
 
@@ -395,19 +410,35 @@ def delete_plan():
     
     if form.validate_on_submit():
         plan = SubscriptionPlan.query.get_or_404(form.plan_id.data)
-        
-        # Check if plan is being used by any active subscriptions
-        active_subscriptions = Subscription.query.filter_by(plan_id=plan.id, is_active=True).count()
-        
-        if active_subscriptions > 0:
-            flash(f'Cannot delete plan {plan.name} as it has {active_subscriptions} active subscriptions.', 'danger')
+
+        # subscriptions.plan_id AND subscriptions.pending_plan_id are both
+        # NOT-NULL-safe FKs to this table with no cascade (ORM or DB) - a
+        # plan that has ever had a customer who later upgraded, downgraded,
+        # or churned still has an INACTIVE Subscription row pointing at it
+        # (subscribe() sets is_active=False rather than deleting on a plan
+        # switch), and a pending_plan_id reference can exist independent of
+        # is_active entirely. Counting only is_active=True subscriptions
+        # missed both, so this guard would pass and the delete below would
+        # still hit Postgres's own FK constraint - an unhandled 500. Count
+        # every subscription that references this plan at all, active or
+        # historical, via either column.
+        referencing_subscriptions = Subscription.query.filter(
+            db.or_(Subscription.plan_id == plan.id, Subscription.pending_plan_id == plan.id)
+        ).count()
+
+        if referencing_subscriptions > 0:
+            flash(f'Cannot delete plan {plan.name}: {referencing_subscriptions} subscription(s) '
+                  f'(active or historical) still reference it.', 'danger')
             return redirect(url_for('admin.subscriptions'))
-        
-        # Delete the plan
-        db.session.delete(plan)
-        db.session.commit()
-        
-        flash(f'Plan {plan.name} deleted.', 'success')
+
+        try:
+            # Delete the plan
+            db.session.delete(plan)
+            db.session.commit()
+            flash(f'Plan {plan.name} deleted.', 'success')
+        except Exception:
+            db.session.rollback()
+            flash(f'Could not delete plan {plan.name} because it still has related records.', 'danger')
     
     return redirect(url_for('admin.subscriptions'))
 

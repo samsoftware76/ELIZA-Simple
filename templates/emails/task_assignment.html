@@ -86,7 +86,7 @@
             
             {% if task.description %}
             <p><strong>Description:</strong><br>
-            {{ task.description|replace('\n', '<br>')|safe }}</p>
+            {{ task.description|nl2br|safe }}</p>
             {% else %}
             <p><strong>Description:</strong> No description provided.</p>
             {% endif %}

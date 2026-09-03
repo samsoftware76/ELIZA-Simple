@@ -130,6 +130,42 @@ def test_task_comment_delete_routes_404_for_other_tenant(client, owner_user, oth
     assert _post(client, f'/comments/{comment.id}/delete').status_code == 404
 
 
+def test_task_delete_comment_rejects_comment_from_a_different_tenants_task_even_for_an_admin(
+        client, owner_user, other_owner_user, make_user, make_client, make_project, make_task, db_session):
+    """Bug-hunt finding: task_delete_comment() anchored its tenant check to
+    the URL's task_id, never to the comment's OWN task - so an ADMIN-role
+    user who legitimately owns some task in THEIR OWN tenant (B) could pair
+    it with a comment_id from a completely different tenant's (A) task and
+    delete that comment, because the ADMIN branch skipped ownership
+    entirely. This is deliberately NOT the same scenario as the test above
+    (which uses a task B has no access to at all, so the earlier ownership
+    check already 404s regardless of this bug) - task_id here genuinely
+    belongs to B, only comment_id crosses tenants."""
+    from models.models import Comment, UserRole
+
+    # Tenant A: a task with a comment on it.
+    a_client = make_client(owner_user)
+    a_project = make_project(a_client)
+    a_task = make_task(a_project)
+    a_comment = Comment(task_id=a_task.id, user_id=owner_user.id, content='tenant A internal note', is_internal=True)
+    db_session.add(a_comment)
+    db_session.commit()
+    a_comment_id = a_comment.id
+
+    # Tenant B: an ADMIN-role user who owns their own, unrelated task.
+    b_admin = make_user(role=UserRole.ADMIN)
+    b_client = make_client(b_admin)
+    b_project = make_project(b_client)
+    b_task = make_task(b_project)
+
+    _login_as_b(client, b_admin)
+    resp = _post(client, f'/tasks/{b_task.id}/comment/delete/{a_comment_id}')
+    assert resp.status_code == 404
+
+    # The comment must still exist, untouched, in tenant A.
+    assert Comment.query.get(a_comment_id) is not None
+
+
 # ---------------------------------------------------------------------------
 # Quote
 # ---------------------------------------------------------------------------

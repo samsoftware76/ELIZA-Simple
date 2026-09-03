@@ -98,6 +98,15 @@ PLAN_BY_SLUG = {entry['slug']: entry for entry in PLAN_CATALOG}
 
 VALID_CYCLES = ('monthly', 'yearly')
 
+# The only two currencies the payment forms (change_plan.html, payment.html)
+# ever offer, and the only two _plan_amount() below knows how to price (USD
+# as-is, UGX via the hardcoded conversion). The form field is never
+# validated against this by the browser - a client could submit any string -
+# so every route reading request.form['currency'] must clamp to this set
+# before pricing or handing it to PesaPal, or an unrecognized currency code
+# would be charged using the raw USD number unconverted.
+VALID_CURRENCIES = ('USD', 'UGX')
+
 
 def _require_owner():
     """Only the account owner may change the plan.
@@ -477,12 +486,33 @@ def change_plan(plan, cycle):
         return redirect(url_for('subscription.plans'))
 
     current_plan = subscription.plan
-    is_upgrade = target_plan.price_monthly > (current_plan.price_monthly if current_plan else 0)
+    # Same plan, longer cycle (e.g. Basic monthly -> Basic yearly) is always
+    # an upgrade requiring payment now, never the free-at-cycle-end
+    # "downgrade" branch below: the plan is identical, so there is no price
+    # decrease to justify extending the paid-for period for free - the
+    # customer would otherwise get a full extra year of the plan they only
+    # ever paid one month for. price_monthly-only comparison can't see this
+    # because it's the same plan on both sides (equal price), so it's
+    # checked separately here rather than folded into that comparison.
+    same_plan_longer_cycle = (
+        current_plan is not None
+        and target_plan.id == current_plan.id
+        and cycle_length(cycle) > cycle_length(subscription.billing_cycle)
+    )
+    is_upgrade = same_plan_longer_cycle or (
+        target_plan.price_monthly > (current_plan.price_monthly if current_plan else 0))
     amount_due = target_plan.price_monthly if cycle == 'monthly' else target_plan.price_yearly
     effective_at = subscription.end_date or datetime.utcnow()
 
     if request.method == 'POST':
+        # Clamp to the only currencies _plan_amount() knows how to price -
+        # see VALID_CURRENCIES above. Without this, an unrecognized currency
+        # code (never offered by the form, but nothing stops a raw POST)
+        # falls through _plan_amount()'s USD-vs-UGX check untouched, so the
+        # unconverted USD number gets charged in whatever currency was sent.
         currency = request.form.get('currency', 'USD')
+        if currency not in VALID_CURRENCIES:
+            currency = 'USD'
         try:
             if is_upgrade:
                 # Park the target; do NOT touch plan_id/billing_cycle/is_active.
@@ -590,8 +620,13 @@ def trial_payment(subscription_id):
             # Log form data for debugging
             current_app.logger.info(f"Payment form data: {request.form}")
 
-            # Get currency and amount from form
+            # Get currency and amount from form. Clamp to VALID_CURRENCIES -
+            # see the comment on that constant - so an unrecognized code
+            # can't skip _plan_amount()'s USD-vs-UGX conversion and get
+            # charged as the raw USD number in a different currency.
             currency = request.form.get('currency', 'USD')
+            if currency not in VALID_CURRENCIES:
+                currency = 'USD'
             billing_cycle = request.form.get('billing_cycle', subscription.billing_cycle)
             if billing_cycle not in VALID_CYCLES:
                 billing_cycle = subscription.billing_cycle
@@ -676,8 +711,25 @@ def payment_callback():
 
         # Get the subscription ID from session or try to find it by order tracking ID
         subscription_id = None
+        session_amount_due = None
         if pending_payment and 'subscription_id' in pending_payment:
+            # SECURITY: the session tells us WHICH subscription this payment
+            # is for, but that alone is not proof this specific payment was
+            # ever made - it must also be the SAME order _start_pesapal_
+            # checkout() created for that pending change, not any other
+            # already-completed PesaPal transaction (e.g. an old, cheaper
+            # plan's payment) replayed against this OrderTrackingId query
+            # param. Refuse rather than silently substitute.
+            expected_tracking_id = pending_payment.get('order_tracking_id')
+            if expected_tracking_id and expected_tracking_id != order_tracking_id:
+                current_app.logger.error(
+                    f"Payment callback order mismatch: session expected order "
+                    f"{expected_tracking_id} but callback confirmed {order_tracking_id} - refusing to apply."
+                )
+                flash('That payment does not match the plan change you started. Please try again or contact us.', 'danger')
+                return redirect(url_for('home'))
             subscription_id = pending_payment['subscription_id']
+            session_amount_due = pending_payment.get('amount')
             current_app.logger.info(f"Found subscription ID in session: {subscription_id}")
 
         # If we couldn't find the subscription ID in the session, fall back to
@@ -726,6 +778,26 @@ def payment_callback():
 
         # Update the subscription status if payment is completed
         if pesapal_status.upper() in ['COMPLETED', 'PAID']:
+            # SECURITY: when we know what this specific order was supposed to
+            # cost (the amount _start_pesapal_checkout() stashed in the
+            # session for THIS order_tracking_id, already confirmed above to
+            # be the one PesaPal is reporting on), the amount PesaPal
+            # confirms must actually cover it - otherwise a completed
+            # transaction for a smaller amount could still pass the status
+            # check above and grant a pricier plan it never paid for.
+            if session_amount_due is not None:
+                try:
+                    confirmed_amount = float(payment_status.get('amount'))
+                except (TypeError, ValueError):
+                    confirmed_amount = None
+                if confirmed_amount is not None and round(confirmed_amount, 2) < round(float(session_amount_due), 2) - 0.01:
+                    current_app.logger.error(
+                        f"Payment callback amount mismatch for order {order_tracking_id}: "
+                        f"confirmed {confirmed_amount}, expected {session_amount_due} - refusing to apply."
+                    )
+                    flash('The confirmed payment amount does not match the plan change you started. Please contact us.', 'danger')
+                    return redirect(url_for('home'))
+
             # A paid plan change waiting on this payment (pending_change_at is
             # NULL for those; a scheduled downgrade has it set and is never
             # applied here). This is the ONLY place an upgrade is moved onto
@@ -781,7 +853,13 @@ def payment_callback():
 @login_required
 def subscription_status():
     """View subscription status"""
-    subscription = Subscription.query.filter_by(user_id=current_user.id, is_active=True).first()
+    # Subscription.user_id is always the ACCOUNT OWNER's id (see
+    # get_owner_id() and every other lookup in this file/module) - a team
+    # member's own current_user.id is never the right key here, or this page
+    # always reports "no active subscription" for them even on a paid
+    # tenant. get_active_subscription() also applies any scheduled downgrade
+    # that's come due, same as every other page that reads this.
+    subscription = get_active_subscription(current_user.get_owner_id())
     if not subscription:
         return render_template('subscription/status.html', subscription=None)
 

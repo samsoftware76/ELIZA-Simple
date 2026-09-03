@@ -260,3 +260,230 @@ def test_project_create_allowed_when_unlimited_plan(client, owner_user, make_sub
     }, follow_redirects=True)
     assert resp.status_code == 200
     assert Project.query.filter_by(owner_id=owner_user.id).count() == before_count + 1
+
+
+# ---------------------------------------------------------------------------
+# payment_callback() must not apply a plan change from a REPLAYED, unrelated
+# already-completed PesaPal transaction id - the OrderTrackingId being
+# confirmed must be the one _start_pesapal_checkout() actually created for
+# THIS pending change (recorded in session['pending_payment']), and its
+# confirmed amount must cover what that change costs.
+# ---------------------------------------------------------------------------
+
+def test_payment_callback_rejects_order_id_that_does_not_match_the_pending_payment_session(
+        client, owner_user, make_subscription, make_subscription_plan, monkeypatch):
+    import api.subscription as subscription_module
+
+    current_plan = make_subscription_plan(name='Cheap Current Plan For Replay Test', price_monthly=9.99)
+    target_plan = make_subscription_plan(name='Pricey Target Plan For Replay Test', price_monthly=49.99)
+    subscription = make_subscription(
+        owner_user, plan=current_plan,
+        is_active=True, is_trial=False, billing_cycle='monthly',
+        end_date=datetime.utcnow() + timedelta(days=20),
+        pending_plan_id=target_plan.id,
+        pending_billing_cycle='monthly',
+        pending_change_at=None,  # NULL = upgrade awaiting payment
+    )
+
+    login_as(client, owner_user)
+    with client.session_transaction() as sess:
+        # The order _start_pesapal_checkout() actually created for this upgrade.
+        sess['pending_payment'] = {
+            'subscription_id': subscription.id,
+            'amount': 49.99,
+            'currency': 'USD',
+            'order_tracking_id': 'REAL-NEW-ENTERPRISE-ORDER',
+            'merchant_reference': 'ELIZA-SUB-real',
+        }
+
+    # An old, genuinely-completed transaction for something else entirely -
+    # PesaPal truthfully reports it COMPLETED for its own (smaller) amount.
+    fake_status = {'payment_status': 'COMPLETED', 'payment_method': 'Visa', 'amount': 9.99}
+    monkeypatch.setattr(subscription_module.pesapal, 'get_transaction_status', lambda order_tracking_id: fake_status)
+
+    resp = client.get('/payment/callback?OrderTrackingId=OLD-CHEAP-ORDER-FROM-MONTHS-AGO', follow_redirects=True)
+    assert resp.status_code == 200
+
+    refreshed = Subscription.query.get(subscription.id)
+    assert refreshed.plan_id == current_plan.id, "replaying an unrelated completed order must not apply the pending upgrade"
+    assert refreshed.pending_plan_id == target_plan.id, "the pending upgrade must remain pending, not silently cleared"
+
+
+def test_payment_callback_rejects_confirmed_amount_below_what_pending_payment_expects(
+        client, owner_user, make_subscription, make_subscription_plan, monkeypatch):
+    import api.subscription as subscription_module
+
+    current_plan = make_subscription_plan(name='Cheap Current Plan For Amount Test', price_monthly=9.99)
+    target_plan = make_subscription_plan(name='Pricey Target Plan For Amount Test', price_monthly=49.99)
+    subscription = make_subscription(
+        owner_user, plan=current_plan,
+        is_active=True, is_trial=False, billing_cycle='monthly',
+        end_date=datetime.utcnow() + timedelta(days=20),
+        pending_plan_id=target_plan.id,
+        pending_billing_cycle='monthly',
+        pending_change_at=None,
+    )
+
+    login_as(client, owner_user)
+    with client.session_transaction() as sess:
+        sess['pending_payment'] = {
+            'subscription_id': subscription.id,
+            'amount': 49.99,
+            'currency': 'USD',
+            'order_tracking_id': 'REAL-NEW-ORDER',
+            'merchant_reference': 'ELIZA-SUB-real2',
+        }
+
+    # The SAME order id the session expects, but PesaPal only confirms a
+    # much smaller amount for it (e.g. underpaid).
+    fake_status = {'payment_status': 'COMPLETED', 'payment_method': 'Visa', 'amount': 9.99}
+    monkeypatch.setattr(subscription_module.pesapal, 'get_transaction_status', lambda order_tracking_id: fake_status)
+
+    resp = client.get('/payment/callback?OrderTrackingId=REAL-NEW-ORDER', follow_redirects=True)
+    assert resp.status_code == 200
+
+    refreshed = Subscription.query.get(subscription.id)
+    assert refreshed.plan_id == current_plan.id, "an amount below what's due must not apply the pending upgrade"
+    assert refreshed.pending_plan_id == target_plan.id
+
+
+def test_payment_callback_still_applies_upgrade_when_order_and_amount_both_match(
+        client, owner_user, make_subscription, make_subscription_plan, monkeypatch):
+    """Regression guard for the fix above: the legitimate flow (matching
+    order id, full amount confirmed) must still work."""
+    import api.subscription as subscription_module
+
+    current_plan = make_subscription_plan(name='Cheap Current Plan For Happy Path', price_monthly=9.99)
+    target_plan = make_subscription_plan(name='Pricey Target Plan For Happy Path', price_monthly=49.99)
+    subscription = make_subscription(
+        owner_user, plan=current_plan,
+        is_active=True, is_trial=False, billing_cycle='monthly',
+        end_date=datetime.utcnow() + timedelta(days=20),
+        pending_plan_id=target_plan.id,
+        pending_billing_cycle='monthly',
+        pending_change_at=None,
+    )
+
+    login_as(client, owner_user)
+    with client.session_transaction() as sess:
+        sess['pending_payment'] = {
+            'subscription_id': subscription.id,
+            'amount': 49.99,
+            'currency': 'USD',
+            'order_tracking_id': 'REAL-MATCHING-ORDER',
+            'merchant_reference': 'ELIZA-SUB-happy',
+        }
+
+    fake_status = {'payment_status': 'COMPLETED', 'payment_method': 'Visa', 'amount': 49.99}
+    monkeypatch.setattr(subscription_module.pesapal, 'get_transaction_status', lambda order_tracking_id: fake_status)
+
+    resp = client.get('/payment/callback?OrderTrackingId=REAL-MATCHING-ORDER', follow_redirects=True)
+    assert resp.status_code == 200
+
+    refreshed = Subscription.query.get(subscription.id)
+    assert refreshed.plan_id == target_plan.id
+    assert refreshed.pending_plan_id is None
+
+
+# ---------------------------------------------------------------------------
+# subscription_status() must resolve via get_owner_id(), not current_user.id -
+# a team member visiting the page directly must see the ACCOUNT's real
+# subscription, not "no active subscription".
+# ---------------------------------------------------------------------------
+
+def test_subscription_status_resolves_via_owner_id_for_a_team_member(
+        client, owner_user, make_team_member, make_subscription, make_subscription_plan):
+    plan = make_subscription_plan(name='Team Visible Plan')
+    make_subscription(
+        owner_user, plan=plan, is_active=True, is_trial=False, billing_cycle='monthly',
+        end_date=datetime.utcnow() + timedelta(days=20))
+    member = make_team_member(owner_user)
+
+    login_as(client, member)
+    resp = client.get('/subscription/status', follow_redirects=True)
+    assert resp.status_code == 200
+    html = resp.get_data(as_text=True)
+    assert "You don't have an active subscription." not in html
+    assert 'Team Visible Plan' in html
+
+
+# ---------------------------------------------------------------------------
+# An unrecognized currency (never offered by the form - only USD/UGX are
+# options) must be clamped to USD before pricing/charging, not passed
+# through to PesaPal with the raw USD number unconverted.
+# ---------------------------------------------------------------------------
+
+def test_change_plan_clamps_unrecognized_currency_to_usd(
+        client, owner_user, make_subscription, make_subscription_plan, monkeypatch):
+    import api.subscription as subscription_module
+
+    current_plan = make_subscription_plan(name='Starter For Currency Test', price_monthly=9.99)
+    make_subscription(
+        owner_user, plan=current_plan,
+        is_active=True, is_trial=False, billing_cycle='monthly',
+        end_date=datetime.utcnow() + timedelta(days=20),
+    )
+
+    captured = {}
+    def _fake_create_payment_order(**kwargs):
+        captured.update(kwargs)
+        return {'redirect_url': 'https://pesapal.example/pay', 'order_tracking_id': 'ORDER-X', 'merchant_reference': 'REF-X'}
+    monkeypatch.setattr(subscription_module.pesapal, 'create_payment_order', _fake_create_payment_order)
+
+    login_as(client, owner_user)
+    token = get_csrf_token(client, '/subscription/change/enterprise/monthly')
+    resp = client.post('/subscription/change/enterprise/monthly', data={
+        'currency': 'KES',  # never offered by the form - only USD/UGX are options
+        'csrf_token': token,
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+
+    assert captured.get('currency') == 'USD', "an unrecognized currency must be clamped to USD, not passed through to PesaPal"
+    assert captured.get('amount') == 49.99, "the USD price must not be silently charged under a different currency code"
+
+
+# ---------------------------------------------------------------------------
+# Switching billing cycle on the SAME plan (e.g. Basic monthly -> Basic
+# yearly) must be treated as an upgrade requiring payment now, never the
+# free, scheduled-at-cycle-end "downgrade" path - there is no price decrease
+# to justify extending the paid-for period for free.
+# ---------------------------------------------------------------------------
+
+def test_changing_billing_cycle_on_the_same_plan_requires_payment_not_a_free_downgrade(
+        client, owner_user, make_subscription, make_subscription_plan, monkeypatch):
+    import api.subscription as subscription_module
+
+    basic_plan = make_subscription_plan(
+        name='Basic', price_monthly=9.99, price_yearly=99.99,
+        max_projects=5, max_users=3, max_clients=10,
+    )
+    subscription = make_subscription(
+        owner_user, plan=basic_plan,
+        is_active=True, is_trial=False, billing_cycle='monthly',
+        start_date=datetime.utcnow() - timedelta(days=5),
+        end_date=datetime.utcnow() + timedelta(days=25),
+    )
+
+    captured = {}
+    def _fake_create_payment_order(**kwargs):
+        captured.update(kwargs)
+        return {'redirect_url': 'https://pesapal.example/pay', 'order_tracking_id': 'ORDER-CYCLE', 'merchant_reference': 'REF-CYCLE'}
+    monkeypatch.setattr(subscription_module.pesapal, 'create_payment_order', _fake_create_payment_order)
+
+    login_as(client, owner_user)
+    token = get_csrf_token(client, '/subscription/change/basic/yearly')
+    resp = client.post('/subscription/change/basic/yearly', data={'currency': 'USD', 'csrf_token': token}, follow_redirects=False)
+    assert resp.status_code == 302
+    assert resp.headers.get('Location', '') == 'https://pesapal.example/pay', \
+        "a same-plan cycle upgrade must go through checkout, not the free-downgrade path"
+
+    refreshed = Subscription.query.get(subscription.id)
+    # Upgrade branch parks pending_plan_id/pending_billing_cycle with
+    # pending_change_at NULL and does NOT touch plan_id/billing_cycle yet -
+    # only a confirmed payment (payment_callback) applies it.
+    assert refreshed.plan_id == basic_plan.id
+    assert refreshed.billing_cycle == 'monthly'
+    assert refreshed.pending_plan_id == basic_plan.id
+    assert refreshed.pending_billing_cycle == 'yearly'
+    assert refreshed.pending_change_at is None, "must be parked as an upgrade awaiting payment, not scheduled as a free downgrade"
+    assert captured.get('amount') == 99.99, "must charge the yearly price, not give a full extra year for free"
