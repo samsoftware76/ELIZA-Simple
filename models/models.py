@@ -137,9 +137,34 @@ class User(db.Model, UserMixin):
     # Holds one of forms.DISPLAY_CURRENCY_CHOICES' codes (a deliberately wider
     # list than the document-currency CURRENCY_CHOICES).
     display_currency = db.Column(db.String(10))
+    # ACCOUNT DEACTIVATION (soft delete). A REAL column now - this used to be a
+    # hardcoded @property returning True further down (the bare minimum to
+    # satisfy Flask-Login's UserMixin contract), which meant there was no way
+    # to turn an account off at all short of deleting the row and losing its
+    # history with it. See migrations/add_user_is_active.py.
+    #
+    # Flask-Login reads this property by name in login_user(), so a real False
+    # here makes login_user() refuse and return False all on its own - that is
+    # the mechanism, not a hand-rolled check. Two things it does NOT do by
+    # itself, both handled explicitly elsewhere:
+    #   1. login_user()'s return value is easy to ignore, which would flash
+    #      "Signed in." over a login that never happened - api/index.py's
+    #      login() checks is_active up front and reports it honestly.
+    #   2. Flask-Login only consults is_active at LOGIN time. Someone already
+    #      holding a valid session cookie when they're deactivated would sail
+    #      on until it expired, so load_user() (the @login_manager.user_loader
+    #      in api/index.py) returns None for an inactive user, which drops
+    #      them to anonymous on their very next request.
+    #
+    # nullable=False with default=True: no user is ever implicitly "off", and
+    # every existing row was backfilled TRUE by the migration (ADD COLUMN ...
+    # NOT NULL DEFAULT TRUE). Deactivation is REVERSIBLE and keeps history -
+    # the row stays, their invoices/comments/time entries are untouched, and
+    # old records still resolve to their real name via the ordinary FKs.
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     projects = db.relationship('Project', secondary=project_users, lazy='subquery',
                                backref=db.backref('team_members', lazy=True))
@@ -179,15 +204,19 @@ class User(db.Model, UserMixin):
     @property
     def is_authenticated(self):
         return True
-        
-    @property
-    def is_active(self):
-        return True
-        
+
+    # NOTE: is_active is deliberately NOT a property here any more - it is a
+    # real db.Column declared with the other columns above. Flask-Login only
+    # requires that `user.is_active` be readable and truthy for an account
+    # allowed to log in; it does not care whether that comes from a property
+    # or a mapped column, so the column satisfies the same contract while
+    # actually being settable and persisted.
+
     @property
     def is_anonymous(self):
         return False
-        
+
+
     # Helper methods
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}"

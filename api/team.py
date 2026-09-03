@@ -40,6 +40,37 @@ def _require_owner():
     return None
 
 
+def active_memberships_query(owner_id):
+    """Memberships of `owner_id`'s team whose member ACCOUNT is still active.
+
+    Two independent "active" flags have to agree for someone to count as a
+    team member, and conflating them is the easy bug here:
+
+      * TeamMembership.is_active - the OWNER's own soft-revoke (remove_member
+        below). "You are no longer on my team."
+      * User.is_active - the platform-level account deactivation added with
+        migrations/add_user_is_active.py. "This person cannot log in at all."
+
+    A member whose account is deactivated still has a perfectly active
+    membership row, so filtering on TeamMembership.is_active alone would
+    still list them on the team page AND still charge the owner a paid seat
+    for someone who cannot sign in. Every place that asks "who is on this
+    team right now" goes through this one query so those two flags can never
+    drift apart again - the member list, the seat cap enforced in invite()
+    below, and the seat figure shown on the plans page
+    (utils/plan_limits.count_team_seats).
+
+    Returns a Query, not a list, so callers can .all() or .count() it.
+    """
+    return TeamMembership.query.join(
+        User, TeamMembership.member_user_id == User.id
+    ).filter(
+        TeamMembership.account_owner_id == owner_id,
+        TeamMembership.is_active.is_(True),
+        User.is_active.is_(True),
+    )
+
+
 def _clean_role_title(raw):
     """Normalise a submitted free-text role title to what goes in the column.
 
@@ -77,7 +108,14 @@ def dashboard():
     """
     owner_id = current_user.get_owner_id()
     is_owner = current_user.id == owner_id
-    memberships = TeamMembership.query.filter_by(account_owner_id=owner_id, is_active=True).all()
+    # DEACTIVATED ACCOUNTS ARE HIDDEN, not shown greyed out - the deactivation
+    # model chosen for this app is explicitly "hidden from active lists", and
+    # this is the tenant's list of who is on the team right now. The
+    # membership row itself is untouched (nothing here writes), so
+    # reactivating the account puts them straight back on this page with
+    # their role and title intact. See active_memberships_query above for why
+    # the User.is_active half of the filter matters.
+    memberships = active_memberships_query(owner_id).all()
 
     if not is_owner:
         # Read-only teammate view: no invite form, no pending invites, no
@@ -119,7 +157,11 @@ def invite():
         # api/subscription.py, the admin form field in forms.py, the pricing
         # page in templates/landing.html) as how many people can be INVITED,
         # not the account's total user count including the owner.
-        active_member_count = TeamMembership.query.filter_by(account_owner_id=owner_id, is_active=True).count()
+        # A DEACTIVATED member does NOT consume a paid seat: they cannot log
+        # in, so charging the owner for them would be billing for nothing.
+        # active_memberships_query() is the single definition of "on the team
+        # right now" shared with the member list above and the plans page.
+        active_member_count = active_memberships_query(owner_id).count()
         pending_invite_count = TeamInvite.query.filter_by(inviter_id=owner_id, status='pending').count()
         seats_used = active_member_count + pending_invite_count
 
@@ -146,6 +188,15 @@ def invite():
         # would just sit at status='pending' forever with no signal to the
         # owner that anything failed. Check up front instead.
         existing_user = User.query.filter_by(email=form.email.data).first()
+        if existing_user and not existing_user.is_active:
+            # A PLATFORM-DEACTIVATED account. Re-adding them to the team below
+            # would flip TeamMembership.is_active back on and start charging a
+            # seat again for someone who still cannot log in (User.is_active
+            # is False, so login_user() refuses and load_user() returns None).
+            # Only a platform admin can undo that, so refuse here rather than
+            # quietly producing a member who can never sign in.
+            flash('That account has been deactivated by an administrator and cannot be added to a team.', 'danger')
+            return redirect(url_for('team.dashboard'))
         if existing_user:
             # remove_member() only ever soft-deletes (is_active=False) and
             # never touches the User row, so a previously-removed member of

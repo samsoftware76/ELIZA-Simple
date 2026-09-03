@@ -25,18 +25,21 @@ report) surfaced independently in four different delete routes:
     bug-hunt pass), so this is only a safety net: a clean rollback and a
     friendly flash instead of a raw 500.
 
-NOTE on delete_user/delete_plan test data: the real "Delete" modals for both
-(templates/admin/users.html, templates/admin/subscriptions.html) only ever
-submit the row id + csrf_token, but api/admin.py's delete_user()/delete_plan()
-gate on validate_on_submit() of the FULL edit form (UserForm/
-SubscriptionPlanForm), which has DataRequired on several other fields -
-first_name/last_name/username/email/role, or name/price_monthly/
-price_yearly/features respectively. That means the delete buttons as
-currently wired never actually reach the delete code at all (a separate,
-already-flagged bug - see the task report's confirmed_real_but_deferred).
-These tests submit a full, validating form payload so the ROUTE's own
-delete-then-handle-the-FK-error logic is exercised directly, independent of
-that separate wiring gap.
+NOTE on delete_user/delete_plan test data: these tests submit a FULL edit-form
+payload (first_name/last_name/username/email/role, or name/price_monthly/
+price_yearly/features) rather than the id + csrf_token the real confirm modals
+send. That was originally a workaround: both routes used to gate on
+validate_on_submit() of the fat form, so a modal-shaped payload never reached
+the delete code at all. That wiring gap is now FIXED - the routes gate on
+forms.UserActionForm / forms.PlanDeleteConfirmForm, which describe what the
+modals actually post.
+
+These tests are kept posting the fat payload on purpose, and are still
+meaningful: WTForms ignores fields a form doesn't declare, so the extra keys
+are simply dropped and the routes' own guard logic is exercised exactly as
+before. The modal-shaped payload (id + csrf and nothing else) is covered
+separately in tests/test_user_deactivation.py, which is where the wiring fix
+itself is locked in.
 """
 from conftest import login_as, get_csrf_token
 from models.models import Client, Project, User, UserRole

@@ -83,7 +83,7 @@
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button type="button" class="btn btn-outline-primary"
+                                            <button type="button" class="btn btn-outline-primary js-modal-trigger"
                                                     data-toggle="modal"
                                                     data-target="#editPlanModal"
                                                     data-plan-id="{{ plan.id }}"
@@ -98,7 +98,7 @@
                                                     data-plan-active="{{ plan.is_active }}">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
-                                            <button type="button" class="btn btn-outline-danger"
+                                            <button type="button" class="btn btn-outline-danger js-modal-trigger"
                                                     data-toggle="modal"
                                                     data-target="#deletePlanModal"
                                                     data-plan-id="{{ plan.id }}"
@@ -156,7 +156,7 @@
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button type="button" class="btn btn-outline-primary"
+                                            <button type="button" class="btn btn-outline-primary js-modal-trigger"
                                                     data-toggle="modal"
                                                     data-target="#editSubscriptionModal"
                                                     data-subscription-id="{{ subscription.id }}"
@@ -169,7 +169,7 @@
                                                 <i class="bi bi-pencil"></i>
                                             </button>
                                             {% if subscription.is_active %}
-                                            <button type="button" class="btn btn-outline-danger"
+                                            <button type="button" class="btn btn-outline-danger js-modal-trigger"
                                                     data-toggle="modal"
                                                     data-target="#cancelSubscriptionModal"
                                                     data-subscription-id="{{ subscription.id }}"
@@ -415,60 +415,71 @@
 
 {% block extra_js %}
 <script>
+    // WHY THESE ARE PLAIN 'click' HANDLERS ON THE BUTTONS, NOT
+    // 'show.bs.modal' HANDLERS ON THE MODALS:
+    //
+    // This app runs Bootstrap 4 (see templates/base.html), which fires its
+    // lifecycle events - show.bs.modal and friends - through jQuery's
+    // .trigger(). jQuery synthesises those rather than dispatching a real DOM
+    // event, so a listener registered with native addEventListener never runs
+    // for them. Every modal on this page was populated that way, which meant
+    // the hidden plan_id / subscription_id input was never filled in and each
+    // form posted an empty id. That is the second, independent reason the
+    // Delete Plan button did nothing (the first being that its route gated on
+    // the full SubscriptionPlanForm - see api/admin.py's delete_plan).
+    //
+    // A click handler on the trigger button is a real DOM event, fires before
+    // Bootstrap opens the modal, and needs no jQuery. Values come from the
+    // button's own data-* attributes via this.dataset - no Jinja value is ever
+    // interpolated into a JS string.
     document.addEventListener('DOMContentLoaded', function() {
-        // Edit Plan Modal
-        const editPlanModal = document.getElementById('editPlanModal');
-        if (editPlanModal) {
-            editPlanModal.addEventListener('show.bs.modal', function(event) {
-                const button = event.relatedTarget;
-                editPlanModal.querySelector('input[name="plan_id"]').value = button.getAttribute('data-plan-id');
-                editPlanModal.querySelector('input[name="name"]').value = button.getAttribute('data-plan-name');
-                editPlanModal.querySelector('input[name="description"]').value = button.getAttribute('data-plan-description');
-                editPlanModal.querySelector('input[name="price_monthly"]').value = button.getAttribute('data-plan-price-monthly');
-                editPlanModal.querySelector('input[name="price_yearly"]').value = button.getAttribute('data-plan-price-yearly');
-                editPlanModal.querySelector('input[name="max_projects"]').value = button.getAttribute('data-plan-max-projects');
-                editPlanModal.querySelector('input[name="max_users"]').value = button.getAttribute('data-plan-max-users');
-                editPlanModal.querySelector('input[name="max_clients"]').value = button.getAttribute('data-plan-max-clients');
-                editPlanModal.querySelector('textarea[name="features"]').value = button.getAttribute('data-plan-features');
-                editPlanModal.querySelector('input[name="is_active"]').checked = button.getAttribute('data-plan-active') === 'True';
-            });
+        function setValue(modal, selector, value) {
+            var el = modal.querySelector(selector);
+            if (el) { el.value = value || ''; }
         }
 
-        // Delete Plan Modal
-        const deletePlanModal = document.getElementById('deletePlanModal');
-        if (deletePlanModal) {
-            deletePlanModal.addEventListener('show.bs.modal', function(event) {
-                const button = event.relatedTarget;
-                deletePlanModal.querySelector('input[name="plan_id"]').value = button.getAttribute('data-plan-id');
-                deletePlanModal.querySelector('#deletePlanName').textContent = button.getAttribute('data-plan-name');
-            });
+        function setText(modal, selector, value) {
+            var el = modal.querySelector(selector);
+            if (el) { el.textContent = value || ''; }
         }
 
-        // Edit Subscription Modal
-        const editSubscriptionModal = document.getElementById('editSubscriptionModal');
-        if (editSubscriptionModal) {
-            editSubscriptionModal.addEventListener('show.bs.modal', function(event) {
-                const button = event.relatedTarget;
-                editSubscriptionModal.querySelector('input[name="subscription_id"]').value = button.getAttribute('data-subscription-id');
-                editSubscriptionModal.querySelector('select[name="user_id"]').value = button.getAttribute('data-user-id');
-                editSubscriptionModal.querySelector('select[name="plan_id"]').value = button.getAttribute('data-plan-id');
-                editSubscriptionModal.querySelector('input[name="start_date"]').value = button.getAttribute('data-start-date');
-                editSubscriptionModal.querySelector('input[name="end_date"]').value = button.getAttribute('data-end-date');
-                editSubscriptionModal.querySelector('select[name="billing_cycle"]').value = button.getAttribute('data-billing-cycle');
-                editSubscriptionModal.querySelector('select[name="status"]').value = button.getAttribute('data-status');
-            });
-        }
+        var triggers = document.querySelectorAll('.js-modal-trigger');
+        Array.prototype.forEach.call(triggers, function(button) {
+            button.addEventListener('click', function() {
+                var data = this.dataset;
+                var modal = document.querySelector(this.getAttribute('data-target'));
+                if (!modal) { return; }
 
-        // Cancel Subscription Modal
-        const cancelSubscriptionModal = document.getElementById('cancelSubscriptionModal');
-        if (cancelSubscriptionModal) {
-            cancelSubscriptionModal.addEventListener('show.bs.modal', function(event) {
-                const button = event.relatedTarget;
-                cancelSubscriptionModal.querySelector('input[name="subscription_id"]').value = button.getAttribute('data-subscription-id');
-                cancelSubscriptionModal.querySelector('#cancelUserName').textContent = button.getAttribute('data-user-name');
-                cancelSubscriptionModal.querySelector('#cancelPlanName').textContent = button.getAttribute('data-plan-name');
+                if (modal.id === 'editPlanModal') {
+                    setValue(modal, 'input[name="plan_id"]', data.planId);
+                    setValue(modal, 'input[name="name"]', data.planName);
+                    setValue(modal, 'input[name="description"]', data.planDescription);
+                    setValue(modal, 'input[name="price_monthly"]', data.planPriceMonthly);
+                    setValue(modal, 'input[name="price_yearly"]', data.planPriceYearly);
+                    setValue(modal, 'input[name="max_projects"]', data.planMaxProjects);
+                    setValue(modal, 'input[name="max_users"]', data.planMaxUsers);
+                    setValue(modal, 'input[name="max_clients"]', data.planMaxClients);
+                    setValue(modal, 'textarea[name="features"]', data.planFeatures);
+                    var activeBox = modal.querySelector('input[name="is_active"]');
+                    if (activeBox) { activeBox.checked = data.planActive === 'True'; }
+                } else if (modal.id === 'deletePlanModal') {
+                    setValue(modal, 'input[name="plan_id"]', data.planId);
+                    setText(modal, '#deletePlanName', data.planName);
+                } else if (modal.id === 'editSubscriptionModal') {
+                    setValue(modal, 'input[name="subscription_id"]', data.subscriptionId);
+                    setValue(modal, 'select[name="user_id"]', data.userId);
+                    setValue(modal, 'select[name="plan_id"]', data.planId);
+                    setValue(modal, 'input[name="start_date"]', data.startDate);
+                    setValue(modal, 'input[name="end_date"]', data.endDate);
+                    setValue(modal, 'select[name="billing_cycle"]', data.billingCycle);
+                    setValue(modal, 'select[name="status"]', data.status);
+                } else if (modal.id === 'cancelSubscriptionModal') {
+                    setValue(modal, 'input[name="subscription_id"]', data.subscriptionId);
+                    setText(modal, '#cancelUserName', data.userName);
+                    setText(modal, '#cancelPlanName', data.planName);
+                }
             });
-        }
+        });
     });
 </script>
 {% endblock %}

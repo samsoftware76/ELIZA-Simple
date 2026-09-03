@@ -622,8 +622,17 @@ class UserForm(FlaskForm):
     the Postgres column stores names like 'ADMIN', not values like 'admin',
     so the choice values must match exactly or assigning user.role crashes.
     first_name/last_name are required here because User.first_name/last_name
-    are NOT NULL columns; there's no is_active column on User (is_active is
-    a read-only Flask-Login property, always True), so no toggle for it.
+    are NOT NULL columns.
+
+    There is deliberately NO is_active field on this form even though
+    User.is_active is now a real column (see models/models.py and
+    migrations/add_user_is_active.py). Turning an account off is a distinct,
+    audited action with its own guards - an admin cannot do it to themselves,
+    the UI warns first when the target owns a team, and it writes an
+    ActivityLog entry naming the admin - so it lives on its own POST routes
+    (admin.deactivate_user / admin.reactivate_user) driven by UserActionForm
+    below, rather than riding along silently as a checkbox on an ordinary
+    "fix this user's phone number" save.
     """
     user_id = HiddenField('User ID')
     first_name = StringField('First Name', validators=[DataRequired(), Length(max=50)])
@@ -641,6 +650,50 @@ class UserForm(FlaskForm):
         ('CLIENT', 'Client'),
     ], validators=[DataRequired()])
     submit = SubmitField('Save')
+
+
+class DeleteConfirmForm(FlaskForm):
+    """A confirmation form that carries the CSRF token and nothing else.
+
+    Exists because the admin panel's "are you sure?" modals submit only the
+    row id plus csrf_token, while the routes behind them used to gate on
+    validate_on_submit() of the FULL edit form (UserForm requires
+    first_name/last_name/username/email/role; SubscriptionPlanForm requires
+    name/price_monthly/price_yearly/features). None of those fields is in the
+    confirm modal, so validation ALWAYS failed and the route fell straight
+    through to its redirect having done nothing at all - and, because the
+    failure branch was the implicit "no else", with no error message either.
+    A delete button that silently does nothing is worse than one that
+    refuses, because the admin walks away believing the row is gone.
+
+    The rule this encodes: a form class must describe the payload actually
+    being submitted. CSRF protection is unchanged - Flask-WTF still requires
+    a valid token here exactly as it did on the fat form, so nothing about
+    the security of these routes is relaxed; only the irrelevant field
+    requirements are gone.
+
+    Subclassed below rather than used directly wherever a specific row id
+    also has to travel, so each route keeps the id field name its own modal
+    already posts.
+    """
+    submit = SubmitField('Confirm')
+
+
+class UserActionForm(DeleteConfirmForm):
+    """id + csrf for a POST acting on exactly one user row.
+
+    Used by admin.delete_user (hard delete, history-free users only),
+    admin.deactivate_user and admin.reactivate_user. DataRequired on the id
+    matters: without it an empty user_id would validate and the route would
+    then 404 on get_or_404(''), which reads as a broken page rather than a
+    rejected request.
+    """
+    user_id = HiddenField('User ID', validators=[DataRequired()])
+
+
+class PlanDeleteConfirmForm(DeleteConfirmForm):
+    """id + csrf for admin.delete_plan - see DeleteConfirmForm above."""
+    plan_id = HiddenField('Plan ID', validators=[DataRequired()])
 
 
 class SubscriptionPlanForm(FlaskForm):

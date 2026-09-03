@@ -1,10 +1,13 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, abort
 from flask_login import login_required, current_user
 from sqlalchemy import func
-from models.models import User, Client, Project, Task, UserRole, ProjectStatus, TaskStatus, AnalyticsEvent, ActivityLog
+from models.models import (User, Client, Project, Task, UserRole, ProjectStatus, TaskStatus,
+                           AnalyticsEvent, ActivityLog, TeamMembership)
 from models.subscription import Subscription, SubscriptionPlan
 from models.billing import AccountStatement
-from forms import UserForm, SubscriptionPlanForm, SubscriptionForm, EmailSettingsForm, PesapalSettingsForm, AppSettingsForm, StatementForm
+from forms import (UserForm, SubscriptionPlanForm, SubscriptionForm, EmailSettingsForm,
+                   PesapalSettingsForm, AppSettingsForm, StatementForm,
+                   UserActionForm, PlanDeleteConfirmForm)
 from utils.account_statement import build_account_statement
 from models import db
 from datetime import datetime, timedelta
@@ -31,8 +34,14 @@ def admin_required(f):
 @login_required
 @admin_required
 def dashboard():
-    # Count statistics
-    user_count = User.query.count()
+    # Count statistics.
+    # This card is labelled "Active users in the system", so it counts ACTIVE
+    # users - a deactivated account cannot log in and must not be counted as
+    # one. The deactivated tally is shown alongside rather than folded in, so
+    # the total headcount is still visible and the two numbers can't silently
+    # disagree with the Users page.
+    user_count = User.query.filter(User.is_active.is_(True)).count()
+    deactivated_user_count = User.query.filter(User.is_active.is_(False)).count()
     client_count = Client.query.count()
     active_project_count = Project.query.filter_by(status=ProjectStatus.IN_PROGRESS).count()
 
@@ -81,6 +90,7 @@ def dashboard():
     
     return render_template('admin/dashboard.html',
                           user_count=user_count,
+                          deactivated_user_count=deactivated_user_count,
                           client_count=client_count,
                           active_project_count=active_project_count,
                           todo_count=todo_count,
@@ -177,17 +187,46 @@ def analytics():
 @admin_required
 def users():
     users = User.query.all()
-    
-    # Create forms for the modals
+
+    # How many ACTIVE team members each listed user owns, so the Deactivate
+    # modal can warn concretely ("this account owns a team of 3") instead of
+    # generically. Built as one grouped query rather than N per-row queries.
+    #
+    # Only memberships whose member account is itself still active are
+    # counted - the same definition of "on the team right now" that
+    # api/team.py's active_memberships_query() uses for the member list and
+    # the seat cap, so this warning can't claim a headcount the team page
+    # doesn't show.
+    member_user = db.aliased(User)
+    owned_team_counts = dict(
+        db.session.query(
+            TeamMembership.account_owner_id, func.count(TeamMembership.id)
+        ).join(
+            member_user, TeamMembership.member_user_id == member_user.id
+        ).filter(
+            TeamMembership.is_active.is_(True),
+            member_user.is_active.is_(True),
+        ).group_by(TeamMembership.account_owner_id).all()
+    )
+
+    # Create forms for the modals.
+    #
+    # delete_form / status_form are UserActionForm (id + csrf), NOT UserForm:
+    # the confirm modals only ever submit those two values, and gating the
+    # routes on the full UserForm is precisely what made the Delete button
+    # silently do nothing. See forms.DeleteConfirmForm.
     add_form = UserForm()
     edit_form = UserForm()
-    delete_form = UserForm()
-    
-    return render_template('admin/users.html', 
-                          users=users, 
-                          add_form=add_form, 
-                          edit_form=edit_form, 
-                          delete_form=delete_form)
+    delete_form = UserActionForm()
+    status_form = UserActionForm()
+
+    return render_template('admin/users.html',
+                          users=users,
+                          owned_team_counts=owned_team_counts,
+                          add_form=add_form,
+                          edit_form=edit_form,
+                          delete_form=delete_form,
+                          status_form=status_form)
 
 @admin_bp.route('/users/add', methods=['POST'])
 @login_required
@@ -274,41 +313,172 @@ def edit_user():
     
     return redirect(url_for('admin.users'))
 
+def _log_admin_user_action(target_user, action_type, description):
+    """Write the audit entry for an admin acting on another account.
+
+    Mirrors statement_generate()'s entry below: the admin is named explicitly
+    in the description so the ledger reads as "an admin did this to someone"
+    rather than as routine tenant activity. owner_id is the TARGET's tenant
+    (their own account, or the account they were invited into), so the entry
+    lands in the affected tenant's slice of the log rather than the admin's.
+    """
+    db.session.add(ActivityLog(
+        user_id=current_user.id,
+        owner_id=target_user.get_owner_id(),
+        action_type=action_type,
+        entity_type='user',
+        entity_id=target_user.id,
+        description=description,
+    ))
+
+
+@admin_bp.route('/users/deactivate', methods=['POST'])
+@login_required
+@admin_required
+def deactivate_user():
+    """Soft-delete an account: kept, hidden, cannot log in, fully reversible.
+
+    What this deliberately does NOT do is touch a single row of the user's
+    history. Their invoices, quotes, contracts, comments, time entries and
+    activity-log entries all keep pointing at this same User row, so every
+    old record still resolves to their real name exactly as before. That is
+    the whole reason this exists alongside (and now instead of) hard delete.
+
+    TENANT OWNERS - FLAGGED DECISION: deactivating a user who owns a team
+    locks out ONLY that user. Their team members resolve through
+    get_owner_id() to this now-inactive owner and keep working in the
+    account's data with their own logins intact, because their own
+    User.is_active is untouched. The alternative (cascade to the whole team)
+    was rejected: it turns one admin click into an unbounded number of
+    lockouts, and reactivating cleanly afterwards is impossible without also
+    recording which members were ALREADY deactivated beforehand - which would
+    make the action no longer reversible, the one property the whole feature
+    is built around. The confirm modal in templates/admin/users.html states
+    this explicitly, with the real member count, before the admin confirms.
+    """
+    form = UserActionForm()
+
+    if not form.validate_on_submit():
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{field}: {error}', 'danger')
+        return redirect(url_for('admin.users'))
+
+    user = User.query.get_or_404(form.user_id.data)
+
+    # SERVER-SIDE self-lockout guard, not just a hidden button. load_user()
+    # in api/index.py returns None for an inactive user, so an admin who
+    # deactivated themselves would be anonymous on their very next request -
+    # locked out of the admin panel that is the only way to undo it.
+    if user.id == current_user.id:
+        flash('You cannot deactivate your own account.', 'danger')
+        return redirect(url_for('admin.users'))
+
+    if not user.is_active:
+        flash(f'{user.username} is already deactivated.', 'info')
+        return redirect(url_for('admin.users'))
+
+    user.is_active = False
+    _log_admin_user_action(
+        user, 'admin_user_deactivated',
+        f'ADMIN {current_user.get_full_name()} ({current_user.email}) deactivated user '
+        f'{user.get_full_name()} ({user.email}, user id {user.id}). The account is kept '
+        f'and all its history is intact; it cannot log in until reactivated.'
+    )
+    db.session.commit()
+
+    flash(f'{user.username} has been deactivated. They can no longer sign in, and their history is kept.', 'success')
+    return redirect(url_for('admin.users'))
+
+
+@admin_bp.route('/users/reactivate', methods=['POST'])
+@login_required
+@admin_required
+def reactivate_user():
+    """Undo a deactivation - the reversible half of the pair above."""
+    form = UserActionForm()
+
+    if not form.validate_on_submit():
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{field}: {error}', 'danger')
+        return redirect(url_for('admin.users'))
+
+    user = User.query.get_or_404(form.user_id.data)
+
+    if user.is_active:
+        flash(f'{user.username} is already active.', 'info')
+        return redirect(url_for('admin.users'))
+
+    user.is_active = True
+    _log_admin_user_action(
+        user, 'admin_user_reactivated',
+        f'ADMIN {current_user.get_full_name()} ({current_user.email}) reactivated user '
+        f'{user.get_full_name()} ({user.email}, user id {user.id}). The account can sign in again.'
+    )
+    db.session.commit()
+
+    flash(f'{user.username} has been reactivated and can sign in again.', 'success')
+    return redirect(url_for('admin.users'))
+
+
 @admin_bp.route('/users/delete', methods=['POST'])
 @login_required
 @admin_required
 def delete_user():
-    form = UserForm()
-    
-    if form.validate_on_submit():
-        user = User.query.get_or_404(form.user_id.data)
-        
-        # Prevent deleting the current user
-        if user.id == current_user.id:
-            flash('You cannot delete your own account.', 'danger')
-            return redirect(url_for('admin.users'))
+    """HARD delete - now the secondary action, kept only for an account with
+    genuinely no history (a mistyped signup, a test account).
 
-        try:
-            # Delete the user
-            db.session.delete(user)
-            db.session.commit()
-            flash(f'User {user.username} deleted.', 'success')
-        except Exception:
-            # ActivityLog.user_id, Comment.user_id, TimeEntry.user_id,
-            # TeamMembership.account_owner_id/member_user_id,
-            # Subscription.user_id, Quote/Invoice/Contract.created_by_id and
-            # TeamInvite/ClientInvite.inviter_id are all NOT NULL FKs to
-            # users.id with no cascade (ORM or DB) - deleting any user who
-            # has ever done anything in the app raised an unhandled
-            # IntegrityError here (a raw 500). Deciding what SHOULD happen
-            # to that history (reassign, block, soft-delete...) is a real
-            # product decision, not something to guess at in a bug-hunt
-            # pass - so this at minimum degrades to a clean rollback and a
-            # friendly message instead of crashing.
-            db.session.rollback()
-            flash(f'Could not delete {user.username}: they still have related records '
-                  f'(activity, comments, time entries, invoices, or a team membership).', 'danger')
-    
+    Deactivate is the primary action and the prominent button in the UI: it
+    keeps the row, keeps the audit ledger complete, and is reversible. This
+    route stays because a user with literally nothing attached has no history
+    worth preserving, and leaving such rows around forever is its own kind of
+    mess. When the FK guards below refuse, the message points the admin at
+    Deactivate rather than leaving them stuck.
+
+    Was previously gated on UserForm.validate_on_submit() while the confirm
+    modal submitted only user_id + csrf_token - so validation always failed
+    and this route silently redirected having done nothing. Now gated on
+    UserActionForm, which describes what the modal actually posts. See
+    forms.DeleteConfirmForm.
+    """
+    form = UserActionForm()
+
+    if not form.validate_on_submit():
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{field}: {error}', 'danger')
+        return redirect(url_for('admin.users'))
+
+    user = User.query.get_or_404(form.user_id.data)
+
+    # Prevent deleting the current user
+    if user.id == current_user.id:
+        flash('You cannot delete your own account.', 'danger')
+        return redirect(url_for('admin.users'))
+
+    username = user.username  # read before the delete detaches the instance
+
+    try:
+        # Delete the user
+        db.session.delete(user)
+        db.session.commit()
+        flash(f'User {username} deleted.', 'success')
+    except Exception:
+        # ActivityLog.user_id, Comment.user_id, TimeEntry.user_id,
+        # TeamMembership.account_owner_id/member_user_id,
+        # Subscription.user_id, Quote/Invoice/Contract.created_by_id and
+        # TeamInvite/ClientInvite.inviter_id are all NOT NULL FKs to
+        # users.id with no cascade (ORM or DB) - deleting any user who
+        # has ever done anything in the app raised an unhandled
+        # IntegrityError here (a raw 500). That question now HAS a product
+        # answer - deactivate, keep the history - so the message says so
+        # instead of leaving the admin at a dead end.
+        db.session.rollback()
+        flash(f'Could not delete {username}: they still have related records '
+              f'(activity, comments, time entries, invoices, or a team membership). '
+              f'Deactivate them instead - the account is kept and hidden, and their history stays intact.', 'danger')
+
     return redirect(url_for('admin.users'))
 
 @admin_bp.route('/subscriptions')
@@ -321,15 +491,29 @@ def subscriptions():
     # Create forms for the modals
     add_plan_form = SubscriptionPlanForm()
     edit_plan_form = SubscriptionPlanForm()
-    delete_plan_form = SubscriptionPlanForm()
-    
+    # id + csrf only - the confirm modal never submits the fat plan form, and
+    # gating on it is what made this button silently do nothing. See
+    # forms.DeleteConfirmForm.
+    delete_plan_form = PlanDeleteConfirmForm()
+
     edit_subscription_form = SubscriptionForm()
     cancel_subscription_form = SubscriptionForm()
 
     # A subscription belongs to a User (an ELIZA account holder), not a
     # Client (that user's own customer) - populate accordingly.
+    #
+    # DEACTIVATED USERS ARE DELIBERATELY STILL LISTED HERE, marked as such.
+    # This is admin tooling for money: a deactivated account can still have a
+    # live subscription that has to be cancelled or corrected, and dropping
+    # them from the choices would make SelectField reject the submitted id as
+    # "Not a valid choice" - leaving that subscription permanently uneditable.
+    # Hiding deactivated users applies to the TENANT-facing lists (the team
+    # page, seat counts), not to the admin's own view of who exists.
     users = User.query.all()
-    edit_subscription_form.user_id.choices = [(u.id, f"{u.get_full_name()} ({u.email})") for u in users]
+    edit_subscription_form.user_id.choices = [
+        (u.id, f"{u.get_full_name()} ({u.email})" + ('' if u.is_active else ' - DEACTIVATED'))
+        for u in users
+    ]
     edit_subscription_form.plan_id.choices = [(p.id, p.name) for p in plans]
     
     return render_template('admin/subscriptions.html',
@@ -406,40 +590,56 @@ def edit_plan():
 @login_required
 @admin_required
 def delete_plan():
-    form = SubscriptionPlanForm()
-    
-    if form.validate_on_submit():
-        plan = SubscriptionPlan.query.get_or_404(form.plan_id.data)
+    """Delete a subscription plan that nothing references.
 
-        # subscriptions.plan_id AND subscriptions.pending_plan_id are both
-        # NOT-NULL-safe FKs to this table with no cascade (ORM or DB) - a
-        # plan that has ever had a customer who later upgraded, downgraded,
-        # or churned still has an INACTIVE Subscription row pointing at it
-        # (subscribe() sets is_active=False rather than deleting on a plan
-        # switch), and a pending_plan_id reference can exist independent of
-        # is_active entirely. Counting only is_active=True subscriptions
-        # missed both, so this guard would pass and the delete below would
-        # still hit Postgres's own FK constraint - an unhandled 500. Count
-        # every subscription that references this plan at all, active or
-        # historical, via either column.
-        referencing_subscriptions = Subscription.query.filter(
-            db.or_(Subscription.plan_id == plan.id, Subscription.pending_plan_id == plan.id)
-        ).count()
+    Was gated on SubscriptionPlanForm.validate_on_submit() while the confirm
+    modal submitted only plan_id + csrf_token - name/price_monthly/
+    price_yearly/features are all DataRequired on that form and none of them
+    is in the modal, so validation always failed and this route silently
+    redirected having deleted nothing and said nothing. Now gated on
+    PlanDeleteConfirmForm, which describes what the modal actually posts.
+    The reference guards below are unchanged.
+    """
+    form = PlanDeleteConfirmForm()
 
-        if referencing_subscriptions > 0:
-            flash(f'Cannot delete plan {plan.name}: {referencing_subscriptions} subscription(s) '
-                  f'(active or historical) still reference it.', 'danger')
-            return redirect(url_for('admin.subscriptions'))
+    if not form.validate_on_submit():
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f'{field}: {error}', 'danger')
+        return redirect(url_for('admin.subscriptions'))
 
-        try:
-            # Delete the plan
-            db.session.delete(plan)
-            db.session.commit()
-            flash(f'Plan {plan.name} deleted.', 'success')
-        except Exception:
-            db.session.rollback()
-            flash(f'Could not delete plan {plan.name} because it still has related records.', 'danger')
-    
+    plan = SubscriptionPlan.query.get_or_404(form.plan_id.data)
+    plan_name = plan.name  # read before the delete detaches the instance
+
+    # subscriptions.plan_id AND subscriptions.pending_plan_id are both
+    # NOT-NULL-safe FKs to this table with no cascade (ORM or DB) - a
+    # plan that has ever had a customer who later upgraded, downgraded,
+    # or churned still has an INACTIVE Subscription row pointing at it
+    # (subscribe() sets is_active=False rather than deleting on a plan
+    # switch), and a pending_plan_id reference can exist independent of
+    # is_active entirely. Counting only is_active=True subscriptions
+    # missed both, so this guard would pass and the delete below would
+    # still hit Postgres's own FK constraint - an unhandled 500. Count
+    # every subscription that references this plan at all, active or
+    # historical, via either column.
+    referencing_subscriptions = Subscription.query.filter(
+        db.or_(Subscription.plan_id == plan.id, Subscription.pending_plan_id == plan.id)
+    ).count()
+
+    if referencing_subscriptions > 0:
+        flash(f'Cannot delete plan {plan_name}: {referencing_subscriptions} subscription(s) '
+              f'(active or historical) still reference it.', 'danger')
+        return redirect(url_for('admin.subscriptions'))
+
+    try:
+        # Delete the plan
+        db.session.delete(plan)
+        db.session.commit()
+        flash(f'Plan {plan_name} deleted.', 'success')
+    except Exception:
+        db.session.rollback()
+        flash(f'Could not delete plan {plan_name} because it still has related records.', 'danger')
+
     return redirect(url_for('admin.subscriptions'))
 
 @admin_bp.route('/subscriptions/edit', methods=['POST'])
@@ -451,7 +651,13 @@ def edit_subscription():
     # Populate the choices for validation
     users = User.query.all()
     plans = SubscriptionPlan.query.all()
-    form.user_id.choices = [(u.id, f"{u.get_full_name()} ({u.email})") for u in users]
+    # Deactivated users stay in these choices on purpose - see subscriptions()
+    # above: dropping them would make an existing subscription belonging to a
+    # deactivated account fail validation and become uneditable forever.
+    form.user_id.choices = [
+        (u.id, f"{u.get_full_name()} ({u.email})" + ('' if u.is_active else ' - DEACTIVATED'))
+        for u in users
+    ]
     form.plan_id.choices = [(p.id, p.name) for p in plans]
 
     if form.validate_on_submit():

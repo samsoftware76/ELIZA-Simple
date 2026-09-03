@@ -146,10 +146,30 @@ register_filters(app)
 
 @login_manager.user_loader
 def load_user(user_id):
+    """Resolve the session's user id to a User, or None.
+
+    Returning None is how a DEACTIVATED user with an already-valid session
+    cookie is genuinely logged out. Flask-Login checks User.is_active exactly
+    once, inside login_user() - it never re-checks it for a session that is
+    already established, so an admin deactivating someone mid-session would
+    otherwise leave them working normally until their cookie expired (which,
+    with "remember me", is a year). This callback runs on EVERY request, so
+    refusing to load an inactive user drops them to AnonymousUserMixin
+    immediately: @login_required bounces them to /login, and the login page
+    then refuses them too (see login() below). Verified live, not assumed -
+    see tests/test_user_deactivation.py.
+
+    The same None is returned for a user id that no longer exists at all,
+    which is Flask-Login's own documented contract for this callback, so this
+    adds no new failure mode.
+    """
     # Use our retry logic for more robust database connections
     def get_user():
         return User.query.get(int(user_id))
-    return retry_operation(get_user)
+    user = retry_operation(get_user)
+    if user is not None and not user.is_active:
+        return None
+    return user
 
 @app.before_request
 def restrict_client_role_to_portal():
@@ -527,7 +547,30 @@ def login():
             user = retry_operation(get_user)
             
             if user and user.check_password(form.password.data):
-                login_user(user, remember=form.remember_me.data)
+                # DEACTIVATED ACCOUNT. login_user() below already refuses an
+                # inactive user on its own (Flask-Login reads User.is_active
+                # and returns False without establishing a session) - but it
+                # does so SILENTLY, and its return value is easy to ignore.
+                # Left to that alone, this branch would flash "Signed in."
+                # and redirect to a page that immediately bounces back to
+                # /login, which reads as a broken app rather than a closed
+                # account. Check it explicitly first and say so plainly.
+                #
+                # Deliberately AFTER check_password: a wrong password on a
+                # deactivated account still gets the generic credentials
+                # message below, so this never becomes an oracle telling an
+                # attacker which emails exist as deactivated accounts.
+                if not user.is_active:
+                    flash('This account has been deactivated. Contact your administrator.', 'danger')
+                    return render_template('auth/login.html', title='Login', form=form)
+
+                # Belt and braces: this is the real gate (login_user() returns
+                # False rather than raising if it refuses for any reason), so
+                # a session is never assumed to exist just because the
+                # password matched.
+                if not login_user(user, remember=form.remember_me.data):
+                    flash('This account cannot be signed in to. Contact your administrator.', 'danger')
+                    return render_template('auth/login.html', title='Login', form=form)
                 log_event('user_login', user_id=user.id)
                 flash('Signed in.', 'success')
                 if user.role == UserRole.CLIENT:

@@ -32,9 +32,11 @@
                 <div class="col-md-4 mb-4">
                     <div class="card bg-primary text-white">
                         <div class="card-body">
-                            <h5 class="card-title">Total Users</h5>
+                            <h5 class="card-title">Active Users</h5>
                             <h2 class="display-4">{{ user_count }}</h2>
-                            <p class="card-text">Active users in the system</p>
+                            <p class="card-text">
+                                Accounts that can sign in{% if deactivated_user_count %} &middot; {{ deactivated_user_count }} deactivated{% endif %}
+                            </p>
                         </div>
                     </div>
                 </div>

@@ -29,7 +29,10 @@ owner, and an invited team member shares them.
 from datetime import datetime, timedelta
 
 from models import db
-from models.models import Client, Project, TeamMembership, TeamInvite
+# TeamMembership is no longer imported here - "an active team member" is now
+# defined in exactly one place (api.team.active_memberships_query, imported
+# lazily inside count_team_seats below) so this module can't drift from it.
+from models.models import Client, Project, TeamInvite
 from models.subscription import Subscription
 
 # 0 in any max_* column means "no ceiling" - see models/subscription.py.
@@ -123,13 +126,29 @@ def count_clients(owner_id):
 def count_team_seats(owner_id):
     """Seats used: active memberships + still-pending invites.
 
-    Copied deliberately from api/team.py's invite() so the number shown on the
-    plans page is the same number that route enforces - a burst of pending
-    invites counts against the cap there, so it has to count here too. The
-    owner themselves is NOT counted: max_users is advertised everywhere as how
-    many people can be invited, not the account's total headcount.
+    Shares api/team.py's active_memberships_query() rather than re-deriving
+    "active member" here, so the number shown on the plans page is the same
+    number invite() enforces - a burst of pending invites counts against the
+    cap there, so it has to count here too. The owner themselves is NOT
+    counted: max_users is advertised everywhere as how many people can be
+    invited, not the account's total headcount.
+
+    A DEACTIVATED member consumes no seat. Their TeamMembership row is still
+    is_active=True (an admin deactivating an account never touches the
+    owner's team roster), so counting memberships alone would keep billing
+    the owner for someone who cannot log in - which is exactly the drift
+    active_memberships_query() exists to prevent.
+
+    Imported inside the function rather than at module scope on purpose:
+    api/team.py imports a Blueprint and registers routes at import time, and
+    this module is imported by api/index.py during app setup. Keeping the
+    dependency lazy means utils.plan_limits stays importable on its own (as
+    the tests import it) and can never participate in an import cycle if
+    api/team.py later wants a helper from here.
     """
-    active_members = TeamMembership.query.filter_by(account_owner_id=owner_id, is_active=True).count()
+    from api.team import active_memberships_query
+
+    active_members = active_memberships_query(owner_id).count()
     pending_invites = TeamInvite.query.filter_by(inviter_id=owner_id, status='pending').count()
     return active_members + pending_invites
 
