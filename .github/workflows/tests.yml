@@ -1,0 +1,33 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          # Matches the venv this scaffold was built and verified against
+          # (Python 3.13.3) - NOT vercel.json's runtime3.9, which pins only
+          # the production Lambda's interpreter, not local/CI development.
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest
+        # No secrets needed: tests/conftest.py forces SQLALCHEMY_DATABASE_URI
+        # to a throwaway local sqlite file before api.index is ever imported,
+        # and asserts that before any test runs - this job never touches the
+        # real Neon database and needs no DATABASE_URL (or any other) secret.

@@ -120,8 +120,16 @@ ELIZA_App/
 - Vercel uses `vercel.json` for build/routing config and `api/index.py` as the serverless function entry point.
 - Static files under `static/` are served automatically per `vercel.json`.
 
+## Running the tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+CI (`.github/workflows/tests.yml`) runs the same `pytest` on every push and pull request to `main`, with no secrets configured. Tests never touch the real database — `tests/conftest.py` forces the app onto a throwaway local SQLite file (deleted at the end of the run) before `api.index` is ever imported, and asserts that before a single test executes; the real `DATABASE_URL` (Neon/Postgres) is never read by the test process.
+
 ## Known Gaps
 
-- No automated test suite yet.
 - No PDF export or e-signature for quotes/invoices — the client portal is web-only.
 - No automatic invoice reminders for approaching/passed due dates (currently manual re-send).
