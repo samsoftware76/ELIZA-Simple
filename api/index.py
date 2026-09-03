@@ -1335,7 +1335,7 @@ def client_edit(client_id):
     
     return render_template('clients/form.html', form=form, client=client)
 
-@app.route('/clients/<int:client_id>/delete')
+@app.route('/clients/<int:client_id>/delete', methods=['POST'])
 @login_required
 def client_delete(client_id):
     """Delete a client"""
@@ -1663,7 +1663,7 @@ def project_reopen(project_id):
 
     return redirect(url_for('project_detail', project_id=project.id))
 
-@app.route('/projects/<int:project_id>/delete')
+@app.route('/projects/<int:project_id>/delete', methods=['POST'])
 @login_required
 def project_delete(project_id):
     """Delete a project"""
@@ -1703,7 +1703,7 @@ def project_delete(project_id):
         return redirect(url_for('project_detail', project_id=project.id))
 
 # Time Tracking Routes
-@app.route('/tasks/<int:task_id>/time/start', methods=['GET', 'POST'])
+@app.route('/tasks/<int:task_id>/time/start', methods=['POST'])
 @login_required
 def task_time_start(task_id):
     """Start time tracking for a task"""
@@ -1758,7 +1758,7 @@ def task_time_start(task_id):
     
     return redirect(url_for('task_detail', task_id=task.id))
 
-@app.route('/tasks/<int:task_id>/time/stop', methods=['GET', 'POST'])
+@app.route('/tasks/<int:task_id>/time/stop', methods=['POST'])
 @login_required
 def task_time_stop(task_id):
     """Stop time tracking for a task"""
@@ -1877,7 +1877,7 @@ def task_time_add(task_id):
 
     return render_template('tasks/time_form.html', form=form, task=task)
 
-@app.route('/tasks/<int:task_id>/comment/delete/<int:comment_id>')
+@app.route('/tasks/<int:task_id>/comment/delete/<int:comment_id>', methods=['POST'])
 @login_required
 def task_delete_comment(task_id, comment_id):
     """Delete a comment from a task"""
@@ -1984,7 +1984,7 @@ def project_assign_user(project_id):
         
     return redirect(url_for('project_detail', project_id=project.id))
 
-@app.route('/projects/<int:project_id>/team/remove/<int:user_id>')
+@app.route('/projects/<int:project_id>/team/remove/<int:user_id>', methods=['POST'])
 @login_required
 def project_remove_user(project_id, user_id):
     """Remove a user from a project team"""
@@ -2319,7 +2319,7 @@ def task_mark_complete(task_id):
     flash(f'Task "{task.title}" has been marked complete.', 'success')
     return redirect(url_for('task_detail', task_id=task.id))
 
-@app.route('/tasks/<int:task_id>/delete')
+@app.route('/tasks/<int:task_id>/delete', methods=['POST'])
 @login_required
 def task_delete(task_id):
     """Delete a task"""
@@ -3172,7 +3172,7 @@ def export_deliverables_report():
     )
     return response
 
-@app.route('/comments/<int:comment_id>/delete')
+@app.route('/comments/<int:comment_id>/delete', methods=['POST'])
 @login_required
 def comment_delete(comment_id):
     """Delete a comment directly"""

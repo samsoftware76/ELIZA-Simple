@@ -273,7 +273,7 @@ def quote_send(quote_id):
     return redirect(url_for('billing.quote_detail', quote_id=quote.id))
 
 
-@billing_bp.route('/quotes/<int:quote_id>/delete')
+@billing_bp.route('/quotes/<int:quote_id>/delete', methods=['POST'])
 @login_required
 def quote_delete(quote_id):
     """Delete a quote"""
@@ -514,7 +514,7 @@ def invoice_mark_paid(invoice_id):
     return redirect(url_for('billing.invoice_detail', invoice_id=invoice.id))
 
 
-@billing_bp.route('/invoices/<int:invoice_id>/delete')
+@billing_bp.route('/invoices/<int:invoice_id>/delete', methods=['POST'])
 @login_required
 def invoice_delete(invoice_id):
     """Delete an invoice"""
