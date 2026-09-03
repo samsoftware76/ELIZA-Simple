@@ -27,3 +27,4 @@ uploads/
 # change, never application code. Keep them locally if useful, never commit -
 # git history is forever, and this repo may not always stay private.
 migration_backup_*.json
+.git_commit_msg.txt
