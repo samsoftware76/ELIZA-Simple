@@ -22,7 +22,7 @@ def bulk_email():
         cta_url = request.form.get('cta_url')
         
         if not subject or not message or not client_ids:
-            flash('Please fill in all required fields.', 'danger')
+            flash('A subject, a message and at least one recipient are all required.', 'danger')
             return redirect(url_for('email.bulk_email'))
         
         # Get clients - scoped to this user's own so ids for another tenant's

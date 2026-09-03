@@ -72,7 +72,7 @@
         </div>
     {% else %}
         <div class="alert alert-info">
-            <p>No invoices yet. <a href="{{ url_for('billing.invoice_create') }}">Create your first invoice</a> to get started.</p>
+            <p class="mb-0">No invoices yet. Sending one gives the client a link they can pay on by card, MTN, Airtel or M-Pesa, or your bank details to wire. <a href="{{ url_for('billing.invoice_create') }}">Raise one</a>, or <a href="{{ url_for('billing.quotes_list') }}">send a quote</a> and let an accepted quote raise it for you.</p>
         </div>
     {% endif %}
 

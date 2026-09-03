@@ -17,7 +17,7 @@
 </head>
 <body>
     <div class="header">
-        <h2>New Invoice</h2>
+        <h2>Invoice {{ invoice.invoice_number }} from {{ invoice.created_by.get_full_name() }}</h2>
     </div>
     <div class="content">
         <p>Hello {{ invoice.client.contact_person }},</p>
@@ -32,9 +32,9 @@
             {% endif %}
         </div>
 
-        <p>You can view the full breakdown and pay securely online:</p>
+        <p>The full breakdown is on the page below, and you can pay from it by card, by MTN, Airtel or M&#8209;Pesa mobile money, or by bank transfer to the account shown there.</p>
 
-        <a href="{{ portal_url }}" class="button">View &amp; Pay Invoice</a>
+        <a href="{{ portal_url }}" class="button">Open the invoice and pay</a>
 
         <p>Thank you,<br>{{ invoice.created_by.get_full_name() }}</p>
     </div>

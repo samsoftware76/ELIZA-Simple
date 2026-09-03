@@ -1,6 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}{{ title }}{% endblock %}
+{# One template, two audiences: '/' is the KPI dashboard when signed in and
+   the marketing landing when not. The title/description have to switch with
+   it, and a block may only be DEFINED once per template (defining it twice,
+   once per branch, is a Jinja TemplateAssertionError) - so the branch lives
+   inside the single block. base.html's topbar heading takes the part before
+   ' - ', which is why "Dashboard" leads. #}
+{% block title %}{% if current_user.is_authenticated %}Dashboard - ELIZA{% else %}ELIZA - quotes your clients accept and pay online{% endif %}{% endblock %}
+
+{% block meta_description %}Client, project and invoicing software for freelancers and small studios. Send a quote, the client accepts it in the browser with no account, and ELIZA raises the invoice for them to pay by card, MTN, Airtel or M-Pesa through PesaPal, or by bank transfer.{% endblock %}
 
 {% block content %}
 {% if current_user.is_authenticated %}
@@ -51,30 +59,30 @@
            path instead of a wall of zeros that looks broken. #}
         <div class="card dash-welcome">
             <div class="card-body">
-                <h2 class="dash-welcome-title">Welcome to ELIZA, {{ current_user.first_name }}</h2>
-                <p class="dash-welcome-lead">Your dashboard will light up as soon as there is work to track. Three quick steps to get going:</p>
+                <h2 class="dash-welcome-title">Nothing to count yet, {{ current_user.first_name }}</h2>
+                <p class="dash-welcome-lead">Every number on this dashboard is counted from your clients, projects and tasks. Add one of each and it starts reading.</p>
                 <div class="row">
                     <div class="col-md-4 mb-3">
                         <div class="dash-step">
                             <div class="dash-step-num">1</div>
-                            <div class="dash-step-title">Add your first client</div>
-                            <div class="dash-step-text">Everything in ELIZA - projects, tasks, quotes, invoices - hangs off a client.</div>
+                            <div class="dash-step-title">Add a client</div>
+                            <div class="dash-step-text">A project, quote, invoice or contract has to belong to a client, so this one comes first.</div>
                             <a href="{{ url_for('client_create') }}" class="btn btn-primary btn-sm mt-2">Add a client</a>
                         </div>
                     </div>
                     <div class="col-md-4 mb-3">
                         <div class="dash-step">
                             <div class="dash-step-num">2</div>
-                            <div class="dash-step-title">Create a project</div>
-                            <div class="dash-step-text">Group the work you're doing for that client and track its progress here.</div>
+                            <div class="dash-step-title">Open a project for them</div>
+                            <div class="dash-step-text">The project holds that client's tasks, its tracked hours and the progress bar you will see here.</div>
                             <a href="{{ url_for('project_create') }}" class="btn btn-outline-secondary btn-sm mt-2">New project</a>
                         </div>
                     </div>
                     <div class="col-md-4 mb-3">
                         <div class="dash-step">
                             <div class="dash-step-num">3</div>
-                            <div class="dash-step-title">Break it into tasks</div>
-                            <div class="dash-step-text">Tasks drive the progress bars, time tracking and overdue alerts on this page.</div>
+                            <div class="dash-step-title">Write the tasks</div>
+                            <div class="dash-step-text">Tasks are what the progress percentage, the hours-this-month figure and the overdue count are made of.</div>
                             <a href="{{ url_for('create_task') }}" class="btn btn-outline-secondary btn-sm mt-2">New task</a>
                         </div>
                     </div>
@@ -177,11 +185,12 @@
                             {% endfor %}
                         {% else %}
                             <div class="dash-empty">
-                                <p class="mb-2">No projects in progress right now.</p>
                                 {% if stats.project_count == 0 %}
-                                    <a href="{{ url_for('project_create') }}" class="btn btn-primary btn-sm">Create your first project</a>
+                                    <p class="mb-2">No projects yet. This panel lists projects with the status In Progress and shows how far their tasks have got.</p>
+                                    <a href="{{ url_for('project_create') }}" class="btn btn-primary btn-sm">New project</a>
                                 {% else %}
-                                    <a href="{{ url_for('projects') }}" class="btn btn-outline-secondary btn-sm">View your projects</a>
+                                    <p class="mb-2">None of your projects are set to In Progress, so there is nothing to show here.</p>
+                                    <a href="{{ url_for('projects') }}" class="btn btn-outline-secondary btn-sm">See all projects</a>
                                 {% endif %}
                             </div>
                         {% endif %}
@@ -208,7 +217,7 @@
                             </div>
                         {% else %}
                             <div class="dash-empty">
-                                <p class="mb-0">No activity yet. Actions you and your team take on clients, projects and tasks will show up here.</p>
+                                <p class="mb-0">Nothing logged yet. Creating, editing and completing clients, projects and tasks each writes a line here, with who did it and when.</p>
                             </div>
                         {% endif %}
                     </div>
@@ -220,43 +229,68 @@
     {# ---------------------------------------------------------------
        Public (unauthenticated) home - the REAL logged-out landing page
        (templates/landing.html is unregistered dead code, see api/main.py).
-       Mobile-first marketing anatomy in the app's card language. Every
-       claim below maps to a shipped feature: payment links + PesaPal
-       card/mobile-money collection and bank transfer details (portal +
-       wallet), auto-invoice on quote acceptance (billing), branded
-       quotes/invoices/contracts with e-signature (contracts + portal),
-       client portal (client_portal), dashboard/reports/team roles. The
-       14-day free trial line matches templates/subscription/plans.html.
-       No fabricated stats, testimonials or logos. One primary CTA
-       (Create free account), repeated once at the bottom; Login is the
-       secondary link. Styles: .pub-* in static/css/custom.css, with a
-       single entrance reveal that prefers-reduced-motion disables.
+
+       Copy rule for this page: a visitor scans it, they do not read it, so
+       the first line names the single most specific true thing the app does
+       (a quote the client accepts and pays without an account) instead of
+       the category it belongs to. Every sentence below is checkable against
+       code, and the check is named in a comment beside it. Nothing here is
+       a user count, a testimonial, a logo wall or a statistic - there are
+       no real ones to quote, so there are none.
+
+       Styles: .pub-* in static/css/custom.css, with a single entrance
+       reveal that prefers-reduced-motion disables.
        --------------------------------------------------------------- #}
     <div class="pub-landing">
         <section class="pub-hero pub-reveal">
-            <h1 class="pub-hero-title">Clients, projects and getting paid &mdash; managed in one place.</h1>
+            {# accept_quote() in api/portal.py: public token route, no login,
+               creates the invoice from the quote and redirects the client
+               straight to it. #}
+            <h1 class="pub-hero-title">Your client opens a link, accepts the quote, and pays the invoice it becomes.</h1>
             <p class="pub-hero-lead">
-                ELIZA is client, project &amp; money management for freelancers and small teams:
-                run your work, send branded quotes, invoices and contracts, and get paid by card,
-                M&#8209;Pesa/MTN/Airtel mobile money via PesaPal, or direct bank transfer.
+                ELIZA is where a freelancer or a small studio keeps client work: projects
+                and tasks on one side, quotes, invoices and signed contracts on the other.
+                Accepting a quote raises the invoice from the same line items, and the
+                client pays it by card, MTN, Airtel or M&#8209;Pesa through PesaPal, or by
+                transfer to your bank. They never make an account or install anything.
             </p>
             <div class="pub-hero-cta">
-                <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Create free account</a>
-                <a href="{{ url_for('login') }}" class="pub-hero-login">Already have one? Log in</a>
+                <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Create your account</a>
+                <a href="{{ url_for('features') }}" class="pub-hero-login">Read the feature list first</a>
             </div>
-            <p class="pub-hero-note">Paid plans include a 14-day free trial &mdash; no credit card needed to start.</p>
+            <p class="pub-hero-note">14 days free on any paid plan. No card to start.</p>
         </section>
+
+        {# ---------------------------------------------------------------
+           SCREENSHOT SLOT - intentionally an empty labelled frame, not
+           artwork. Replace this whole <figure> with a real screenshot:
+             static/img/dashboard-1440x900.png - the signed-in dashboard at
+             1440x900 with the KPI row (active projects / outstanding
+             invoices / hours this month / overdue tasks), the "Projects in
+             progress" panel and the sidebar visible. Use a demo account,
+             not a real client's data.
+           When it goes in, also add a 1200x630 PNG and the og:image tag
+           that templates/base.html currently omits on purpose.
+           --------------------------------------------------------------- #}
+        <figure class="pub-shot" aria-hidden="true">
+            <div class="pub-shot-frame">
+                <span class="pub-shot-label">Screenshot of the dashboard goes here</span>
+            </div>
+        </figure>
 
         <div class="row pub-benefits">
             <div class="col-md-4 mb-3">
                 <div class="card h-100">
                     <div class="card-body">
-                        <div class="pub-benefit-icon"><i class="fas fa-money-bill-wave"></i></div>
-                        <h2 class="pub-benefit-title">Get paid faster</h2>
+                        <div class="pub-benefit-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+                        {# create_invoice_from_quote() + status SENT + the
+                           send_quote_response_notification() call, all in
+                           accept_quote(), api/portal.py. #}
+                        <h2 class="pub-benefit-title">The quote becomes the invoice</h2>
                         <p class="pub-benefit-text">
-                            Send invoices with a secure payment link &mdash; clients pay by card or
-                            M&#8209;Pesa/MTN/Airtel mobile money through PesaPal, or wire your bank account.
-                            Accepted quotes can become invoices automatically.
+                            The client reads the line items and clicks Accept. ELIZA copies those
+                            same lines into an invoice, marks it sent, and puts it on their next
+                            screen to pay. You get an email naming the invoice it raised.
                         </p>
                     </div>
                 </div>
@@ -265,11 +299,14 @@
                 <div class="card h-100">
                     <div class="card-body">
                         <div class="pub-benefit-icon"><i class="fas fa-file-signature"></i></div>
-                        <h2 class="pub-benefit-title">Look professional</h2>
+                        {# Contract.signer_name / signature_image / signer_ip /
+                           signed_at in models/billing.py; contract_edit() in
+                           api/contracts.py refuses to edit a sent contract. #}
+                        <h2 class="pub-benefit-title">Contracts signed in the browser</h2>
                         <p class="pub-benefit-text">
-                            Branded quotes, invoices and contracts with electronic signature,
-                            plus a client portal where your clients review work, approve quotes
-                            and sign &mdash; under your name and logo.
+                            They type their full name, tick the consent box and draw a signature.
+                            ELIZA keeps the name, the signature image, the timestamp and the IP
+                            address on the contract, and refuses to edit the text once it is sent.
                         </p>
                     </div>
                 </div>
@@ -277,23 +314,38 @@
             <div class="col-md-4 mb-3">
                 <div class="card h-100">
                     <div class="card-body">
-                        <div class="pub-benefit-icon"><i class="fas fa-chart-bar"></i></div>
-                        <h2 class="pub-benefit-title">Stay in control</h2>
+                        <div class="pub-benefit-icon"><i class="fas fa-money-bill-wave"></i></div>
+                        {# PesaPal button + bank block in templates/portal/invoice.html;
+                           the custody note matches templates/wallet.html. #}
+                        <h2 class="pub-benefit-title">Card, mobile money or your bank</h2>
                         <p class="pub-benefit-text">
-                            One dashboard for projects, tasks, tracked hours and outstanding
-                            invoices &mdash; with deliverables reports for clients and team roles
-                            when you're not working alone.
+                            PesaPal handles cards and MTN, Airtel and M&#8209;Pesa. Your bank name,
+                            account number and SWIFT code print on the invoice for clients who
+                            wire. ELIZA never holds the money - it goes to your PesaPal merchant
+                            account or your bank.
                         </p>
                     </div>
                 </div>
             </div>
         </div>
 
+        <section class="pub-also">
+            <h2 class="pub-also-title">Also in the app</h2>
+            <ul class="pub-also-list">
+                <li>A client portal where the client watches project progress and approves finished tasks.</li>
+                <li>A timer on every task, plus manual entries, feeding an hours-per-project report.</li>
+                <li>A deliverables report for one project or a whole client, printable to PDF or exported to Excel.</li>
+                <li>Team members you invite by email and give your own role titles to.</li>
+            </ul>
+            <a href="{{ url_for('features') }}" class="pub-also-link">All of it, feature by feature</a>
+        </section>
+
         <section class="pub-cta-bottom card">
             <div class="card-body text-center">
-                <h2 class="pub-cta-title">Start managing your work in minutes</h2>
-                <p class="text-muted mb-3">From first contact to final invoice.</p>
-                <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Create free account</a>
+                <h2 class="pub-cta-title">Start with one client and one quote</h2>
+                <p class="text-muted mb-3">14 days free on any paid plan, and it does not ask for a card.</p>
+                <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Create your account</a>
+                <p class="pub-hero-note mb-0">Already signed up? <a href="{{ url_for('login') }}">Log in</a></p>
             </div>
         </section>
     </div>

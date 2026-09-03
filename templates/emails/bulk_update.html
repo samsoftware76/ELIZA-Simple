@@ -53,7 +53,9 @@
         {% if message %}
             {{ message|safe }}
         {% else %}
-            <p>We wanted to keep you updated on the latest news and developments from ELIZA Project Management.</p>
+            {# No body was passed in. Say that, rather than filling the
+               gap with news nobody actually wrote. #}
+            <p>(This message was sent with no content in it. Nothing to read - please ignore it.)</p>
         {% endif %}
         
         {% if cta_text and cta_url %}
@@ -62,14 +64,19 @@
             </p>
         {% endif %}
         
-        <p>Thank you for being a valued client.</p>
-        <p>Best regards,<br>The ELIZA Team<br><a href="https://elizaproject.com">elizaproject.com</a></p>
+        {# The sender here is the freelancer or studio, not ELIZA, and there
+           is no elizaproject.com - that link used to 404. Both removed. #}
     </div>
     <div class="footer">
-        <p>© 2025 ELIZA Project Management. All rights reserved.</p>
+        {# The hardcoded "&copy; 2025 ... All rights reserved." that was here
+           went stale the moment the year turned, and asserted ELIZA's
+           copyright over a message the freelancer wrote. Dropped. #}
         <p>
-            <a href="{{ base_url }}/email/unsubscribe?token={{ unsubscribe_token }}">Unsubscribe</a> from future emails.
+            You are getting this because you are a client on file.
+            <a href="{{ base_url }}/email/unsubscribe?token={{ unsubscribe_token }}">Unsubscribe</a>
+            and you will be left off lists like this from now on.
         </p>
+        <p>Sent with ELIZA.</p>
     </div>
 </body>
 </html>

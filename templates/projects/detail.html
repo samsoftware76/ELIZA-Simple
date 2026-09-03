@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ project.title }}{% endblock %}
+{% block title %}{{ project.title }} - project - ELIZA{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -195,9 +195,9 @@
                     </div>
                     {% else %}
                     <div class="text-center py-4">
-                        <p class="text-muted mb-0">No tasks have been added to this project yet.</p>
+                        <p class="text-muted mb-0">No tasks on this project, so its progress reads 0%. Progress is the share of tasks marked complete.</p>
                         <a href="{{ url_for('task_create', project_id=project.id) }}" class="btn btn-sm btn-primary mt-2">
-                            <i class="fas fa-plus"></i> Create First Task
+                            <i class="fas fa-plus"></i> Add the first task
                         </a>
                     </div>
                     {% endif %}
@@ -329,7 +329,7 @@
                         {% endfor %}
                         {% else %}
                         <li class="list-group-item text-center py-3">
-                            <p class="text-muted mb-0">No team members assigned</p>
+                            <p class="text-muted mb-0">Nobody assigned to this project yet.</p>
                         </li>
                         {% endif %}
                     </ul>

@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 
-{% block title %}Reports Dashboard{% endblock %}
+{% block title %}Reports - ELIZA{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-4">Reports Dashboard</h1>
+    <h1 class="mb-2">Reports</h1>
+    <p class="text-muted mb-4">Six views over the same clients, projects, tasks and hours. Every one reads live data - there is nothing to schedule or rebuild.</p>
     
     <div class="row">
         <div class="col-md-4 mb-4">
@@ -13,8 +14,8 @@
                     <h5 class="card-title mb-0">Project Status</h5>
                 </div>
                 <div class="card-body">
-                    <p class="card-text">View the status distribution of all projects in the system.</p>
-                    <a href="{{ url_for('report_project_status') }}" class="btn btn-outline-primary">Generate Report</a>
+                    <p class="card-text">How many of your projects sit in each status, and the task counts behind them. Exports to CSV.</p>
+                    <a href="{{ url_for('report_project_status') }}" class="btn btn-outline-primary">Open project status</a>
                 </div>
             </div>
         </div>
@@ -25,8 +26,8 @@
                     <h5 class="card-title mb-0">Task Distribution</h5>
                 </div>
                 <div class="card-body">
-                    <p class="card-text">View task distribution by status, priority, and assignee.</p>
-                    <a href="{{ url_for('report_task_distribution') }}" class="btn btn-outline-success">Generate Report</a>
+                    <p class="card-text">Where the tasks are: by status, by priority and by who they are assigned to. Exports to CSV.</p>
+                    <a href="{{ url_for('report_task_distribution') }}" class="btn btn-outline-success">Open task distribution</a>
                 </div>
             </div>
         </div>
@@ -37,8 +38,8 @@
                     <h5 class="card-title mb-0">Time Tracking</h5>
                 </div>
                 <div class="card-body">
-                    <p class="card-text">View time tracking reports for projects and team members.</p>
-                    <a href="{{ url_for('report_time_tracking') }}" class="btn btn-outline-info">Generate Report</a>
+                    <p class="card-text">Hours logged, totalled per project and per person. Exports to CSV.</p>
+                    <a href="{{ url_for('report_time_tracking') }}" class="btn btn-outline-info">Open time tracking</a>
                 </div>
             </div>
         </div>
@@ -51,8 +52,8 @@
                     <h5 class="card-title mb-0">Project Timelines</h5>
                 </div>
                 <div class="card-body">
-                    <p class="card-text">View Gantt charts and timeline visualizations for projects.</p>
-                    <a href="{{ url_for('report_project_timeline') }}" class="btn btn-outline-warning">Generate Report</a>
+                    <p class="card-text">Each project drawn against its start and end dates, as a Gantt bar.</p>
+                    <a href="{{ url_for('report_project_timeline') }}" class="btn btn-outline-warning">Open the timeline</a>
                 </div>
             </div>
         </div>
@@ -63,8 +64,8 @@
                     <h5 class="card-title mb-0">Overdue Tasks</h5>
                 </div>
                 <div class="card-body">
-                    <p class="card-text">View a list of all overdue tasks across all projects.</p>
-                    <a href="{{ url_for('report_overdue_tasks') }}" class="btn btn-outline-danger">Generate Report</a>
+                    <p class="card-text">Every task past its due date, oldest first, with the project and the person it is on. Exports to CSV.</p>
+                    <a href="{{ url_for('report_overdue_tasks') }}" class="btn btn-outline-danger">Open overdue tasks</a>
                 </div>
             </div>
         </div>
@@ -77,8 +78,8 @@
                     <h5 class="card-title mb-0">Deliverables Report</h5>
                 </div>
                 <div class="card-body">
-                    <p class="card-text">An executive-ready report for a project or client: what's been delivered, what's overdue, and who was responsible.</p>
-                    <a href="{{ url_for('report_deliverables') }}" class="btn btn-outline-dark">Generate Report</a>
+                    <p class="card-text">The one to send a client: what has been delivered, what is late and who did it, for one project or all of theirs. Prints to PDF, exports to .xlsx.</p>
+                    <a href="{{ url_for('report_deliverables') }}" class="btn btn-outline-dark">Open deliverables</a>
                 </div>
             </div>
         </div>

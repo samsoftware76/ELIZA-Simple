@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, session, abort, g
+from flask import Flask, render_template, jsonify, request, redirect, url_for, flash, session, abort, g, has_request_context
 import os
 import logging
 import sys
@@ -209,6 +209,156 @@ def inject_current_year():
     stale hardcoded year and needs no JS."""
     return dict(current_year=datetime.now().year)
 
+
+# The only endpoints a search engine or a link preview bot can actually
+# render. Everything else is either behind @login_required or behind a
+# per-document token (portal.*), so it must never get a canonical tag, an
+# og:url or a sitemap entry - see PUBLIC_SITEMAP_ENDPOINTS below, which is
+# the same list minus the pages we do not want indexed at all.
+PUBLIC_SEO_ENDPOINTS = (
+    'home', 'features', 'contact', 'login', 'register', 'subscription.plans',
+)
+
+# What actually goes in /sitemap.xml. Login and register are deliberately
+# absent: they are public but they are not landing pages, and a sitemap is a
+# list of pages worth ranking, not a list of reachable URLs.
+PUBLIC_SITEMAP_ENDPOINTS = (
+    ('home', '1.0', 'weekly'),
+    ('features', '0.9', 'monthly'),
+    ('subscription.plans', '0.8', 'monthly'),
+    ('contact', '0.5', 'yearly'),
+)
+
+
+def _site_url():
+    """Absolute site root with no trailing slash, from BASE_URL.
+
+    Same source of truth the quote/invoice/contract portal links already use
+    (api/billing.py, api/contracts.py, api/team.py) rather than a hardcoded
+    domain or url_for(_external=True), which on Vercel would follow whatever
+    Host header the request happened to arrive with.
+    """
+    return (app.config.get('BASE_URL') or '').rstrip('/')
+
+
+@app.context_processor
+def inject_seo():
+    """canonical_url / og_url for templates/base.html's <head>.
+
+    Returns an empty string for anything that is not a public page, so the
+    template's `{% if canonical_url %}` simply drops the tag on authenticated
+    and token-gated pages instead of advertising them.
+
+    Context processors also run for the render_template() calls that build
+    email bodies (utils/email_utils.py), and those can happen with no request
+    bound - touching `request` there would raise RuntimeError and take the
+    send down with it. Hence the has_request_context() guard: no request, no
+    canonical, and the email renders as before.
+    """
+    if not has_request_context():
+        return dict(canonical_url='', site_url=_site_url())
+    endpoint = request.endpoint or ''
+    if endpoint not in PUBLIC_SEO_ENDPOINTS:
+        return dict(canonical_url='', site_url=_site_url())
+    # '/' is the marketing landing only while logged out; for a signed-in
+    # user it is the KPI dashboard, which is nobody's canonical anything.
+    if endpoint == 'home' and current_user.is_authenticated:
+        return dict(canonical_url='', site_url=_site_url())
+    return dict(canonical_url=_site_url() + request.path, site_url=_site_url())
+
+
+@app.route('/features')
+def features():
+    """Public feature page. Deliberately unauthenticated: the public side of
+    this app was a single page, so there was nothing for a search engine to
+    rank and nothing to link to from an email or a tweet."""
+    return render_template('features.html')
+
+
+@app.route('/contact')
+def contact():
+    """Public contact page. There is no contact-form backend in this app, so
+    this page does not pretend to have one - it publishes the real sender
+    address (MAIL_DEFAULT_SENDER, the same address every ELIZA email already
+    comes from) and lets the visitor mail it."""
+    # MAIL_DEFAULT_SENDER is configured as a display form -
+    # "ELIZA Project Management <someone@example.com>" - so pull the bare
+    # address out for the mailto: and show that, not the display wrapper.
+    raw_sender = app.config.get('MAIL_DEFAULT_SENDER') or ''
+    match = re.search(r'<([^>]+)>', raw_sender)
+    contact_email = (match.group(1) if match else raw_sender).strip()
+    return render_template('contact.html', contact_email=contact_email or None)
+
+
+@app.route('/robots.txt')
+def robots_txt():
+    """Served from the app root, which is the only place a crawler looks.
+
+    static/robots.txt was unreachable at /robots.txt (vercel.json only maps
+    /static/* to the static build) and still named a placeholder domain, so
+    it was doing nothing. Disallow covers every authenticated area plus the
+    token-addressed client portal, whose URLs are the documents themselves.
+    """
+    lines = [
+        '# The crawlable pages are /, /features, /plans, /contact, /login and',
+        '# /register. Nothing is blanket-disallowed, so they need no Allow line;',
+        '# everything listed below is either behind a login or behind a',
+        '# per-document token and has nothing to show a crawler.',
+        'User-agent: *',
+        '',
+        '# Signed-in application areas',
+        'Disallow: /admin/',
+        'Disallow: /my/',
+        'Disallow: /portal/',
+        'Disallow: /clients',
+        'Disallow: /projects',
+        'Disallow: /tasks',
+        'Disallow: /quotes',
+        'Disallow: /invoices',
+        'Disallow: /contracts',
+        'Disallow: /reports',
+        'Disallow: /export/',
+        'Disallow: /team',
+        'Disallow: /wallet',
+        'Disallow: /profile',
+        'Disallow: /email/',
+        'Disallow: /subscribe/',
+        'Disallow: /subscription/',
+        'Disallow: /trial/',
+        'Disallow: /payment/',
+        'Disallow: /accept-invite/',
+        'Disallow: /accept-client-invite/',
+        'Disallow: /reset-password',
+        'Disallow: /logout',
+        '',
+        'Sitemap: {0}/sitemap.xml'.format(_site_url()),
+        '',
+    ]
+    return app.response_class('\n'.join(lines), mimetype='text/plain')
+
+
+@app.route('/sitemap.xml')
+def sitemap_xml():
+    """Public URLs only, built from BASE_URL + url_for so it cannot drift
+    out of sync with the routing table the way the old hand-written
+    static/sitemap.xml did (it listed /auth/login and /auth/register, neither
+    of which has ever existed in app.url_map)."""
+    site = _site_url()
+    today = datetime.now().strftime('%Y-%m-%d')
+    parts = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for endpoint, priority, changefreq in PUBLIC_SITEMAP_ENDPOINTS:
+        parts.append('  <url>')
+        parts.append('    <loc>{0}{1}</loc>'.format(site, url_for(endpoint)))
+        parts.append('    <lastmod>{0}</lastmod>'.format(today))
+        parts.append('    <changefreq>{0}</changefreq>'.format(changefreq))
+        parts.append('    <priority>{0}</priority>'.format(priority))
+        parts.append('  </url>')
+    parts.append('</urlset>')
+    parts.append('')
+    return app.response_class('\n'.join(parts), mimetype='application/xml')
+
+
 @app.route('/')
 def home():
     """Home page: KPI dashboard for authenticated staff, marketing blurb otherwise.
@@ -347,9 +497,9 @@ def test_email():
     success = test_email_configuration(current_user.email)
     
     if success:
-        flash('Test email sent successfully! Please check your inbox.', 'success')
+        flash('Test email sent. Check the inbox.', 'success')
     else:
-        flash('Failed to send test email. Please check the server logs for details.', 'danger')
+        flash('The test email did not send. The reason is in the server logs.', 'danger')
     
     return redirect(url_for('home'))
 
@@ -375,7 +525,7 @@ def login():
             if user and user.check_password(form.password.data):
                 login_user(user, remember=form.remember_me.data)
                 log_event('user_login', user_id=user.id)
-                flash('Login successful!', 'success')
+                flash('Signed in.', 'success')
                 if user.role == UserRole.CLIENT:
                     # A CLIENT login has no destination among the staff routes,
                     # so skip next_page (unlike every other role below) and send
@@ -385,10 +535,10 @@ def login():
                 return redirect(next_page or url_for('home'))
             else:
                 print(f"DEBUG: Login failed for {form.email.data}. User exists: {user is not None}")
-                flash('Login failed. Please check your email and password.', 'danger')
+                flash('That email and password do not match an account.', 'danger')
         except Exception as e:
             print(f"ERROR during login: {str(e)}")
-            flash('An error occurred during login. Please try again.', 'danger')
+            flash('Something went wrong signing you in. Try again.', 'danger')
     
     return render_template('auth/login.html', title='Login', form=form)
 
@@ -416,7 +566,7 @@ def register():
         db.session.commit()
         log_event('user_registered', user_id=user.id, role=user.role.name)
 
-        flash('Your account has been created! You can now log in.', 'success')
+        flash('Account created. Log in with the email and password you just chose.', 'success')
         return redirect(url_for('login'))
     
     return render_template('auth/register.html', title='Register', form=form)
@@ -492,7 +642,7 @@ def _save_business_logo(file_storage, user_id):
         # directory can't be created at request time, so degrade instead of
         # 500ing on a user just trying to save their business name.
         print(f"ERROR creating logo upload dir: {str(e)}")
-        flash('Logo upload is not available on this deployment right now - your business name was still saved.', 'warning')
+        flash('The logo could not be stored on this deployment. Everything else on the form was saved.', 'warning')
         return None
 
     safe_name = secure_filename(filename)
@@ -801,7 +951,7 @@ def reset_password(token):
     if form.validate_on_submit():
         user.set_password(form.password.data)
         db.session.commit()
-        flash('Your password has been reset successfully. You can now log in with your new password.', 'success')
+        flash('Password changed. Log in with the new one.', 'success')
         return redirect(url_for('login'))
 
     return render_template('auth/reset_password.html', title='Reset Password', form=form)
@@ -868,7 +1018,7 @@ def accept_invite(token):
         log_event('team_invite_accepted', user_id=new_user.id, inviter_id=invite.inviter_id)
 
         login_user(new_user)
-        flash('Your account has been created and you have joined the team!', 'success')
+        flash('Account created. You are on the team.', 'success')
         return redirect(url_for('home'))
 
     return render_template('auth/accept_invite.html', title='Accept Invite', form=form, invite=invite)
@@ -927,7 +1077,7 @@ def accept_client_invite(token):
         log_event('client_invite_accepted', user_id=new_user.id, inviter_id=invite.inviter_id)
 
         login_user(new_user)
-        flash('Your account has been created!', 'success')
+        flash('Account created. You can see your projects now.', 'success')
         return redirect(url_for('client_portal.dashboard'))
 
     return render_template('auth/accept_client_invite.html', title='Accept Invite', form=form, invite=invite)
@@ -1022,7 +1172,7 @@ def client_create():
         db.session.add(activity)
         db.session.commit()
 
-        flash(f'Client "{client.name}" has been created successfully!', 'success')
+        flash(f'Client "{client.name}" added.', 'success')
         return redirect(url_for('clients'))
     
     return render_template('clients/form.html', form=form, client=None)
@@ -1180,7 +1330,7 @@ def client_edit(client_id):
         db.session.add(activity)
         db.session.commit()
         
-        flash(f'Client "{client.name}" has been updated successfully!', 'success')
+        flash(f'Client "{client.name}" saved.', 'success')
         return redirect(url_for('client_detail', client_id=client.id))
     
     return render_template('clients/form.html', form=form, client=client)
@@ -1198,7 +1348,7 @@ def client_delete(client_id):
 
     # Check if client has associated projects
     if client.projects:
-        flash(f'Cannot delete client "{client_name}" because it has associated projects. Please delete or reassign the projects first.', 'danger')
+        flash(f'"{client_name}" still has projects. Delete or move those first.', 'danger')
         return redirect(url_for('client_detail', client_id=client.id))
 
     # Refuse rather than orphan an active portal login: deleting the Client
@@ -1228,7 +1378,7 @@ def client_delete(client_id):
     db.session.delete(client)
     db.session.commit()
     
-    flash(f'Client "{client_name}" has been deleted successfully!', 'success')
+    flash(f'Client "{client_name}" deleted.', 'success')
     return redirect(url_for('clients'))
 
 # Project Management Routes
@@ -1297,7 +1447,7 @@ def project_create():
             db.session.add(activity)
             db.session.commit()
             
-            flash(f'Project "{project.title}" has been created successfully!', 'success')
+            flash(f'Project "{project.title}" created.', 'success')
             return redirect(url_for('project_detail', project_id=project.id))
         except Exception as e:
             db.session.rollback()
@@ -1418,7 +1568,7 @@ def project_edit(project_id):
             db.session.add(activity)
             db.session.commit()
             
-            flash(f'Project "{project.title}" has been updated successfully!', 'success')
+            flash(f'Project "{project.title}" saved.', 'success')
             return redirect(url_for('project_detail', project_id=project.id))
         except Exception as e:
             db.session.rollback()
@@ -1526,7 +1676,7 @@ def project_delete(project_id):
     
     # Check if project has associated tasks
     if project.tasks:
-        flash(f'Cannot delete project "{project_title}" because it has associated tasks. Please delete the tasks first.', 'danger')
+        flash(f'"{project_title}" still has tasks. Delete those first.', 'danger')
         return redirect(url_for('project_detail', project_id=project.id))
     
     try:
@@ -1545,7 +1695,7 @@ def project_delete(project_id):
         db.session.delete(project)
         db.session.commit()
         
-        flash(f'Project "{project_title}" has been deleted successfully!', 'success')
+        flash(f'Project "{project_title}" deleted.', 'success')
         return redirect(url_for('projects'))
     except Exception as e:
         db.session.rollback()
@@ -1601,7 +1751,7 @@ def task_time_start(task_id):
         db.session.add(activity)
         db.session.commit()
 
-        flash('Time tracking started successfully!', 'success')
+        flash('Timer started.', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error starting time tracking: {str(e)}', 'danger')
@@ -1655,7 +1805,7 @@ def task_time_stop(task_id):
         db.session.add(activity)
         db.session.commit()
         
-        flash(f'Time tracking stopped. You worked for {active_entry.duration:.2f} hours.', 'success')
+        flash(f'Timer stopped at {active_entry.duration:.2f} hours.', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error stopping time tracking: {str(e)}', 'danger')
@@ -1719,7 +1869,7 @@ def task_time_add(task_id):
             db.session.add(activity)
             db.session.commit()
 
-            flash(f'Time entry added successfully. Duration: {duration_text}.', 'success')
+            flash(f'Logged {duration_text}.', 'success')
             return redirect(url_for('task_detail', task_id=task.id))
         except Exception as e:
             db.session.rollback()
@@ -1761,7 +1911,7 @@ def task_delete_comment(task_id, comment_id):
         db.session.delete(comment)
         db.session.commit()
         
-        flash('Comment has been deleted successfully!', 'success')
+        flash('Comment deleted.', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting comment: {str(e)}', 'danger')
@@ -1855,7 +2005,7 @@ def project_remove_user(project_id, user_id):
         # Check if user has assigned tasks in this project
         assigned_tasks = Task.query.filter_by(project_id=project.id, assignee_id=user.id).count()
         if assigned_tasks > 0:
-            flash(f'Cannot remove {user.username} from the project because they have {assigned_tasks} assigned tasks. Please reassign the tasks first.', 'danger')
+            flash(f'{user.username} still has {assigned_tasks} task(s) on this project. Reassign them first.', 'danger')
             return redirect(url_for('project_detail', project_id=project.id))
         
         # Log the activity before removing the team member
@@ -1952,7 +2102,7 @@ def task_create(project_id):
                     print(traceback.format_exc())
                     app.logger.error(traceback.format_exc())
             
-            flash(f'Task "{task.title}" has been created successfully!', 'success')
+            flash(f'Task "{task.title}" created.', 'success')
             return redirect(url_for('project_detail', project_id=project.id))
         except Exception as e:
             db.session.rollback()
@@ -2085,7 +2235,7 @@ def task_edit(task_id):
                 print(traceback.format_exc())
                 app.logger.error(traceback.format_exc())
             
-            flash(f'Task "{task.title}" has been updated successfully!', 'success')
+            flash(f'Task "{task.title}" saved.', 'success')
             return redirect(url_for('task_detail', task_id=task.id))
         except Exception as e:
             db.session.rollback()
@@ -2196,7 +2346,7 @@ def task_delete(task_id):
         db.session.delete(task)
         db.session.commit()
         
-        flash(f'Task "{task_title}" has been deleted successfully!', 'success')
+        flash(f'Task "{task_title}" deleted.', 'success')
         return redirect(url_for('project_detail', project_id=project_id))
     except Exception as e:
         db.session.rollback()
@@ -2261,7 +2411,7 @@ def task_add_comment(task_id):
             print(traceback.format_exc())
             app.logger.error(traceback.format_exc())
         
-        flash('Comment added successfully!', 'success')
+        flash('Comment added.', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error adding comment: {str(e)}', 'danger')
@@ -2616,7 +2766,7 @@ def create_task():
         if task.assignee_id and task.assignee_id != current_user.id:
             send_task_assignment_notification(task, task.assigned_to)
         
-        flash(f'Task "{task.title}" created successfully.', 'success')
+        flash(f'Task "{task.title}" created.', 'success')
         return redirect(url_for('task_detail', task_id=task.id))
     
     # If GET request or form validation failed
@@ -3044,7 +3194,7 @@ def comment_delete(comment_id):
     try:
         db.session.delete(comment)
         db.session.commit()
-        flash('Comment deleted successfully!', 'success')
+        flash('Comment deleted.', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting comment: {str(e)}', 'danger')

@@ -209,7 +209,7 @@ def add_user():
         db.session.add(new_user)
         db.session.commit()
         
-        flash(f'User {new_user.username} has been created successfully.', 'success')
+        flash(f'User {new_user.username} created.', 'success')
     else:
         for field, errors in form.errors.items():
             for error in errors:
@@ -251,7 +251,7 @@ def edit_user():
         
         db.session.commit()
         
-        flash(f'User {user.username} has been updated successfully.', 'success')
+        flash(f'User {user.username} saved.', 'success')
     else:
         for field, errors in form.errors.items():
             for error in errors:
@@ -277,7 +277,7 @@ def delete_user():
         db.session.delete(user)
         db.session.commit()
         
-        flash(f'User {user.username} has been deleted successfully.', 'success')
+        flash(f'User {user.username} deleted.', 'success')
     
     return redirect(url_for('admin.users'))
 
@@ -334,7 +334,7 @@ def add_plan():
         db.session.add(new_plan)
         db.session.commit()
         
-        flash(f'Subscription plan {new_plan.name} has been created successfully.', 'success')
+        flash(f'Plan {new_plan.name} created.', 'success')
     else:
         for field, errors in form.errors.items():
             for error in errors:
@@ -364,7 +364,7 @@ def edit_plan():
 
         db.session.commit()
         
-        flash(f'Subscription plan {plan.name} has been updated successfully.', 'success')
+        flash(f'Plan {plan.name} saved.', 'success')
     else:
         for field, errors in form.errors.items():
             for error in errors:
@@ -392,7 +392,7 @@ def delete_plan():
         db.session.delete(plan)
         db.session.commit()
         
-        flash(f'Subscription plan {plan.name} has been deleted successfully.', 'success')
+        flash(f'Plan {plan.name} deleted.', 'success')
     
     return redirect(url_for('admin.subscriptions'))
 
@@ -423,7 +423,7 @@ def edit_subscription():
 
         db.session.commit()
         
-        flash('Subscription has been updated successfully.', 'success')
+        flash('Subscription saved.', 'success')
     else:
         for field, errors in form.errors.items():
             for error in errors:

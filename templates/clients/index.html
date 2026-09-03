@@ -108,9 +108,9 @@
     {% else %}
         <div class="alert alert-info">
             {% if request.args.get('q') or request.args.get('created_after') or request.args.get('created_before') %}
-            <p>No clients found matching your search. Try adjusting it or <a href="{{ url_for('clients') }}">view all clients</a>.</p>
+            <p>No clients match that search. <a href="{{ url_for('clients') }}">Clear the filters</a> to see all of them.</p>
             {% else %}
-            <p>No clients found. <a href="{{ url_for('client_create') }}">Add your first client</a> to get started.</p>
+            <p>No clients yet. A client is what a project, quote, invoice or contract has to belong to, so this is the first thing to add. <a href="{{ url_for('client_create') }}">Add one now</a>.</p>
             {% endif %}
         </div>
     {% endif %}

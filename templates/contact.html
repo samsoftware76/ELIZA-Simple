@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{#
+  Public contact page (api/index.py -> contact(), no login).
+
+  There is no contact-form backend in this app - no route accepts a message
+  from a stranger, and nothing stores one - so this page does not draw a form
+  that would silently throw a visitor's message away. It publishes the real
+  address instead: contact_email is the bare address pulled out of
+  MAIL_DEFAULT_SENDER, which is the same From address every ELIZA email
+  already arrives from, so a reply to any of them lands in the same place.
+
+  No response-time promise appears here. There is no support rota behind this
+  address to make one true. If one ever exists, put the real number in.
+
+  Bootstrap 4 markup only. Styles: .pub-* / .feat-* in css/custom.css.
+#}
+
+{% block title %}Contact ELIZA{% endblock %}
+
+{% block meta_description %}How to reach ELIZA: the email address behind the app, where to go for a password reset, and who to talk to if you were sent a quote or invoice from someone using ELIZA.{% endblock %}
+
+{% block content %}
+<div class="pub-landing">
+    <section class="pub-hero pub-reveal pub-hero-compact">
+        <h1 class="pub-hero-title">Contact</h1>
+        <p class="pub-hero-lead">
+            One address, read by the person who builds ELIZA. There is no
+            contact form on this page because there is no inbox behind one.
+        </p>
+    </section>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="feat-item-title">Email</h2>
+                    {% if contact_email %}
+                        <p class="feat-contact-value">
+                            <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>
+                        </p>
+                        <p class="feat-list-note mb-0">
+                            This is the address ELIZA sends from, so replying to any email
+                            the app has sent you reaches the same place. Sales questions,
+                            billing problems and bug reports all go here.
+                        </p>
+                    {% else %}
+                        {# MAIL_DEFAULT_SENDER unset: say so rather than print a
+                           blank mailto: link that goes nowhere. #}
+                        <p class="feat-list-note mb-0">
+                            No public address is configured on this deployment yet.
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="feat-item-title">Faster than emailing</h2>
+                    <ul class="feat-list">
+                        <li>Locked out? <a href="{{ url_for('reset_password_request') }}">Reset your password</a> - the link lands in your inbox and is good for 30 minutes.</li>
+                        <li>Wondering what it does? <a href="{{ url_for('features') }}">The feature list</a> is written screen by screen.</li>
+                        <li>Wondering what it costs? <a href="{{ url_for('subscription.plans') }}">The plans page</a> has the prices and the limits.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <h2 class="feat-item-title">Were you sent a quote, invoice or contract from ELIZA?</h2>
+            <p class="feat-list-note mb-0">
+                Then ELIZA is not the party you are doing business with - it is the
+                software the freelancer or studio used to send you that document. Their
+                name is at the top of it, and it is their address on the invoice that
+                the money should go to. For anything about the work, the amount or the
+                deadline, reply to the person who sent the link. Write to us only if
+                the link itself is broken.
+            </p>
+        </div>
+    </div>
+
+    <section class="pub-cta-bottom card">
+        <div class="card-body text-center">
+            <h2 class="pub-cta-title">Nothing to ask yet?</h2>
+            <p class="text-muted mb-3">14 days free on any paid plan, and it does not ask for a card.</p>
+            <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Create your account</a>
+        </div>
+    </section>
+</div>
+{% endblock %}

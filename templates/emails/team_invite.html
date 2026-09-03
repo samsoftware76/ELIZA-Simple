@@ -21,13 +21,13 @@
         {# display_role = the owner's custom title if they set one, else the
            humanized machine role (models/models.py) - same value as the
            plain-text part of this email in utils/email_utils.py. #}
-        <p>{{ inviter_name }} has invited you to join their team on ELIZA as a <strong>{{ invite.display_role }}</strong>. Click the button below to create your account. This link expires in 7 days.</p>
-        <a href="{{ accept_url }}" class="button">Accept Invite</a>
+        <p>{{ inviter_name }} has invited you onto their team on ELIZA as a <strong>{{ invite.display_role }}</strong>. You will see their clients, projects and tasks, not a fresh empty account. Pick a password below. The link stops working after 7 days.</p>
+        <a href="{{ accept_url }}" class="button">Create my account</a>
         <p style="margin-top: 20px;">If you weren't expecting this invite, you can safely ignore this email.</p>
-        <p>Thank you,<br>ELIZA Project Management</p>
+        <p>Thank you,<br>ELIZA</p>
     </div>
     <div class="footer">
-        <p>This is an automated message from the ELIZA Project Management System.</p>
+        <p>Sent by ELIZA, the software {{ inviter_name }} uses to run their client work.</p>
     </div>
 </body>
 </html>

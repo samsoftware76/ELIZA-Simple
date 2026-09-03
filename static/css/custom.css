@@ -1219,3 +1219,231 @@ main.public-main {
         animation: none;
     }
 }
+
+/* ------------------------------------------------------------------ */
+/* Public pages beyond the landing: /features and /contact             */
+/* (templates/features.html, templates/contact.html), plus the shared  */
+/* nav + footer additions in base.html's unauthenticated branch.       */
+/* Same language as the .pub-* landing block above - 1px #e9ecef       */
+/* borders, 8px radius, #d13e16 used sparingly.                        */
+/* ------------------------------------------------------------------ */
+
+/* Features/Pricing/Contact in the top bar would wrap the 60px bar onto a
+   second line on a narrow phone. Hide them there; the public footer nav
+   below carries the same links, so nothing becomes unreachable. */
+@media (max-width: 575.98px) {
+    .public-topbar-page {
+        display: none;
+    }
+}
+
+.public-footer-nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px 18px;
+    margin-bottom: 10px;
+}
+
+.public-footer-nav a {
+    color: #6c757d;
+    font-size: 13px;
+}
+
+.public-footer-nav a:hover,
+.public-footer-nav a:focus {
+    color: #d13e16;
+}
+
+/* Shorter hero for the secondary public pages - they are not the landing
+   and should not spend half a phone screen on a heading. */
+.pub-hero-compact {
+    padding: 20px 8px 24px;
+}
+
+@media (min-width: 768px) {
+    .pub-hero-compact {
+        padding: 32px 16px 28px;
+    }
+}
+
+/* ---- Screenshot slot on the landing -------------------------------
+   A deliberately neutral, obviously-empty frame, NOT a stand-in image.
+   Dashed border + hatched ground reads as "nothing here yet" to anyone
+   looking at it, and its 16:10 ratio is the shape of the 1440x900 grab
+   that belongs in it. Delete this whole block when the real PNG lands. */
+.pub-shot {
+    margin: 0 0 28px;
+}
+
+.pub-shot-frame {
+    position: relative;
+    width: 100%;
+    padding-top: 62.5%; /* 1440x900 */
+    border: 1px dashed #ced4da;
+    border-radius: 8px;
+    background-color: #f8f9fa;
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(206, 212, 218, 0.22) 0,
+        rgba(206, 212, 218, 0.22) 1px,
+        transparent 1px,
+        transparent 9px
+    );
+}
+
+.pub-shot-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #adb5bd;
+    text-align: center;
+    padding: 0 16px;
+}
+
+/* ---- "Also in the app" strip on the landing ---------------------- */
+.pub-also {
+    margin: 4px 0 24px;
+    padding: 20px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: #fff;
+}
+
+.pub-also-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #212529;
+    margin-bottom: 12px;
+}
+
+.pub-also-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 12px;
+}
+
+.pub-also-list li {
+    position: relative;
+    padding-left: 20px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: #6c757d;
+}
+
+.pub-also-list li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #e8491d;
+}
+
+.pub-also-link {
+    font-size: 14px;
+    font-weight: 600;
+    color: #d13e16;
+}
+
+/* ---- /features section blocks ------------------------------------ */
+.feat-block {
+    margin-bottom: 32px;
+}
+
+.feat-head {
+    margin-bottom: 14px;
+}
+
+.feat-num {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: #d13e16;
+    background: #fdece7;
+    border-radius: 6px;
+    padding: 3px 8px;
+    margin-bottom: 8px;
+}
+
+.feat-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #212529;
+    margin: 0 0 4px;
+}
+
+.feat-sub {
+    font-size: 14px;
+    color: #6c757d;
+    margin: 0;
+}
+
+.feat-item-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #212529;
+    margin-bottom: 10px;
+}
+
+.feat-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.feat-list li {
+    position: relative;
+    padding-left: 20px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: #495057;
+}
+
+.feat-list li:last-child {
+    margin-bottom: 0;
+}
+
+.feat-list li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #ced4da;
+}
+
+.feat-list-note {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #6c757d;
+}
+
+.feat-contact-value {
+    font-size: 17px;
+    font-weight: 600;
+    word-break: break-word;
+    margin-bottom: 10px;
+}
+
+/* Sub-heading under the "Create your account" title (templates/auth/
+   register.html). static/style.css styles .auth-form h2 but has nothing
+   for a lead line under it. */
+.auth-lead {
+    margin: -6px 0 20px;
+    font-size: 14px;
+    line-height: 1.55;
+    color: #6c757d;
+    text-align: center;
+}

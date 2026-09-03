@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Deliverables Report{% endblock %}
+{% block title %}Deliverables report - ELIZA{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -65,7 +65,7 @@
                     </form>
                     <p class="text-muted small mt-2 mb-0">Every project belonging to this client is reported separately below.</p>
                     {% else %}
-                    <p class="text-muted mb-0">You don't have any clients yet.</p>
+                    <p class="text-muted mb-0">No clients yet, so there is nothing to report on. <a href="{{ url_for('client_create') }}">Add a client</a> and give them a project first.</p>
                     {% endif %}
                 </div>
             </div>

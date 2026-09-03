@@ -65,12 +65,12 @@
 </head>
 <body>
     <div class="header">
-        <h2>New Comment on Task</h2>
+        <h2>{{ commented_by.username }} commented on {{ task.title }}</h2>
     </div>
     <div class="content">
         <p>Hello,</p>
         
-        <p>A new comment has been added to a task in the ELIZA Project Management system:</p>
+        <p>On this task:</p>
         
         <div class="task-info">
             <p><strong>Task:</strong> {{ task.title }}</p>
@@ -83,15 +83,14 @@
             <p>{{ comment.content|replace('\n', '<br>')|safe }}</p>
         </div>
         
-        <p>You can view the task and reply to the comment by clicking the button below:</p>
+        <p>Reply on the task itself:</p>
         
-        <a href="{{ base_url }}/tasks/{{ task.id }}" class="button">View Task</a>
+        <a href="{{ base_url }}/tasks/{{ task.id }}" class="button">Open the task</a>
         
-        <p>Thank you,<br>
-        ELIZA Project Management System</p>
+        <p>ELIZA</p>
     </div>
     <div class="footer">
-        <p>This is an automated message from the ELIZA Project Management System. Please do not reply to this email.</p>
+        <p>Sent by ELIZA because you are on this task.</p>
     </div>
 </body>
 </html>

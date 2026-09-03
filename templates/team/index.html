@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Team - ELIZA{% endblock %}
+{% block title %}Your team - ELIZA{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -104,7 +104,7 @@
                     </table>
                 </div>
             {% else %}
-                <p class="text-muted mb-0">No team members yet - invite one below.</p>
+                <p class="text-muted mb-0">Just you so far. Anyone you invite below sees this account's clients and projects, under a job title you choose.</p>
             {% endif %}
         </div>
     </div>
@@ -155,7 +155,7 @@
                     </table>
                 </div>
             {% else %}
-                <p class="text-muted mb-0">No pending invites.</p>
+                <p class="text-muted mb-0">No invites waiting to be accepted. Sent invites appear here for seven days, and can be revoked until they are used.</p>
             {% endif %}
         </div>
     </div>

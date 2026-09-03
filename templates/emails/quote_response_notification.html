@@ -15,7 +15,7 @@
 </head>
 <body>
     <div class="header">
-        <h2>Quote {{ 'Accepted' if accepted else 'Declined' }}</h2>
+        <h2>{{ quote.client.name }} {{ 'accepted' if accepted else 'declined' }} quote {{ quote.quote_number }}</h2>
     </div>
     <div class="content">
         <p>Hello {{ quote.created_by.first_name }},</p>
@@ -33,18 +33,18 @@
         {% if accepted %}
             {% if invoice %}
             <p>Invoice <strong>{{ invoice.invoice_number }}</strong> was auto-generated from this quote and presented to the client for payment right away &mdash; no further action is needed unless you want to review it.</p>
-            <a href="{{ base_url }}/invoices/{{ invoice.id }}" class="button">View Invoice</a>
+            <a href="{{ base_url }}/invoices/{{ invoice.id }}" class="button">Open the invoice</a>
             {% else %}
-            <p>You can now convert this quote into an invoice from the quote's detail page.</p>
+            <p>Turn it into an invoice from the quote page whenever you are ready.</p>
             {% endif %}
         {% endif %}
 
-        <a href="{{ base_url }}/quotes/{{ quote.id }}" class="button">View Quote</a>
+        <a href="{{ base_url }}/quotes/{{ quote.id }}" class="button">Open the quote</a>
 
-        <p>Thank you,<br>ELIZA Project Management System</p>
+        <p>ELIZA</p>
     </div>
     <div class="footer">
-        <p>This is an automated message from the ELIZA Project Management System.</p>
+        <p>Sent by ELIZA when a client answers a quote on your account.</p>
     </div>
 </body>
 </html>

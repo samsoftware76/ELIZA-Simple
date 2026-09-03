@@ -62,12 +62,12 @@
 </head>
 <body>
     <div class="header">
-        <h2>Task Assignment</h2>
+        <h2>{{ task.title }} is yours</h2>
     </div>
     <div class="content">
         <p>Hello {{ user.first_name }},</p>
         
-        <p>You have been assigned a new task in the ELIZA Project Management system:</p>
+        <p>You have been put on this task:</p>
         
         <div class="task-info">
             <p><strong>Task:</strong> {{ task.title }}</p>
@@ -92,15 +92,14 @@
             {% endif %}
         </div>
         
-        <p>You can view the task details and start working on it by clicking the button below:</p>
+        <p>Open it to read the detail, start the timer or leave a comment:</p>
         
-        <a href="{{ base_url }}/tasks/{{ task.id }}" class="button">View Task</a>
+        <a href="{{ base_url }}/tasks/{{ task.id }}" class="button">Open the task</a>
         
-        <p>Thank you,<br>
-        ELIZA Project Management System</p>
+        <p>ELIZA</p>
     </div>
     <div class="footer">
-        <p>This is an automated message from the ELIZA Project Management System. Please do not reply to this email.</p>
+        <p>Sent by ELIZA because this task was assigned to you.</p>
     </div>
 </body>
 </html>

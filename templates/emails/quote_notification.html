@@ -16,7 +16,7 @@
 </head>
 <body>
     <div class="header">
-        <h2>You've received a new quote</h2>
+        <h2>Quote {{ quote.quote_number }} from {{ quote.created_by.get_full_name() }}</h2>
     </div>
     <div class="content">
         <p>Hello {{ quote.client.contact_person }},</p>
@@ -31,9 +31,9 @@
             {% endif %}
         </div>
 
-        <p>Please review the full details and let us know whether to proceed:</p>
+        <p>The line items are on the page below. Accept it there and an invoice you can pay comes up straight away; decline it and you can say why.</p>
 
-        <a href="{{ portal_url }}" class="button">View &amp; Respond to Quote</a>
+        <a href="{{ portal_url }}" class="button">Open the quote</a>
 
         <p>Thank you,<br>{{ quote.created_by.get_full_name() }}</p>
     </div>

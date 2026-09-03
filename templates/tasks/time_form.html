@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}{{ 'Add Time Entry' if not time_entry else 'Edit Time Entry' }} | {{ task.title }}{% endblock %}
+{% block title %}{{ 'Log time on' if not time_entry else 'Edit time on' }} {{ task.title }} - ELIZA{% endblock %}
 
 {% block content %}
 <div class="container mt-4">

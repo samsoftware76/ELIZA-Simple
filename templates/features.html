@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{#
+  Public feature page (api/index.py -> features(), no login). Uses the
+  unauthenticated branch of base.html, same as the landing.
+
+  Organised by the four jobs, in the order the work actually happens: win it,
+  do it, get paid for it, keep the client in the loop. Every line names a
+  thing that exists in the code - the route or model that backs it is in a
+  comment above each group. Nothing conditional on unset environment
+  variables is claimed here: SMS (api/sms.py) is deliberately absent because
+  it needs AFRICASTALKING_* credentials that are not configured, and an
+  unconfigured feature is not a feature.
+
+  Bootstrap 4 markup only (data-toggle, mr-*, no data-bs-*) - base.html
+  loads Bootstrap 4.5.2. Styles are the shared .pub-* set in
+  static/css/custom.css.
+#}
+
+{% block title %}What ELIZA does - features{% endblock %}
+
+{% block meta_description %}Every feature in ELIZA, grouped by job: quotes and browser-signed contracts to win the work, projects, tasks and a task timer to do it, invoices paid by card, MTN, Airtel or M-Pesa through PesaPal to get paid, and a client portal and deliverables report to keep clients informed.{% endblock %}
+
+{% block content %}
+<div class="pub-landing">
+    <section class="pub-hero pub-reveal pub-hero-compact">
+        <h1 class="pub-hero-title">Every screen in ELIZA, in the order you use it</h1>
+        <p class="pub-hero-lead">
+            Four jobs: win the work, do the work, get paid, keep the client
+            informed. Everything below is in the app now.
+        </p>
+    </section>
+
+    {# Quotes: api/billing.py (quote_create/edit/send/print, convert_to_invoice)
+       + api/portal.py (view_quote/accept_quote/decline_quote, token routes).
+       Contracts: api/contracts.py (+ amend/void) and portal.sign_contract. #}
+    <section class="feat-block">
+        <div class="feat-head">
+            <span class="feat-num">01</span>
+            <h2 class="feat-title">Win the work</h2>
+            <p class="feat-sub">Quotes and contracts, both answered from a link in an email.</p>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="feat-item-title">Quotes</h3>
+                        <ul class="feat-list">
+                            <li>Line items with a description, a quantity and a unit price, in the currency you pick per quote.</li>
+                            <li>A validity date, a quote number and your own business name and logo on the document.</li>
+                            <li>Emailed as a private link. The client reads it in a browser with no account and no password.</li>
+                            <li>Accept, or decline with a written reason that comes back to you by email.</li>
+                            <li>Print or save the quote as a PDF from the same page.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="feat-item-title">Contracts</h3>
+                        <ul class="feat-list">
+                            <li>Signed in the browser: the client types their full name, ticks a consent box and draws a signature.</li>
+                            <li>ELIZA records the typed name, the signature image, the timestamp and the signer's IP address.</li>
+                            <li>Once a contract is sent, its text can no longer be edited - what they read is what they sign.</li>
+                            <li>Amend a sent, signed or declined contract and ELIZA issues it as a new numbered version.</li>
+                            <li>Void an unsigned contract to kill its link. A signed one cannot be voided or deleted.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {# Projects/tasks/time: api/index.py project_* / task_* / task_time_start,
+       task_time_stop, task_time_add; ProjectMember for assignment. #}
+    <section class="feat-block">
+        <div class="feat-head">
+            <span class="feat-num">02</span>
+            <h2 class="feat-title">Do the work</h2>
+            <p class="feat-sub">Projects, tasks and the hours that go against them.</p>
+        </div>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="feat-item-title">Projects</h3>
+                        <ul class="feat-list">
+                            <li>Belong to a client, carry a status and a start and end date.</li>
+                            <li>Progress is the share of their tasks that are done, not a number you type.</li>
+                            <li>Assign team members to a project with a role on it.</li>
+                            <li>Mark complete, and reopen if the client comes back.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="feat-item-title">Tasks</h3>
+                        <ul class="feat-list">
+                            <li>Priority, due date, assignee and a description.</li>
+                            <li>Move through To Do, In Progress, Review and Complete.</li>
+                            <li>Comments on the task, with an email to the people involved.</li>
+                            <li>Anything past its due date is counted as overdue on the dashboard.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="feat-item-title">Time</h3>
+                        <ul class="feat-list">
+                            <li>Start and stop a timer on a task; one running entry per person per task.</li>
+                            <li>Or add hours after the fact with a start time, an end time and a note.</li>
+                            <li>Hours roll up per task, per project and per person.</li>
+                            <li>Your hours this month sit on the dashboard next to overdue tasks.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {# Invoices: api/billing.py invoice_* + api/portal.py view_invoice /
+       pay_invoice / invoice_payment_callback; PesaPal in api/payment.py;
+       wallet() in api/index.py. #}
+    <section class="feat-block">
+        <div class="feat-head">
+            <span class="feat-num">03</span>
+            <h2 class="feat-title">Get paid</h2>
+            <p class="feat-sub">An invoice the client can settle on the page they are already looking at.</p>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="feat-item-title">Invoices</h3>
+                        <ul class="feat-list">
+                            <li>Raised by hand, or automatically from the quote the client just accepted.</li>
+                            <li>Due dates follow the payment terms you set once on your profile.</li>
+                            <li>Sent as a private link, printable to PDF, and markable as paid by hand when someone pays you off-platform.</li>
+                            <li>Each invoice keeps its own currency; ELIZA never adds two currencies together.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="feat-item-title">How they pay</h3>
+                        <ul class="feat-list">
+                            <li>Card, MTN, Airtel and M&#8209;Pesa mobile money through PesaPal, from a button on the invoice.</li>
+                            <li>Or a bank transfer: your bank name, account name, account number and SWIFT code print on the invoice.</li>
+                            <li>A paid invoice emails you straight away with the amount and the method.</li>
+                            <li>The Wallet page totals what you have collected, what is still outstanding and what is overdue.</li>
+                            <li>ELIZA never holds your money. It goes to your PesaPal merchant account or your own bank.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {# Client portal: api/client_portal.py (dashboard, project_detail,
+       approve_task, add_comment) + the client invite in api/index.py.
+       Reports: report_* routes and utils/deliverables_report.py. #}
+    <section class="feat-block">
+        <div class="feat-head">
+            <span class="feat-num">04</span>
+            <h2 class="feat-title">Keep clients informed</h2>
+            <p class="feat-sub">So the "any update?" email stops arriving.</p>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="feat-item-title">Client portal</h3>
+                        <ul class="feat-list">
+                            <li>Invite a client by email and they get their own login, showing only their projects.</li>
+                            <li>They see each project's tasks and how far along it is.</li>
+                            <li>They approve work you have put up for review, and comment on a task.</li>
+                            <li>Revoke a client's access from their client record whenever you want.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="feat-item-title">Reports</h3>
+                        <ul class="feat-list">
+                            <li>Deliverables: what was delivered, what is late and who did it, for one project or a whole client.</li>
+                            <li>That one prints to PDF and exports to Excel as an .xlsx workbook.</li>
+                            <li>Project status, task distribution, time tracking, project timeline and overdue tasks, four of them with a CSV export.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    {# Team: api/team.py (invite, role titles, seat cap from plan limits).
+       Bulk email: api/email_routes.py with the unsubscribe token. #}
+    <section class="feat-block">
+        <div class="feat-head">
+            <span class="feat-num">05</span>
+            <h2 class="feat-title">When you are not working alone</h2>
+        </div>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="feat-item-title">Your team</h3>
+                        <ul class="feat-list">
+                            <li>Invite people by email; the invite link expires after seven days.</li>
+                            <li>Give each one your own job title instead of a fixed role name.</li>
+                            <li>They see the account's clients and projects, not their own empty copy of the app.</li>
+                            <li>Remove a member or revoke an invite that has not been used.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="feat-item-title">Client email</h3>
+                        <ul class="feat-list">
+                            <li>Write one message and send it to the clients you tick.</li>
+                            <li>Every copy carries that client's own unsubscribe link, and an unsubscribed client drops off the recipient list.</li>
+                            <li>Quotes, invoices, contracts, task assignments and comments all send their own emails.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="pub-cta-bottom card">
+        <div class="card-body text-center">
+            <h2 class="pub-cta-title">Send your first quote today</h2>
+            <p class="text-muted mb-3">14 days free on any paid plan, and it does not ask for a card.</p>
+            <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Create your account</a>
+            <p class="pub-hero-note mb-0">
+                <a href="{{ url_for('subscription.plans') }}">See the plans</a> &middot;
+                <a href="{{ url_for('contact') }}">Ask a question</a>
+            </p>
+        </div>
+    </section>
+</div>
+{% endblock %}

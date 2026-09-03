@@ -11,8 +11,8 @@ class LoginForm(FlaskForm):
     """Form for user login"""
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[DataRequired()])
-    remember_me = BooleanField('Remember Me')
-    submit = SubmitField('Sign In')
+    remember_me = BooleanField('Keep me signed in')
+    submit = SubmitField('Log in')
 
 class RegistrationForm(FlaskForm):
     """Form for user registration"""
@@ -40,7 +40,7 @@ class RegistrationForm(FlaskForm):
         (UserRole.DEVELOPER.name, 'Developer'),
         (UserRole.SECRETARY.name, 'Secretary')
     ], validators=[DataRequired()])
-    submit = SubmitField('Register')
+    submit = SubmitField('Create my account')
 
     def validate_username(self, username):
         """Check if username already exists"""
@@ -179,7 +179,7 @@ class ClientAcceptInviteForm(FlaskForm):
 class PasswordResetRequestForm(FlaskForm):
     """Form for requesting password reset"""
     email = StringField('Email', validators=[DataRequired(), Email()])
-    submit = SubmitField('Request Password Reset')
+    submit = SubmitField('Email me a reset link')
 
 class PasswordResetForm(FlaskForm):
     """Form for resetting password"""
@@ -191,7 +191,7 @@ class PasswordResetForm(FlaskForm):
         DataRequired(),
         EqualTo('password', message='Passwords must match')
     ])
-    submit = SubmitField('Reset Password')
+    submit = SubmitField('Save my new password')
 
 # Shared by QuoteForm/InvoiceForm below and InvoiceDefaultsForm - defined
 # before the /profile card forms so InvoiceDefaultsForm can reference it at

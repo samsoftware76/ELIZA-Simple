@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Complete Your Subscription{% endblock %}
+{% block title %}Add payment details - ELIZA{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -61,17 +61,20 @@
                         </div>
                         
                         <div class="alert alert-warning">
-                            <p><i class="fas fa-info-circle"></i> You will be redirected to PesaPal's secure payment page to complete your transaction.</p>
+                            <p><i class="fas fa-info-circle"></i> The next page is PesaPal's, not ours. You enter your card or mobile money details there and come straight back here.</p>
                         </div>
                         
                         <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary btn-lg">Proceed to Payment</button>
-                            <a href="{{ url_for('subscription.cancel_trial', subscription_id=subscription.id) }}" class="btn btn-outline-secondary">Cancel Subscription</a>
+                            <button type="submit" class="btn btn-primary btn-lg">Continue to PesaPal</button>
+                            <a href="{{ url_for('subscription.cancel_trial', subscription_id=subscription.id) }}" class="btn btn-outline-secondary">Cancel this subscription instead</a>
                         </div>
                     </form>
                 </div>
                 <div class="card-footer">
-                    <small class="text-muted">Your payment information is secure and encrypted. We use PesaPal's industry-standard security measures to protect your data.</small>
+                    {# The old line here claimed "industry-standard security measures"
+                       on ELIZA's behalf. ELIZA never sees the card: the number is
+                       entered on PesaPal's own page. Say that instead. #}
+                    <small class="text-muted">Your card number is typed on PesaPal's page and never reaches ELIZA. All ELIZA stores is the amount, the method and PesaPal's tracking id.</small>
                 </div>
             </div>
         </div>

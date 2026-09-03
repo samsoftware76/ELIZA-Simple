@@ -210,7 +210,7 @@ def contract_send(contract_id):
         flash('This contract has already been responded to and cannot be re-sent.', 'warning')
         return redirect(url_for('contracts.contract_detail', contract_id=contract.id))
     if not contract.client.email:
-        flash('This client has no email address on file. Add one before sending.', 'danger')
+        flash('This client has no email address on file. Add one on their record, then send.', 'danger')
         return redirect(url_for('contracts.contract_detail', contract_id=contract.id))
 
     try:

@@ -60,7 +60,7 @@ ELIZA_App/
 ├── migrations/               # Manual DB migration scripts
 ├── templates/                # Jinja templates (auth, clients, projects, tasks, quotes, invoices, reports, subscription, admin, emails)
 │   └── portal/                # Client-facing portal templates (separate branded layout, no internal nav/login)
-├── static/                    # CSS, images, robots.txt, sitemap.xml
+├── static/                    # CSS and images (robots.txt and sitemap.xml are now served at the site root by api/index.py, built from BASE_URL)
 ├── vercel.json                 # Vercel build/routing config
 └── requirements.txt
 ```

@@ -1,0 +1,59 @@
+De-slop copy app-wide, add real SEO, ship /features and /contact
+
+COPY: rewrote user-facing text everywhere per a concrete standard (name
+the mechanism, not the feeling - "Six nails per shingle" beats "trusted,
+reliable and built to last"). Hunted and killed: empty superlatives
+(complete, powerful, seamless, comprehensive), the leverage/deliver/
+empower/streamline verb family, em-dash pileups, and vague claims where
+a real fact belongs. Every remaining claim traces to a shipped feature
+via an inline comment naming the code.
+- The logged-out landing (the worst offender - I wrote its previous copy
+  in an earlier batch) is rewritten wholesale: "Your client opens a
+  link, accepts the quote, and pays the invoice it becomes" instead of
+  a generic value-prop list.
+- Dashboard and every list-page empty state now names the next concrete
+  action and what the thing is for, not "...to get started."
+- 43 flash messages, all client emails (text + HTML), all form button
+  labels, and the plans-page marketing block rewritten the same way.
+- Caught and removed two live falsehoods in the process: plans.html
+  claimed "regular backups" (admin.backup_database is unimplemented and
+  says so), and a bulk-email template linked to elizaproject.com, a
+  domain that has never existed.
+
+SEO: the app had almost none. Added a real per-page <meta description>,
+Open Graph and Twitter card tags (og:image deliberately omitted - the
+only image on hand is SVG, which previews as broken on WhatsApp/Slack/
+X rather than as nothing), distinct human <title> values on 36 pages,
+and a canonical tag restricted to a public-endpoint allowlist so no
+signed-in page or token-based client document is ever advertised as
+canonical. robots.txt and sitemap.xml are now routes built from
+BASE_URL instead of static files - the old ones were unreachable
+(vercel.json only maps /static/*) and wrong (they listed a placeholder
+domain and two routes, auth.login/auth.register, that have never
+existed in this app).
+
+PUBLIC PAGES: added /features (organized by job-to-be-done: win the
+work, do the work, get paid, keep clients informed - three claims that
+didn't survive checking were cut: line-item tax, cross-report Excel
+export, and SMS, which ships but has no configured provider) and
+/contact (the real inbox address, no fake form, no invented response
+time). A screenshot placeholder replaces the missing product image
+rather than an AI-arty stand-in, with a comment naming exactly what
+shot belongs there.
+
+Verified live: 35 routes all 200/zero 500s, meta/OG tags render, zero
+data-bs-*, all 126 url_for targets exist in app.url_map, zero em dashes
+survive on the four public pages, and the agent re-read its own new
+landing copy against the same tell-list it was hunting and reported
+where it holds up. Real account census unchanged (still exactly ids
+1, 2, 3, 11).
+
+Flagged for you: /contact currently publishes samsoftware75@gmail.com
+(from MAIL_DEFAULT_SENDER) - consider a dedicated address before this
+is public; BASE_URL must be set correctly in Vercel or the sitemap/
+robots ship localhost URLs; templates/landing.html (unregistered dead
+code) still has fabricated testimonials - left untouched since it isn't
+wired up, but don't ever wire it up as-is.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_019R6eaABPf2QKYhko84nt86

@@ -67,7 +67,7 @@
         </div>
     {% else %}
         <div class="alert alert-info">
-            <p>No quotes yet. <a href="{{ url_for('billing.quote_create') }}">Create your first quote</a> to get started.</p>
+            <p class="mb-0">No quotes yet. A quote goes out as a private link; when the client clicks Accept, ELIZA raises the invoice from the same line items. <a href="{{ url_for('billing.quote_create') }}">Write one</a>.</p>
         </div>
     {% endif %}
 

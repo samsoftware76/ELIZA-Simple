@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Login - ELIZA{% endblock %}
+{% block title %}Log in to ELIZA{% endblock %}
+
+{% block meta_description %}Log in to your ELIZA account to work on your clients, projects, quotes, invoices and contracts.{% endblock %}
 
 {% block content %}
 <div class="auth-container">
     <div class="auth-form">
-        <h2>Login to ELIZA</h2>
+        <h2>Log in</h2>
 
         <form method="POST" action="{{ url_for('login') }}">
             {{ form.hidden_tag() }}
@@ -45,8 +47,8 @@
         </form>
         
         <div class="auth-links">
-            <p>Don't have an account? <a href="{{ url_for('register') }}">Register here</a></p>
-            <p>Forgot your password? <a href="{{ url_for('reset_password_request') }}">Reset it here</a></p>
+            <p>No account yet? <a href="{{ url_for('register') }}">Create one</a></p>
+            <p>Forgotten your password? <a href="{{ url_for('reset_password_request') }}">Get a reset link by email</a></p>
         </div>
     </div>
 </div>

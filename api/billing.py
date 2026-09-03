@@ -253,7 +253,7 @@ def quote_send(quote_id):
     if quote.client.owner_id != current_user.get_owner_id():
         abort(404)
     if not quote.client.email:
-        flash('This client has no email address on file. Add one before sending.', 'danger')
+        flash('This client has no email address on file. Add one on their record, then send.', 'danger')
         return redirect(url_for('billing.quote_detail', quote_id=quote.id))
 
     try:
@@ -306,7 +306,7 @@ def quote_convert_to_invoice(quote_id):
     try:
         invoice = create_invoice_from_quote(quote, current_user.id)
         db.session.commit()
-        flash(f'Invoice {invoice.invoice_number} created from quote {quote.quote_number}. Review it before sending.', 'success')
+        flash(f'Invoice {invoice.invoice_number} drafted from quote {quote.quote_number}. It is not sent yet - check it, then send.', 'success')
         return redirect(url_for('billing.invoice_edit', invoice_id=invoice.id))
     except Exception as e:
         db.session.rollback()
@@ -473,7 +473,7 @@ def invoice_send(invoice_id):
     if invoice.client.owner_id != current_user.get_owner_id():
         abort(404)
     if not invoice.client.email:
-        flash('This client has no email address on file. Add one before sending.', 'danger')
+        flash('This client has no email address on file. Add one on their record, then send.', 'danger')
         return redirect(url_for('billing.invoice_detail', invoice_id=invoice.id))
 
     try:

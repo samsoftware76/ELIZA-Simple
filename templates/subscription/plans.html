@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Subscription Plans{% endblock %}
+{% block title %}ELIZA pricing - plans and what each one includes{% endblock %}
+
+{# Public page (plans() takes no login), so it carries its own description
+   rather than inheriting base.html's landing one. #}
+{% block meta_description %}ELIZA plans and prices, monthly or yearly, with the client and project limits on each. Every paid plan starts with a 14-day free trial and asks for no card up front.{% endblock %}
 
 {#
   Plan-aware pricing page. Everything here is driven by the `cards` / `usage`
@@ -92,8 +96,8 @@
 
     {% if not subscription %}
     <div class="alert alert-info mb-4">
-        <h4 class="alert-heading"><i class="fas fa-info-circle mr-2"></i>Start with a 14-day free trial!</h4>
-        <p class="mb-0">All plans come with a 14-day free trial. No credit card required to start. You'll only be asked to provide payment details when your trial ends.</p>
+        <h4 class="alert-heading"><i class="fas fa-info-circle mr-2"></i>The first 14 days are free on any of these</h4>
+        <p class="mb-0">Pick one and the trial starts. ELIZA asks for payment details when it runs out, not on day one, and your dashboard counts the days down until then.</p>
     </div>
     {% endif %}
 
@@ -164,29 +168,38 @@
         <div class="col-12">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h2 class="card-title text-center mb-4">Why Choose ELIZA Project Management?</h2>
-                    <p class="lead text-center mb-4">ELIZA is a complete solution for managing your clients, projects, and tasks. With our powerful features, you can:</p>
+                    {# Every line below names a route that exists. The block this
+                       replaced claimed "a complete solution", "powerful features",
+                       "comprehensive reports" and "regular backups" - three empty
+                       superlatives and one thing the app does not do (there is no
+                       backup job; admin.backup_database says so in its own flash). #}
+                    <h2 class="card-title text-center mb-4">What you are actually buying</h2>
+                    {# Careful: the plan cards above DO gate two things (bulk email
+                       campaigns, advanced analytics - see PLAN_CATALOG in
+                       api/subscription.py), so this line must not claim every
+                       feature is on every plan. Neither is listed below. #}
+                    <p class="lead text-center mb-4">The numbers on the cards are the limits. This is the work you do inside them.</p>
 
                     <div class="row text-center">
                         <div class="col-md-4 mb-3">
                             <div class="p-3">
+                                <i class="fas fa-file-signature fa-2x text-primary mb-3"></i>
+                                <h4>Quotes and contracts</h4>
+                                <p>Emailed as a private link. Your client accepts a quote or signs a contract in the browser, with no account and no password.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="p-3">
+                                <i class="fas fa-money-bill-wave fa-2x text-primary mb-3"></i>
+                                <h4>Invoices that get paid</h4>
+                                <p>An accepted quote raises the invoice itself. Clients pay by card, MTN, Airtel or M-Pesa through PesaPal, or wire your bank.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="p-3">
                                 <i class="fas fa-history fa-2x text-primary mb-3"></i>
-                                <h4>Track Time</h4>
-                                <p>Accurately track time spent on tasks and generate detailed reports for billing and productivity analysis.</p>
-                            </div>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="p-3">
-                                <i class="fas fa-chart-line fa-2x text-primary mb-3"></i>
-                                <h4>Generate Reports</h4>
-                                <p>Create comprehensive reports on project progress, resource allocation, and financial performance.</p>
-                            </div>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <div class="p-3">
-                                <i class="fas fa-envelope-open-text fa-2x text-primary mb-3"></i>
-                                <h4>Email Notifications</h4>
-                                <p>Keep clients and team members updated with automated email notifications for important events.</p>
+                                <h4>Time on tasks</h4>
+                                <p>Start and stop a timer on a task, or add the hours afterwards. They roll up per task, per project and per person.</p>
                             </div>
                         </div>
                     </div>
@@ -194,31 +207,31 @@
                     <div class="row text-center">
                         <div class="col-md-4 mb-3">
                             <div class="p-3">
-                                <i class="fas fa-users fa-2x text-primary mb-3"></i>
-                                <h4>Client Management</h4>
-                                <p>Manage your entire client database with detailed profiles, communication history, and project tracking.</p>
+                                <i class="fas fa-user-check fa-2x text-primary mb-3"></i>
+                                <h4>Client portal</h4>
+                                <p>Invite a client and they get a login that shows their projects, their tasks and the work waiting on their approval.</p>
                             </div>
                         </div>
                         <div class="col-md-4 mb-3">
                             <div class="p-3">
-                                <i class="fas fa-bullhorn fa-2x text-primary mb-3"></i>
-                                <h4>Bulk Emails</h4>
-                                <p>Send bulk emails for updates, marketing campaigns, and important announcements to your clients.</p>
+                                <i class="fas fa-file-excel fa-2x text-primary mb-3"></i>
+                                <h4>Deliverables report</h4>
+                                <p>What was delivered, what is late and who did it, for one project or a whole client. Prints to PDF, exports to .xlsx.</p>
                             </div>
                         </div>
                         <div class="col-md-4 mb-3">
                             <div class="p-3">
-                                <i class="fas fa-shield-alt fa-2x text-primary mb-3"></i>
-                                <h4>Secure &amp; Reliable</h4>
-                                <p>Your data is protected with industry-standard security measures and regular backups.</p>
+                                <i class="fas fa-envelope-open-text fa-2x text-primary mb-3"></i>
+                                <h4>Email that sends itself</h4>
+                                <p>Quotes, invoices, contracts, task assignments and comments each email the person who needs to know.</p>
                             </div>
                         </div>
                     </div>
 
                     {% if not subscription %}
                     <div class="text-center mt-4">
-                        <h3>Start your 14-day free trial today and experience the power of ELIZA!</h3>
-                        <p class="text-muted">No credit card required to start. You'll only be asked to provide payment details when your trial ends.</p>
+                        <h3>Pick a plan and the 14 days start now</h3>
+                        <p class="text-muted">No card up front. ELIZA asks for payment details on the day the trial runs out, not before.</p>
                     </div>
                     {% endif %}
                 </div>

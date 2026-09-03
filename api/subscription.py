@@ -401,7 +401,7 @@ def subscribe(plan, cycle):
 
         # Calculate trial end date for the flash message
         trial_end_date = subscription.get_trial_end_date()
-        flash(f'Your 14-day free trial of the {entry["name"]} plan has started! You will be asked to provide payment details before {trial_end_date.strftime("%B %d, %Y")} to continue using the service.', 'success')
+        flash(f'Your {entry["name"]} trial runs until {trial_end_date.strftime("%B %d, %Y")}. Add payment details before then to keep the account running.', 'success')
         return redirect(url_for('home'))
     except Exception as e:
         db.session.rollback()
@@ -667,7 +667,7 @@ def payment_callback():
         current_app.logger.info(f"PesaPal payment status: {payment_status}")
 
         if not payment_status:
-            flash('Failed to get payment status from PesaPal.', 'danger')
+            flash('PesaPal did not return a status for that payment. If you were charged, it will settle shortly.', 'danger')
             return redirect(url_for('home'))
 
         # Get payment details from session
@@ -703,7 +703,7 @@ def payment_callback():
 
         if not subscription_id:
             current_app.logger.error("Could not determine subscription ID for payment")
-            flash('Could not find your subscription. Please contact support.', 'danger')
+            flash('That payment does not match a subscription on this account. Email us with the date and amount.', 'danger')
             return redirect(url_for('home'))
 
         # Get the subscription
@@ -759,9 +759,9 @@ def payment_callback():
                 session.pop('pending_payment')
 
             if changed_plan_name:
-                flash(f'Payment completed successfully! You are now on the {changed_plan_name} plan.', 'success')
+                flash(f'Payment received. You are on the {changed_plan_name} plan.', 'success')
             else:
-                flash('Payment completed successfully! Your subscription is now active.', 'success')
+                flash('Payment received. Your subscription is active.', 'success')
         elif pesapal_status.upper() in ['FAILED', 'CANCELLED', 'INVALID']:
             flash(f'Payment was not successful. Status: {pesapal_status}. Please try again.', 'warning')
         else:
@@ -774,7 +774,7 @@ def payment_callback():
         current_app.logger.error(f"Error processing payment callback: {str(e)}")
         import traceback
         current_app.logger.error(f"Traceback: {traceback.format_exc()}")
-        flash('An error occurred while processing your payment. Please contact support.', 'danger')
+        flash('Something went wrong confirming that payment. If you were charged, email us before paying again.', 'danger')
         return redirect(url_for('home'))
 
 @subscription_bp.route('/subscription/status')

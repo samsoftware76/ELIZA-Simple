@@ -18,13 +18,13 @@
     </div>
     <div class="content">
         <p>Hello,</p>
-        <p>{{ inviter_name }} has invited you to the client portal for <strong>{{ invite.client.name }}</strong>, where you can see your project status and approve completed work. Click the button below to set up your account. This link expires in 7 days.</p>
-        <a href="{{ accept_url }}" class="button">Accept Invite</a>
+        <p>{{ inviter_name }} has given you a login for <strong>{{ invite.client.name }}</strong>. It shows how far each of your projects has got, and lets you approve work that is finished and waiting on you. Set your password below. The link stops working after 7 days.</p>
+        <a href="{{ accept_url }}" class="button">Set my password</a>
         <p style="margin-top: 20px;">If you weren't expecting this invite, you can safely ignore this email.</p>
-        <p>Thank you,<br>ELIZA Project Management</p>
+        <p>Thank you,<br>ELIZA</p>
     </div>
     <div class="footer">
-        <p>This is an automated message from the ELIZA Project Management System.</p>
+        <p>Sent by ELIZA, the software {{ inviter_name }} uses to run their client work.</p>
     </div>
 </body>
 </html>

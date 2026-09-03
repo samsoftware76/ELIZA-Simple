@@ -119,7 +119,7 @@
             </div>
         {% else %}
             <div class="alert alert-info">
-                <p>No projects found for this client. <a href="{{ url_for('project_create', client_id=client.id) }}">Create a new project</a> for this client.</p>
+                <p class="mb-0">No projects for {{ client.name }} yet. <a href="{{ url_for('project_create', client_id=client.id) }}">Open one</a> and its tasks, hours and progress land here.</p>
             </div>
         {% endif %}
     </div>
@@ -159,7 +159,7 @@
             </div>
         {% else %}
             <div class="alert alert-info">
-                <p>No contracts for this client yet. <a href="{{ url_for('contracts.contract_create') }}">Create a contract</a>.</p>
+                <p class="mb-0">No contracts with {{ client.name }} yet. <a href="{{ url_for('contracts.contract_create') }}">Write one</a> and they can sign it in their browser.</p>
             </div>
         {% endif %}
     </div>

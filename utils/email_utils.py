@@ -60,7 +60,7 @@ def send_task_assignment_notification(task, user):
     
     try:
         logger.info(f"Sending task assignment notification to {user.email}")
-        text_body = f"Hello {user.first_name},\n\nYou have been assigned a new task: {task.title}\n\nDescription: {task.description}\n\nDue Date: {task.due_date}\n\nRegards,\nELIZA Project Management Team"
+        text_body = f"Hello {user.first_name},\n\nYou have been assigned a new task: {task.title}\n\nDescription: {task.description}\n\nDue Date: {task.due_date}\n\nRegards,\nELIZA"
         html_body = render_template('emails/task_assignment.html', user=user, task=task)
         send_email(subject, recipients, text_body, html_body)
         logger.info(f"Task assignment notification sent successfully to {user.email}")
@@ -105,7 +105,7 @@ def test_email_configuration(recipient_email=None):
     text_body = f"""
 Hello {user.first_name},
 
-You have been assigned a new task in the ELIZA Project Management system:
+You have been put on this task:
 
 Task: {task.title}
 Project: {task.project.title}
@@ -115,11 +115,11 @@ Due Date: {task.due_date.strftime('%B %d, %Y') if task.due_date else 'Not specif
 Description:
 {task.description or 'No description provided.'}
 
-You can view the task details and start working on it by clicking the link below:
+Open it to read the detail, start the timer or leave a comment:
 {current_app.config['BASE_URL']}/tasks/{task.id}
 
 Thank you,
-ELIZA Project Management System
+ELIZA
 """
     
     html_body = render_template('emails/task_assignment.html', 
@@ -172,17 +172,17 @@ def send_task_update_notification(task, update_type, updated_by):
     text_body = f"""
 Hello,
 
-A task in the ELIZA Project Management system has been updated by {updated_by.username}:
+{updated_by.username} changed a task you are on:
 
 Task: {task.title}
 Project: {task.project.title}
 {update_message}
 
-You can view the task details by clicking the link below:
+Open it for the full history:
 {current_app.config['BASE_URL']}/tasks/{task.id}
 
 Thank you,
-ELIZA Project Management System
+ELIZA
 """
     
     html_body = render_template('emails/task_update.html', 
@@ -219,10 +219,10 @@ def send_bulk_email(subject, recipients, template, template_data=None):
 
 {subject}
 
-Please view this email with an HTML-compatible email client to see the full content.
+This message was written as HTML. Open it in an email client that shows HTML to read it.
 
 Thank you,
-ELIZA Project Management System
+ELIZA
 """
     
     # Send email to all recipients
@@ -245,7 +245,7 @@ def send_password_reset_email(user, reset_url):
             f"We received a request to reset your ELIZA password. This link expires in 30 minutes:\n"
             f"{reset_url}\n\n"
             f"If you didn't request this, you can ignore this email.\n\n"
-            f"Thank you,\nELIZA Project Management"
+            f"Thank you,\nELIZA"
         )
         html_body = render_template('emails/password_reset.html', user=user, reset_url=reset_url)
         send_email(subject, recipients, text_body, html_body)
@@ -277,7 +277,7 @@ def send_team_invite_email(invite, accept_url):
             f"This link expires in 7 days:\n"
             f"{accept_url}\n\n"
             f"If you weren't expecting this invite, you can ignore this email.\n\n"
-            f"Thank you,\nELIZA Project Management"
+            f"Thank you,\nELIZA"
         )
         html_body = render_template('emails/team_invite.html', invite=invite, inviter_name=inviter_name, accept_url=accept_url)
         send_email(subject, recipients, text_body, html_body)
@@ -311,7 +311,7 @@ def send_client_invite_email(invite, accept_url):
             f"and approve completed work. This link expires in 7 days:\n"
             f"{accept_url}\n\n"
             f"If you weren't expecting this invite, you can ignore this email.\n\n"
-            f"Thank you,\nELIZA Project Management"
+            f"Thank you,\nELIZA"
         )
         html_body = render_template('emails/client_invite.html', invite=invite, inviter_name=inviter_name, accept_url=accept_url)
         send_email(subject, recipients, text_body, html_body)
@@ -341,8 +341,8 @@ def send_quote_email(quote, portal_url):
             f"{quote.created_by.get_full_name()} has sent you a quote: {quote.title}\n"
             f"Quote number: {quote.quote_number}\n"
             f"Total: {quote.total:.2f} {quote.currency}\n\n"
-            f"View and respond to this quote here:\n{portal_url}\n\n"
-            f"Thank you,\nELIZA Project Management Team"
+            f"Accept or decline it here - accepting brings up an invoice you can pay straight away:\n{portal_url}\n\n"
+            f"Thank you,\nELIZA"
         )
         html_body = render_template('emails/quote_notification.html', quote=quote, portal_url=portal_url)
         send_email(subject, recipients, text_body, html_body)
@@ -374,8 +374,9 @@ def send_invoice_email(invoice, portal_url):
             f"Invoice number: {invoice.invoice_number}\n"
             f"Amount due: {invoice.total:.2f} {invoice.currency}\n"
             f"Due: {due}\n\n"
-            f"View and pay this invoice here:\n{portal_url}\n\n"
-            f"Thank you,\nELIZA Project Management Team"
+            f"Pay it there by card, by MTN, Airtel or M-Pesa mobile money, or by bank transfer\n"
+            f"to the account shown on the page:\n{portal_url}\n\n"
+            f"Thank you,\nELIZA"
         )
         html_body = render_template('emails/invoice_notification.html', invoice=invoice, portal_url=portal_url)
         send_email(subject, recipients, text_body, html_body)
@@ -409,8 +410,8 @@ def send_contract_email(contract, portal_url):
             f"Hello {contract.client.contact_person},\n\n"
             f"{contract.created_by.get_full_name()} has sent you a contract to review and sign: {contract.title}\n"
             f"Contract number: {contract.contract_number}\n\n"
-            f"Review and sign this contract here:\n{portal_url}\n\n"
-            f"Thank you,\nELIZA Project Management Team"
+            f"Read the terms and sign it in your browser here - nothing to print or scan:\n{portal_url}\n\n"
+            f"Thank you,\nELIZA"
         )
         html_body = render_template('emails/contract_notification.html', contract=contract, portal_url=portal_url)
         send_email(subject, recipients, text_body, html_body)
@@ -446,7 +447,7 @@ def send_contract_signed_notification(contract):
             f"Signed by: {contract.signer_name}\n"
             f"Signed at: {signed_at}\n\n"
             f"View it here: {current_app.config['BASE_URL']}/contracts/{contract.id}\n\n"
-            f"Thank you,\nELIZA Project Management System"
+            f"Thank you,\nELIZA"
         )
         html_body = render_template(
             'emails/contract_response_notification.html',
@@ -480,7 +481,7 @@ def send_contract_declined_notification(contract):
             f"{contract.client.name} has declined contract {contract.contract_number}: {contract.title}\n"
             + (f"Reason given: {contract.decline_reason}\n" if contract.decline_reason else "")
             + f"\nView it here: {current_app.config['BASE_URL']}/contracts/{contract.id}\n\n"
-            f"Thank you,\nELIZA Project Management System"
+            f"Thank you,\nELIZA"
         )
         html_body = render_template(
             'emails/contract_response_notification.html',
@@ -521,7 +522,7 @@ def send_quote_response_notification(quote, invoice=None):
             + (f"\nInvoice {invoice.invoice_number} was auto-generated from this quote and presented to the client for payment.\n"
                f"View the invoice here: {current_app.config['BASE_URL']}/invoices/{invoice.id}\n" if accepted and invoice else "")
             + f"\nView it here: {current_app.config['BASE_URL']}/quotes/{quote.id}\n\n"
-            f"Thank you,\nELIZA Project Management System"
+            f"Thank you,\nELIZA"
         )
         html_body = render_template(
             'emails/quote_response_notification.html',
@@ -562,7 +563,7 @@ def send_invoice_paid_notification(invoice):
             f"Amount: {invoice.total:.2f} {invoice.currency}\n"
             f"Method: {invoice.payment_method or 'pesapal'}\n\n"
             f"View it here: {current_app.config['BASE_URL']}/invoices/{invoice.id}\n\n"
-            f"Thank you,\nELIZA Project Management System"
+            f"Thank you,\nELIZA"
         )
         html_body = render_template(
             'emails/invoice_paid_notification.html',
@@ -617,7 +618,7 @@ You can view the task and reply to the comment by clicking the link below:
 {current_app.config['BASE_URL']}/tasks/{task.id}
 
 Thank you,
-ELIZA Project Management System
+ELIZA
 """
     
     html_body = render_template('emails/task_comment.html', 

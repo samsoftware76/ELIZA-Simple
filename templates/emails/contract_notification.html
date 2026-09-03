@@ -15,7 +15,7 @@
 </head>
 <body>
     <div class="header">
-        <h2>You've received a contract to sign</h2>
+        <h2>Contract {{ contract.contract_number }} from {{ contract.created_by.get_full_name() }}</h2>
     </div>
     <div class="content">
         <p>Hello {{ contract.client.contact_person }},</p>
@@ -29,9 +29,9 @@
             {% endif %}
         </div>
 
-        <p>Please review the full contract terms and sign online:</p>
+        <p>Read the terms on the page below and sign there: type your name, tick the consent box and draw your signature. Nothing to print, scan or install.</p>
 
-        <a href="{{ portal_url }}" class="button">Review &amp; Sign Contract</a>
+        <a href="{{ portal_url }}" class="button">Read and sign it</a>
 
         <p>Thank you,<br>{{ contract.created_by.get_full_name() }}</p>
     </div>

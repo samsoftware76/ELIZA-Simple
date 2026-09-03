@@ -76,7 +76,7 @@
         </div>
     {% else %}
         <div class="alert alert-info">
-            <p>No contracts yet. <a href="{{ url_for('contracts.contract_create') }}">Create your first contract</a> to get started.</p>
+            <p class="mb-0">No contracts yet. A contract goes out as a link the client signs in their browser, and ELIZA keeps their name, the signature, the time and their IP address on it. <a href="{{ url_for('contracts.contract_create') }}">Write one</a>.</p>
         </div>
     {% endif %}
 

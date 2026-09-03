@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Send Bulk Email{% endblock %}
+{% block title %}Email your clients - ELIZA{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
@@ -47,23 +47,31 @@
                                     </div>
                                 </div>
                                 <div class="card-body" style="max-height: 300px; overflow-y: auto;">
-                                    {% if clients %}
+                                    {# Only clients with an address who haven't
+                                       unsubscribed can be ticked. Resolving that list
+                                       up front (rather than filtering inside the loop)
+                                       means the empty state below is right in both
+                                       cases: no clients at all, and clients who are
+                                       all unreachable - the second used to render an
+                                       empty box with no explanation. #}
+                                    {% set mailable = clients|selectattr('email')|rejectattr('email_opt_out')|list %}
+                                    {% if mailable %}
                                         <div class="row">
-                                            {% for client in clients %}
-                                                {% if client.email and not client.email_opt_out %}
-                                                    <div class="col-md-4 mb-2">
-                                                        <div class="form-check">
-                                                            <input class="form-check-input client-checkbox" type="checkbox" name="client_ids" value="{{ client.id }}" id="client{{ client.id }}">
-                                                            <label class="form-check-label" for="client{{ client.id }}">
-                                                                {{ client.name }} <small class="text-muted">({{ client.email }})</small>
-                                                            </label>
-                                                        </div>
+                                            {% for client in mailable %}
+                                                <div class="col-md-4 mb-2">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input client-checkbox" type="checkbox" name="client_ids" value="{{ client.id }}" id="client{{ client.id }}">
+                                                        <label class="form-check-label" for="client{{ client.id }}">
+                                                            {{ client.name }} <small class="text-muted">({{ client.email }})</small>
+                                                        </label>
                                                     </div>
-                                                {% endif %}
+                                                </div>
                                             {% endfor %}
                                         </div>
+                                    {% elif clients %}
+                                        <p class="text-muted mb-0">None of your clients can be emailed: this list skips anyone with no email address on file and anyone who has unsubscribed. Add an address on a <a href="{{ url_for('clients') }}">client's record</a> to include them.</p>
                                     {% else %}
-                                        <p class="text-muted">No clients available. <a href="{{ url_for('client_create') }}">Add a client</a> first.</p>
+                                        <p class="text-muted mb-0">No clients yet, so there is nobody to write to. <a href="{{ url_for('client_create') }}">Add one</a>.</p>
                                     {% endif %}
                                 </div>
                             </div>
