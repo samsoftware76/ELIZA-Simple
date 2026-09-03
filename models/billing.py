@@ -347,3 +347,61 @@ class InvoiceItem(db.Model):
     @property
     def total(self):
         return round((self.quantity or 0) * (self.unit_price or 0), 2)
+
+
+class AccountStatement(db.Model):
+    """Chain-of-custody audit record for a generated account statement (see
+    utils/account_statement.py's build_account_statement() and the
+    wallet_statement* routes in api/index.py, plus the admin-only
+    api/admin.py::statement_generate for the any-tenant compliance case).
+
+    This row is NOT a frozen snapshot of amounts - it only records the fact
+    that a statement covering [period_start, period_end] (optionally scoped
+    to one client) was generated, by whom, and when, with a unique reference
+    number in the same style as Invoice/Quote/Contract above. Re-visiting
+    wallet_statement_view(statement_id) always recomputes the figures live
+    from the current Invoice/Contract rows - exactly like this app's "never
+    invent or estimate a number, every line traces to a real row" rule
+    demands. Freezing the amounts too would risk a stale number silently
+    drifting from the real ledger (e.g. if a still-outstanding invoice is
+    later edited); the audit trail this table exists for is about the
+    GENERATION EVENT, not a point-in-time copy of the money.
+
+    owner_id is always a genuine tenant-owning User id, never a team
+    member's own id - api/index.py's wallet_statement route uses
+    current_user.get_owner_id() when a tenant generates their own, and
+    api/admin.py's statement_generate resolves the target user through
+    .get_owner_id() too, specifically so an admin picking a team member's row
+    in the admin user list still lands on that team's real tenant scope.
+    """
+    __tablename__ = 'account_statements'
+
+    id = db.Column(db.Integer, primary_key=True)
+    reference_number = db.Column(db.String(20), unique=True, nullable=False)
+
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # The actual acting user - the tenant owner themselves in the normal
+    # case, or the admin who pulled it for another tenant (see
+    # api/admin.py::statement_generate, which ALSO writes a prominent
+    # ActivityLog entry naming the admin - this column alone is the quieter
+    # half of that audit trail).
+    generated_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    # Nullable: unset means "every client in the period", matching the
+    # optional client filter on the generation form.
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=True)
+
+    period_start = db.Column(db.Date, nullable=False)
+    period_end = db.Column(db.Date, nullable=False)
+    generated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # 'pdf' or 'excel' - which export the generating user was shown/reached
+    # for first. Purely descriptive metadata about this row's own history;
+    # both the Print/PDF and Export Excel actions stay available afterward
+    # regardless of what this says, since both read the same live figures.
+    format = db.Column(db.String(10))
+
+    owner = db.relationship('User', foreign_keys=[owner_id])
+    generated_by = db.relationship('User', foreign_keys=[generated_by_id])
+    client = db.relationship('Client', foreign_keys=[client_id])
+
+    def __repr__(self):
+        return f'<AccountStatement {self.reference_number}>'

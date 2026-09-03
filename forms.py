@@ -548,6 +548,37 @@ class ContractForm(FlaskForm):
             self.project_id.choices = [(0, '— No project —')]
 
 
+class StatementForm(FlaskForm):
+    """Date-range (+ optional client) filter for generating an account
+    statement (utils/account_statement.py) - see api/index.py's
+    wallet_statement route and api/admin.py's statement_generate. client_id
+    choices are scoped to the tenant's own clients, same owner_id pattern as
+    QuoteForm/InvoiceForm/ContractForm above; 0 means "every client"."""
+    period_start = DateField('Period Start', validators=[DataRequired()], format='%Y-%m-%d')
+    period_end = DateField('Period End', validators=[DataRequired()], format='%Y-%m-%d')
+    client_id = SelectField('Client (optional)', coerce=int, validators=[Optional()])
+    submit = SubmitField('Generate Statement')
+
+    def __init__(self, *args, **kwargs):
+        # Tenant isolation: see ProjectForm.owner_id above - a statement must
+        # only be able to scope to this tenant's own clients.
+        self.owner_id = kwargs.pop('owner_id', None)
+        super(StatementForm, self).__init__(*args, **kwargs)
+        if self.owner_id is not None:
+            self.client_id.choices = [(0, '— All clients —')] + \
+                [(c.id, c.name) for c in Client.query.filter_by(owner_id=self.owner_id).order_by(Client.name).all()]
+        else:
+            self.client_id.choices = [(0, '— All clients —')]
+
+    def validate(self, extra_validators=None):
+        if not super(StatementForm, self).validate(extra_validators=extra_validators):
+            return False
+        if self.period_start.data and self.period_end.data and self.period_start.data > self.period_end.data:
+            self.period_end.errors.append('Period end must be on or after period start.')
+            return False
+        return True
+
+
 class TimeEntryForm(FlaskForm):
     """Form for tracking time spent on tasks"""
     task_id = HiddenField('Task ID', validators=[DataRequired()])

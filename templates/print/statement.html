@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Statement {{ statement.reference_number }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --accent: #2952e3;
+            --ink: #1a1d29;
+            --muted: #6b7280;
+            --line: #e5e7eb;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, Segoe UI, Arial, sans-serif;
+            color: var(--ink);
+            margin: 0;
+            background: #f4f6f9;
+        }
+        .toolbar {
+            background: #212529;
+            padding: 14px 0;
+            text-align: center;
+        }
+        .toolbar button {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .toolbar button:hover { background: #1e3fc4; }
+        .toolbar .hint { color: #aab; font-size: 12px; margin-top: 6px; }
+
+        .sheet {
+            max-width: 900px;
+            margin: 32px auto;
+            background: #fff;
+            padding: 56px 64px;
+            box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+            border-radius: 4px;
+        }
+
+        .doc-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 3px solid var(--accent);
+            padding-bottom: 24px;
+            margin-bottom: 24px;
+        }
+        .brand-name { font-size: 22px; font-weight: 700; }
+        .doc-type {
+            text-align: right;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .doc-sub { text-align: right; color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+        .meta-block {
+            background: #f9fafb;
+            border-radius: 4px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 24px;
+        }
+        .meta-block .item .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; display: block; }
+        .meta-block .item .value { font-weight: 600; font-size: 13px; }
+
+        .honesty-box {
+            background: #fff9eb;
+            border-left: 3px solid #d69e2e;
+            border-radius: 4px;
+            padding: 14px 18px;
+            margin-bottom: 28px;
+            font-size: 12px;
+            color: #6b5217;
+            line-height: 1.6;
+        }
+        .honesty-box strong { color: #4a3b0f; }
+
+        .section { margin-bottom: 32px; page-break-inside: avoid; }
+        .section h4 {
+            font-size: 15px;
+            margin: 0 0 4px;
+            border-bottom: 2px solid var(--line);
+            padding-bottom: 8px;
+        }
+        .section .sub-note { color: var(--muted); font-size: 11px; margin: 0 0 12px; }
+        .currency-total { font-size: 12px; font-weight: 700; margin: 14px 0 6px; }
+        table.rows { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+        table.rows th {
+            text-align: left;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--muted);
+            border-bottom: 2px solid var(--line);
+            padding: 6px 6px;
+        }
+        table.rows td {
+            padding: 7px 6px;
+            border-bottom: 1px solid var(--line);
+            font-size: 12px;
+            vertical-align: top;
+        }
+        table.rows th.num, table.rows td.num { text-align: right; }
+        .empty-note { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+
+        .contracts-section { background: #f9fafb; border-radius: 4px; padding: 16px 20px; }
+
+        .doc-footer {
+            text-align: center;
+            color: var(--muted);
+            font-size: 12px;
+            padding-top: 24px;
+            border-top: 1px solid var(--line);
+        }
+
+        @media print {
+            body { background: #fff; }
+            .toolbar { display: none; }
+            .sheet { box-shadow: none; margin: 0; padding: 0.4in; max-width: 100%; border-radius: 0; }
+            @page { margin: 0.5in; }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <button onclick="window.print()">Download PDF / Print</button>
+        <div class="hint">Use your browser's "Save as PDF" option in the print dialog</div>
+    </div>
+
+    <div class="sheet">
+        <div class="doc-header">
+            <div>
+                <div class="brand-name">{{ report.owner.business_name or 'ELIZA' }}</div>
+            </div>
+            <div>
+                <div class="doc-type">Account Statement</div>
+                <div class="doc-sub">{{ statement.reference_number }}</div>
+                <div class="doc-sub">{{ report.period_start.strftime('%B %d, %Y') }} &ndash; {{ report.period_end.strftime('%B %d, %Y') }}</div>
+            </div>
+        </div>
+
+        <div class="meta-block">
+            <div class="item"><span class="label">Reference</span><span class="value">{{ statement.reference_number }}</span></div>
+            <div class="item"><span class="label">Generated</span><span class="value">{{ statement.generated_at.strftime('%B %d, %Y %H:%M') }} UTC</span></div>
+            <div class="item"><span class="label">Generated By</span><span class="value">{{ statement.generated_by.get_full_name() }}</span></div>
+            <div class="item"><span class="label">Client Scope</span><span class="value">{{ report.client.name if report.client else 'All clients' }}</span></div>
+        </div>
+
+        <div class="honesty-box">
+            <strong>About this statement.</strong> ELIZA never holds funds &mdash; PesaPal, a licensed payment
+            service provider, collects and settles card and mobile-money payments, and direct bank transfers
+            arrive in the freelancer's own bank account. This statement reflects amounts invoiced and payment
+            confirmations recorded by ELIZA, not a custodial account balance. Every figure below is drawn
+            directly from ELIZA's own invoice and payment records for the stated period &mdash; nothing here is
+            estimated or inferred.
+        </div>
+
+        <div class="section">
+            <h4>Invoiced</h4>
+            {% if report.invoiced_by_currency %}
+                {% for code, rows in report.invoiced_by_currency.items()|sort %}
+                <div class="currency-total">{{ code }} &mdash; total {{ '%.2f'|format(report.invoiced_totals[code]) }}</div>
+                <table class="rows">
+                    <thead><tr><th>Invoice #</th><th>Client</th><th>Date</th><th class="num">Amount</th><th>Status</th></tr></thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            <td>{{ row.invoice_number }}</td>
+                            <td>{{ row.client_name }}</td>
+                            <td>{{ row.date.strftime('%b %d, %Y') }}</td>
+                            <td class="num">{{ '%.2f'|format(row.amount) }}</td>
+                            <td>{{ row.status|capitalize }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endfor %}
+            {% else %}
+            <p class="empty-note">No invoices sent in this period.</p>
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <h4>Collected</h4>
+            {% if report.collected_by_currency %}
+                {% for code, rows in report.collected_by_currency.items()|sort %}
+                <div class="currency-total">{{ code }} &mdash; total {{ '%.2f'|format(report.collected_totals[code]) }}</div>
+                <table class="rows">
+                    <thead><tr><th>Invoice #</th><th>Client</th><th>Paid On</th><th class="num">Amount</th><th>Method</th><th>Traceability</th></tr></thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            <td>{{ row.invoice_number }}</td>
+                            <td>{{ row.client_name }}</td>
+                            <td>{{ row.paid_at.strftime('%b %d, %Y') }}</td>
+                            <td class="num">{{ '%.2f'|format(row.amount) }}</td>
+                            <td>{{ row.payment_method if row.is_pesapal else 'Manual / bank transfer' }}</td>
+                            <td>
+                                {% if row.is_pesapal %}
+                                    {% if row.pesapal_merchant_reference %}Ref: {{ row.pesapal_merchant_reference }}<br>{% endif %}
+                                    {% if row.pesapal_order_tracking_id %}Tracking: {{ row.pesapal_order_tracking_id }}{% endif %}
+                                {% else %}
+                                    Marked paid by: not recorded
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endfor %}
+            {% else %}
+            <p class="empty-note">Nothing collected in this period.</p>
+            {% endif %}
+        </div>
+
+        <div class="section">
+            <h4>Outstanding as of {{ report.period_end.strftime('%B %d, %Y') }}</h4>
+            {% if report.outstanding_by_currency %}
+                {% for code, rows in report.outstanding_by_currency.items()|sort %}
+                <div class="currency-total">{{ code }} &mdash; total {{ '%.2f'|format(report.outstanding_totals[code]) }}</div>
+                <table class="rows">
+                    <thead><tr><th>Invoice #</th><th>Client</th><th>Sent On</th><th>Due Date</th><th class="num">Amount</th><th class="num">Days Outstanding</th></tr></thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            <td>{{ row.invoice_number }}</td>
+                            <td>{{ row.client_name }}</td>
+                            <td>{{ row.sent_at.strftime('%b %d, %Y') }}</td>
+                            <td>{{ row.due_date.strftime('%b %d, %Y') if row.due_date else '—' }}</td>
+                            <td class="num">{{ '%.2f'|format(row.amount) }}</td>
+                            <td class="num">{{ row.days_outstanding }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% endfor %}
+            {% else %}
+            <p class="empty-note">Nothing outstanding as of the period end date.</p>
+            {% endif %}
+        </div>
+
+        <div class="section contracts-section">
+            <h4>Contracts signed in this period</h4>
+            <p class="sub-note">Supporting documentation &mdash; these are agreements, not money movement.</p>
+            {% if report.contracts_signed %}
+            <table class="rows">
+                <thead><tr><th>Contract #</th><th>Client</th><th>Signer</th><th>Signed On</th></tr></thead>
+                <tbody>
+                    {% for c in report.contracts_signed %}
+                    <tr>
+                        <td>{{ c.contract_number }}</td>
+                        <td>{{ c.client_name }}</td>
+                        <td>{{ c.signer_name or '—' }}</td>
+                        <td>{{ c.signed_at.strftime('%b %d, %Y') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty-note">No contracts signed in this period.</p>
+            {% endif %}
+        </div>
+
+        <div class="doc-footer">
+            {{ report.owner.business_name or 'ELIZA' }} &middot; Account Statement {{ statement.reference_number }}
+        </div>
+    </div>
+</body>
+</html>

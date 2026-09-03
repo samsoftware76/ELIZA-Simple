@@ -32,7 +32,7 @@ load_dotenv(dotenv_path)
 from models import db
 from models.models import User, Client, Project, Task, Comment, TimeEntry, ProjectMember, ActivityLog, TeamMembership, TeamInvite, ClientInvite
 from models.subscription import Subscription, SubscriptionPlan
-from models.billing import Quote, QuoteItem, Invoice, InvoiceItem, InvoiceStatus, Contract, ContractStatus
+from models.billing import Quote, QuoteItem, Invoice, InvoiceItem, InvoiceStatus, Contract, ContractStatus, AccountStatement
 
 # Import database utilities for improved connection handling
 from utils.db_utils import configure_db_pool, retry_operation, safe_commit, safe_query
@@ -42,7 +42,7 @@ from api.payment import PesaPalPayment
 from api.sms import send_sms
 
 # Import forms
-from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, AcceptInviteForm, ClientAcceptInviteForm, AccountDetailsForm, ChangePasswordForm, BusinessIdentityForm, PayoutDetailsForm, InvoiceDefaultsForm
+from forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm, ClientForm, ProjectForm, TaskForm, TimeEntryForm, AcceptInviteForm, ClientAcceptInviteForm, AccountDetailsForm, ChangePasswordForm, BusinessIdentityForm, PayoutDetailsForm, InvoiceDefaultsForm, StatementForm
 
 # Import template filters
 from filters import register_filters
@@ -56,6 +56,10 @@ from utils.analytics import log_event
 # Import the deliverables report builder - see utils/deliverables_report.py for why the
 # heavier per-project/per-client aggregation lives there instead of inline in this route.
 from utils.deliverables_report import build_deliverables_report
+
+# Import the account statement builder - see utils/account_statement.py for the
+# same single-pure-builder shape as build_deliverables_report above.
+from utils.account_statement import build_account_statement
 
 # Subscription plan limits (max_clients/max_projects). Enforced on the create
 # POST paths below and surfaced as a non-blocking banner on the list pages -
@@ -911,6 +915,225 @@ def wallet():
     return render_template('wallet.html', title='Wallet',
                            wallet=wallet_data, owner=owner,
                            masked_account=masked_account)
+
+
+def _statement_visible(statement):
+    """Whether current_user may VIEW/print/export this already-generated
+    AccountStatement: the tenant it covers, or any admin.
+
+    The admin bypass is deliberate and narrow: api/admin.py's
+    statement_generate is the only route that can CREATE a new
+    AccountStatement for a tenant the admin doesn't own, and it always
+    writes a prominent ActivityLog entry naming the admin when it does (see
+    that route's docstring). Viewing/printing/exporting an already-generated
+    one here creates no new row and needs no further logging beyond that -
+    same trust model this codebase already gives admins elsewhere (e.g.
+    admin/users.html lists every tenant's email/role with no per-view log
+    entry at all)."""
+    return current_user.get_owner_id() == statement.owner_id or current_user.role == UserRole.ADMIN
+
+
+@app.route('/wallet/statement', methods=['GET', 'POST'])
+@login_required
+def wallet_statement():
+    """Generate a formal account statement for THIS tenant - owner-only to
+    WRITE (creates the AccountStatement audit row), same
+    owner-vs-team-member split as profile_invoice_defaults(): a team member
+    never sees the form (muted note instead) and a direct POST is rejected
+    here too, regardless of what the page shows.
+
+    On a valid submission this creates the AccountStatement row (the audit
+    trail: who, when, what range/scope, with a unique STMT-00001 reference
+    number - see models/billing.py) and redirects to
+    wallet_statement_view(), which is what actually computes and shows the
+    figures (live, every time it's opened - see build_account_statement's
+    docstring for why the amounts are never frozen onto this row).
+    """
+    owner_id = current_user.get_owner_id()
+    owner = User.query.get(owner_id)
+    is_owner = current_user.id == owner_id
+
+    if request.method == 'POST' and not is_owner:
+        flash('Only the account owner can generate an account statement.', 'danger')
+        return redirect(url_for('wallet'))
+
+    if not is_owner:
+        # Team members never get a form at all - see the docstring above.
+        return render_template('wallet_statement.html', is_owner=False, form=None, report=None, owner=owner)
+
+    form = StatementForm(owner_id=owner_id)
+
+    if form.validate_on_submit():
+        # Defense in depth: the form's client choices are already scoped to
+        # this owner's own clients, but a crafted POST can submit any id
+        # directly - re-check ownership server-side, same pattern as every
+        # other client_id-accepting form in this codebase.
+        selected_client = Client.query.get(form.client_id.data) if form.client_id.data else None
+        if form.client_id.data and (not selected_client or selected_client.owner_id != owner_id):
+            flash('Invalid client selected.', 'danger')
+        else:
+            try:
+                statement = AccountStatement(
+                    reference_number='PENDING',
+                    owner_id=owner_id,
+                    generated_by_id=current_user.id,
+                    client_id=form.client_id.data or None,
+                    period_start=form.period_start.data,
+                    period_end=form.period_end.data,
+                    format='pdf',
+                )
+                db.session.add(statement)
+                db.session.flush()  # assigns statement.id for numbering, still inside the transaction
+                statement.reference_number = f"STMT-{statement.id:05d}"
+                db.session.commit()
+                flash(f'Statement {statement.reference_number} generated.', 'success')
+                return redirect(url_for('wallet_statement_view', statement_id=statement.id))
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Error generating account statement: {str(e)}")
+                flash(f'Error generating statement: {str(e)}', 'danger')
+
+    return render_template('wallet_statement.html', is_owner=True, form=form, report=None, owner=owner)
+
+
+@app.route('/wallet/statement/<int:statement_id>')
+@login_required
+def wallet_statement_view(statement_id):
+    """On-screen preview of an already-generated statement - the figures are
+    computed fresh from build_account_statement() on every visit (see its
+    docstring), so this always reflects the current, real ledger for the
+    exact range/scope recorded on the AccountStatement audit row."""
+    statement = AccountStatement.query.get_or_404(statement_id)
+    if not _statement_visible(statement):
+        abort(404)
+    report = build_account_statement(
+        statement.owner_id, statement.period_start, statement.period_end, client_id=statement.client_id
+    )
+    viewing_as_admin = current_user.get_owner_id() != statement.owner_id
+    return render_template('wallet_statement.html', is_owner=True, form=None, report=report,
+                           statement=statement, owner=report['owner'], viewing_as_admin=viewing_as_admin)
+
+
+@app.route('/wallet/statement/<int:statement_id>/print')
+@login_required
+def wallet_statement_print(statement_id):
+    """Standalone printable/PDF view of an account statement - same
+    browser-print pattern as templates/print/document.html /
+    templates/reports/deliverables_print.html."""
+    statement = AccountStatement.query.get_or_404(statement_id)
+    if not _statement_visible(statement):
+        abort(404)
+    report = build_account_statement(
+        statement.owner_id, statement.period_start, statement.period_end, client_id=statement.client_id
+    )
+    return render_template('print/statement.html', report=report, statement=statement)
+
+
+@app.route('/wallet/statement/<int:statement_id>/export')
+@login_required
+def export_account_statement(statement_id):
+    """Export an account statement as an .xlsx workbook - one sheet per
+    section, each row carrying its own Currency column (amounts are never
+    summed across currencies - see build_account_statement's docstring).
+    Reads the exact same report dict (and therefore the exact same
+    per-currency totals) as the on-screen preview and the print view."""
+    statement = AccountStatement.query.get_or_404(statement_id)
+    if not _statement_visible(statement):
+        abort(404)
+    report = build_account_statement(
+        statement.owner_id, statement.period_start, statement.period_end, client_id=statement.client_id
+    )
+
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        summary_rows = [{
+            'Reference Number': statement.reference_number,
+            'Generated At (UTC)': statement.generated_at.strftime('%Y-%m-%d %H:%M') if statement.generated_at else '',
+            'Generated By': statement.generated_by.get_full_name() if statement.generated_by else '',
+            'Business': report['owner'].business_name or 'ELIZA',
+            'Period Start': report['period_start'].strftime('%Y-%m-%d'),
+            'Period End': report['period_end'].strftime('%Y-%m-%d'),
+            'Client Scope': report['client'].name if report['client'] else 'All clients',
+        }]
+        pd.DataFrame(summary_rows).to_excel(writer, sheet_name='Summary', index=False)
+
+        totals_rows = []
+        for label, totals in (
+            ('Invoiced', report['invoiced_totals']),
+            ('Collected', report['collected_totals']),
+            ('Outstanding', report['outstanding_totals']),
+        ):
+            for code, amount in sorted(totals.items()):
+                totals_rows.append({'Section': label, 'Currency': code, 'Total': amount})
+        if not totals_rows:
+            totals_rows = [{'Section': 'No invoice activity in this period.', 'Currency': '', 'Total': ''}]
+        pd.DataFrame(totals_rows).to_excel(writer, sheet_name='Summary', index=False, startrow=len(summary_rows) + 2)
+
+        invoiced_data = [
+            {
+                'Invoice #': row['invoice_number'],
+                'Client': row['client_name'],
+                'Date': row['date'].strftime('%Y-%m-%d') if row['date'] else '',
+                'Amount': row['amount'],
+                'Currency': code,
+                'Status': row['status'],
+            }
+            for code, rows in sorted(report['invoiced_by_currency'].items())
+            for row in rows
+        ] or [{'Invoice #': 'No invoices in this period.'}]
+        pd.DataFrame(invoiced_data).to_excel(writer, sheet_name='Invoiced', index=False)
+
+        collected_data = [
+            {
+                'Invoice #': row['invoice_number'],
+                'Client': row['client_name'],
+                'Paid On': row['paid_at'].strftime('%Y-%m-%d') if row['paid_at'] else '',
+                'Amount': row['amount'],
+                'Currency': code,
+                'Method': row['payment_method'],
+                'PesaPal Merchant Reference': row['pesapal_merchant_reference'] or '',
+                'PesaPal Order Tracking ID': row['pesapal_order_tracking_id'] or '',
+                'Marked Paid By': row['marked_paid_by'] or 'Not recorded',
+            }
+            for code, rows in sorted(report['collected_by_currency'].items())
+            for row in rows
+        ] or [{'Invoice #': 'No payments collected in this period.'}]
+        pd.DataFrame(collected_data).to_excel(writer, sheet_name='Collected', index=False)
+
+        outstanding_data = [
+            {
+                'Invoice #': row['invoice_number'],
+                'Client': row['client_name'],
+                'Sent On': row['sent_at'].strftime('%Y-%m-%d') if row['sent_at'] else '',
+                'Due Date': row['due_date'].strftime('%Y-%m-%d') if row['due_date'] else '',
+                'Amount': row['amount'],
+                'Currency': code,
+                'Days Outstanding': row['days_outstanding'],
+            }
+            for code, rows in sorted(report['outstanding_by_currency'].items())
+            for row in rows
+        ] or [{'Invoice #': 'Nothing outstanding as of the period end date.'}]
+        pd.DataFrame(outstanding_data).to_excel(writer, sheet_name='Outstanding', index=False)
+
+        contracts_data = [
+            {
+                'Contract #': c['contract_number'],
+                'Client': c['client_name'],
+                'Signer': c['signer_name'] or '',
+                'Signed On': c['signed_at'].strftime('%Y-%m-%d') if c['signed_at'] else '',
+            }
+            for c in report['contracts_signed']
+        ] or [{'Contract #': 'No contracts signed in this period.'}]
+        pd.DataFrame(contracts_data).to_excel(writer, sheet_name='Contracts Signed', index=False)
+
+    output.seek(0)
+    filename = f'account_statement_{statement.reference_number}.xlsx'
+    response = app.response_class(
+        output.getvalue(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
+    return response
 
 
 @app.route('/reset-password-request', methods=['GET', 'POST'])

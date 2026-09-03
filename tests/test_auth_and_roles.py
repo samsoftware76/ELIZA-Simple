@@ -62,24 +62,6 @@ def test_non_admin_staff_user_rejected_from_admin_dashboard(client, owner_user):
     assert 'You do not have permission to access this page' in resp.get_data(as_text=True)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "PRE-EXISTING BUG, unrelated to anything fixed this session: "
-        "api/admin.py's dashboard() runs Subscription.query.join(SubscriptionPlan) "
-        "with no explicit onclause. Subscription now has TWO foreign keys to "
-        "subscription_plans (plan_id and pending_plan_id - see "
-        "migrations/add_subscription_plan_change.py), so SQLAlchemy can no "
-        "longer infer which one to join on and raises AmbiguousForeignKeysError "
-        "- a real 500 for every admin who visits /admin/dashboard, reproduced "
-        "standalone against a fresh schema, not a test artifact. The fix is "
-        "already written locally but lands in a separate commit (api/admin.py "
-        "is mid-edit by a concurrent batch) - this marker is restored here so "
-        "THIS commit's own CI run stays green against the code as it actually "
-        "is at this point in history. Remove this xfail once that fix commit "
-        "lands alongside this test file."
-    ),
-)
 def test_admin_role_can_reach_admin_dashboard(client, make_user):
     from models.models import UserRole
     admin = make_user(role=UserRole.ADMIN)

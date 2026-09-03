@@ -64,6 +64,10 @@
                                     <td>{{ user.created_at.strftime('%b %d, %Y') if user.created_at else '—' }}</td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('admin.statement_generate', owner_id=user.id) }}"
+                                               class="btn btn-outline-secondary" title="Generate account statement (compliance/legal)">
+                                                <i class="bi bi-file-earmark-text"></i>
+                                            </a>
                                             <button type="button" class="btn btn-outline-primary"
                                                     data-toggle="modal"
                                                     data-target="#editUserModal"

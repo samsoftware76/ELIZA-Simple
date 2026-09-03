@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}Account Statement - ELIZA{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('wallet') }}">Wallet</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Account Statement</li>
+        </ol>
+    </nav>
+
+    {% if admin_target %}
+    <div class="alert alert-warning">
+        <i class="fas fa-user-shield"></i> Admin action: generating a statement for tenant
+        <strong>{{ owner.get_full_name() }}</strong> ({{ owner.email }}){% if admin_target.id != owner.id %} via team member {{ admin_target.get_full_name() }}{% endif %}.
+        This is logged in that tenant's activity history, naming you as the admin who generated it.
+    </div>
+    {% elif viewing_as_admin %}
+    <div class="alert alert-warning">
+        <i class="fas fa-user-shield"></i> You are viewing this as an admin. It covers tenant
+        <strong>{{ owner.get_full_name() }}</strong> ({{ owner.email }}), not your own account.
+    </div>
+    {% endif %}
+
+    {% if not is_owner %}
+    <h1 class="mb-4">Account Statement</h1>
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <p class="text-muted mb-0">The account owner generates account statements for this workspace.</p>
+        </div>
+    </div>
+
+    {% elif not report %}
+    <h1 class="mb-1">Account Statement</h1>
+    <p class="text-muted mb-4">
+        A formal, dated record of invoiced, collected and outstanding activity for a bank, auditor, or legal inquiry.
+        Every figure traces directly to a real invoice, payment confirmation, or signed contract.
+    </p>
+
+    <div class="card shadow-sm" style="max-width: 640px;">
+        <div class="card-header"><h5 class="mb-0">Generate a statement</h5></div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('admin.statement_generate', owner_id=admin_target.id) if admin_target else url_for('wallet_statement') }}">
+                {{ form.hidden_tag() }}
+                <div class="form-row">
+                    <div class="form-group col-md-6">
+                        {{ form.period_start.label }}
+                        {{ form.period_start(class="form-control", type="date") }}
+                        {% for error in form.period_start.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="form-group col-md-6">
+                        {{ form.period_end.label }}
+                        {{ form.period_end(class="form-control", type="date") }}
+                        {% for error in form.period_end.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+                <div class="form-group">
+                    {{ form.client_id.label }}
+                    {{ form.client_id(class="form-control") }}
+                    <small class="form-text text-muted">Leave as "All clients" to cover the whole tenant.</small>
+                </div>
+                {{ form.submit(class="btn btn-primary") }}
+            </form>
+        </div>
+    </div>
+
+    {% else %}
+    {# ------------------------------------------------------------------
+       PREVIEW - the same figures the Print/PDF and Excel export show,
+       computed by the single build_account_statement() call this route
+       made (see api/index.py's wallet_statement_view).
+       ------------------------------------------------------------------ #}
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+        <div>
+            <h1 class="mb-0">Statement {{ statement.reference_number }}</h1>
+            <p class="text-muted mb-0">
+                {{ report.period_start.strftime('%b %d, %Y') }} &ndash; {{ report.period_end.strftime('%b %d, %Y') }}
+                {% if report.client %} &middot; Client: <strong>{{ report.client.name }}</strong>{% else %} &middot; All clients{% endif %}
+            </p>
+        </div>
+        <div class="page-actions">
+            <a href="{{ url_for('wallet_statement_print', statement_id=statement.id) }}" class="btn btn-outline-secondary" target="_blank"><i class="fas fa-file-pdf"></i> Print / PDF</a>
+            <a href="{{ url_for('export_account_statement', statement_id=statement.id) }}" class="btn btn-outline-primary"><i class="fas fa-file-excel"></i> Export Excel</a>
+            <a href="{{ url_for('wallet_statement') }}" class="btn btn-outline-secondary">Generate another</a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3"><small class="text-muted d-block">Reference</small>{{ statement.reference_number }}</div>
+                <div class="col-md-3"><small class="text-muted d-block">Generated</small>{{ statement.generated_at.strftime('%b %d, %Y %H:%M') }} UTC</div>
+                <div class="col-md-3"><small class="text-muted d-block">Generated by</small>{{ statement.generated_by.get_full_name() }}</div>
+                <div class="col-md-3"><small class="text-muted d-block">Business</small>{{ report.owner.business_name or 'ELIZA' }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-secondary">
+        <strong>About this statement.</strong> ELIZA never holds funds &mdash; PesaPal, a licensed payment service
+        provider, collects and settles card and mobile-money payments, and direct bank transfers arrive in the
+        freelancer's own bank account. This statement reflects amounts invoiced and payment confirmations recorded
+        by ELIZA, not a custodial account balance. Every figure below is drawn directly from ELIZA's own invoice and
+        payment records for the stated period &mdash; nothing here is estimated or inferred.
+    </div>
+
+    {# --------------------------- Invoiced --------------------------- #}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h5 class="mb-0">Invoiced</h5></div>
+        <div class="card-body">
+            {% if report.invoiced_by_currency %}
+                {% for code, rows in report.invoiced_by_currency.items()|sort %}
+                <h6 class="fw-bold">{{ code }} &mdash; total {{ '{:,.2f}'.format(report.invoiced_totals[code]) }}</h6>
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>Invoice #</th><th>Client</th><th>Date</th><th class="text-right">Amount</th><th>Status</th></tr></thead>
+                        <tbody>
+                            {% for row in rows %}
+                            <tr>
+                                <td>{{ row.invoice_number }}</td>
+                                <td>{{ row.client_name }}</td>
+                                <td>{{ row.date.strftime('%b %d, %Y') }}</td>
+                                <td class="text-right">{{ '{:,.2f}'.format(row.amount) }}</td>
+                                <td><span class="badge badge-{{ row.status|billing_status_badge }}">{{ row.status|capitalize }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endfor %}
+            {% else %}
+            <p class="text-muted mb-0">No invoices sent in this period.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# --------------------------- Collected --------------------------- #}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h5 class="mb-0">Collected</h5></div>
+        <div class="card-body">
+            {% if report.collected_by_currency %}
+                {% for code, rows in report.collected_by_currency.items()|sort %}
+                <h6 class="fw-bold">{{ code }} &mdash; total {{ '{:,.2f}'.format(report.collected_totals[code]) }}</h6>
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>Invoice #</th><th>Client</th><th>Paid On</th><th class="text-right">Amount</th><th>Method</th><th>Traceability</th></tr></thead>
+                        <tbody>
+                            {% for row in rows %}
+                            <tr>
+                                <td>{{ row.invoice_number }}</td>
+                                <td>{{ row.client_name }}</td>
+                                <td>{{ row.paid_at.strftime('%b %d, %Y') }}</td>
+                                <td class="text-right">{{ '{:,.2f}'.format(row.amount) }}</td>
+                                <td>{{ row.payment_method if row.is_pesapal else 'Manual / bank transfer' }}</td>
+                                <td class="small">
+                                    {% if row.is_pesapal %}
+                                        {% if row.pesapal_merchant_reference %}Ref: {{ row.pesapal_merchant_reference }}<br>{% endif %}
+                                        {% if row.pesapal_order_tracking_id %}Tracking: {{ row.pesapal_order_tracking_id }}{% endif %}
+                                    {% else %}
+                                        <span class="text-muted">Marked paid by: not recorded</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endfor %}
+            {% else %}
+            <p class="text-muted mb-0">Nothing collected in this period.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# --------------------------- Outstanding --------------------------- #}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header"><h5 class="mb-0">Outstanding as of {{ report.period_end.strftime('%b %d, %Y') }}</h5></div>
+        <div class="card-body">
+            {% if report.outstanding_by_currency %}
+                {% for code, rows in report.outstanding_by_currency.items()|sort %}
+                <h6 class="fw-bold">{{ code }} &mdash; total {{ '{:,.2f}'.format(report.outstanding_totals[code]) }}</h6>
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-hover">
+                        <thead><tr><th>Invoice #</th><th>Client</th><th>Sent On</th><th>Due Date</th><th class="text-right">Amount</th><th>Days Outstanding</th></tr></thead>
+                        <tbody>
+                            {% for row in rows %}
+                            <tr>
+                                <td>{{ row.invoice_number }}</td>
+                                <td>{{ row.client_name }}</td>
+                                <td>{{ row.sent_at.strftime('%b %d, %Y') }}</td>
+                                <td>{{ row.due_date.strftime('%b %d, %Y') if row.due_date else '—' }}</td>
+                                <td class="text-right">{{ '{:,.2f}'.format(row.amount) }}</td>
+                                <td>{{ row.days_outstanding }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endfor %}
+            {% else %}
+            <p class="text-muted mb-0">Nothing outstanding as of the period end date.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    {# --------------------- Contracts (supporting, non-financial) --------------------- #}
+    <div class="card shadow-sm mb-4 border-secondary">
+        <div class="card-header bg-light"><h5 class="mb-0">Contracts signed in this period <small class="text-muted">(supporting documentation &mdash; not money movement)</small></h5></div>
+        <div class="card-body">
+            {% if report.contracts_signed %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead><tr><th>Contract #</th><th>Client</th><th>Signer</th><th>Signed On</th></tr></thead>
+                    <tbody>
+                        {% for c in report.contracts_signed %}
+                        <tr>
+                            <td>{{ c.contract_number }}</td>
+                            <td>{{ c.client_name }}</td>
+                            <td>{{ c.signer_name or '—' }}</td>
+                            <td>{{ c.signed_at.strftime('%b %d, %Y') }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">No contracts signed in this period.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

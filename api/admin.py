@@ -1,9 +1,11 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, abort
 from flask_login import login_required, current_user
 from sqlalchemy import func
-from models.models import User, Client, Project, Task, UserRole, ProjectStatus, TaskStatus, AnalyticsEvent
+from models.models import User, Client, Project, Task, UserRole, ProjectStatus, TaskStatus, AnalyticsEvent, ActivityLog
 from models.subscription import Subscription, SubscriptionPlan
-from forms import UserForm, SubscriptionPlanForm, SubscriptionForm, EmailSettingsForm, PesapalSettingsForm, AppSettingsForm
+from models.billing import AccountStatement
+from forms import UserForm, SubscriptionPlanForm, SubscriptionForm, EmailSettingsForm, PesapalSettingsForm, AppSettingsForm, StatementForm
+from utils.account_statement import build_account_statement
 from models import db
 from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash
@@ -44,17 +46,30 @@ def dashboard():
     # Subscription has no `status` column (only is_active/is_trial booleans -
     # see models/subscription.py); the old `Subscription.status == 'active'`
     # filters referenced a column that doesn't exist and crashed every call.
-    basic_count = Subscription.query.join(SubscriptionPlan).filter(
+    #
+    # Subscription now carries TWO FKs to subscription_plans (plan_id and,
+    # since the plan-upgrade feature, pending_plan_id for a scheduled
+    # downgrade) - a bare .join(SubscriptionPlan) can no longer infer which
+    # one to use and raises AmbiguousForeignKeysError on every call. These
+    # counts are about the plan a subscription is CURRENTLY on, so the join
+    # is explicit on plan_id, never pending_plan_id.
+    basic_count = Subscription.query.join(
+        SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.id
+    ).filter(
         SubscriptionPlan.name == 'Basic',
         Subscription.is_active == True
     ).count()
 
-    professional_count = Subscription.query.join(SubscriptionPlan).filter(
+    professional_count = Subscription.query.join(
+        SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.id
+    ).filter(
         SubscriptionPlan.name == 'Professional',
         Subscription.is_active == True
     ).count()
 
-    enterprise_count = Subscription.query.join(SubscriptionPlan).filter(
+    enterprise_count = Subscription.query.join(
+        SubscriptionPlan, Subscription.plan_id == SubscriptionPlan.id
+    ).filter(
         SubscriptionPlan.name == 'Enterprise',
         Subscription.is_active == True
     ).count()
@@ -587,3 +602,87 @@ def backup_database():
 def clear_cache():
     flash('This app has no server-side cache layer to clear yet - nothing to do.', 'info')
     return redirect(url_for('admin.system'))
+
+
+@admin_bp.route('/statement/<int:owner_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def statement_generate(owner_id):
+    """ADMIN-ONLY: generate an account statement for ANY tenant, by user id -
+    the platform-level compliance/legal-request escape hatch (a bank,
+    auditor or police/legal inquiry about one account's activity). owner_id
+    may be a TEAM MEMBER's own id, not just a literal owner's - every row in
+    admin/users.html links here, owners and team members alike - so this
+    always resolves through .get_owner_id() first, landing on that team's
+    real tenant scope rather than an empty, meaningless team-member-id scope.
+
+    Nothing technically stops an admin from reaching this same data by other
+    means today (direct DB access, impersonation, etc.) - the point of this
+    route is an HONEST, deliberate audit trail of the fact that it happened:
+    every use writes a prominent ActivityLog entry naming the admin, the
+    target tenant, and the range - in addition to the AccountStatement row's
+    own generated_by_id, the quieter half of the same trail (see
+    models/billing.py's AccountStatement docstring).
+
+    Viewing/printing/exporting the resulting statement happens on the same
+    shared routes a tenant's own owner uses (wallet_statement_view/_print,
+    export_account_statement in api/index.py) - _statement_visible() there
+    lets any admin through, so this route only needs to handle the
+    CREATE-for-another-tenant step and its logging.
+    """
+    target_user = User.query.get_or_404(owner_id)
+    target_owner_id = target_user.get_owner_id()
+    target_owner = User.query.get(target_owner_id)
+
+    form = StatementForm(owner_id=target_owner_id)
+
+    if form.validate_on_submit():
+        # Defense in depth: the form's client choices are already scoped to
+        # the target tenant's own clients, but a crafted POST can submit any
+        # id directly - re-check ownership server-side.
+        selected_client = Client.query.get(form.client_id.data) if form.client_id.data else None
+        if form.client_id.data and (not selected_client or selected_client.owner_id != target_owner_id):
+            flash('Invalid client selected.', 'danger')
+        else:
+            try:
+                statement = AccountStatement(
+                    reference_number='PENDING',
+                    owner_id=target_owner_id,
+                    generated_by_id=current_user.id,
+                    client_id=form.client_id.data or None,
+                    period_start=form.period_start.data,
+                    period_end=form.period_end.data,
+                    format='pdf',
+                )
+                db.session.add(statement)
+                db.session.flush()  # assigns statement.id for numbering, still inside the transaction
+                statement.reference_number = f"STMT-{statement.id:05d}"
+
+                # Prominent, honest audit trail: this is a real
+                # privacy-sensitive capability (an admin pulling another
+                # tenant's financial data), so this entry names the admin
+                # explicitly rather than reading like routine tenant
+                # activity - see the docstring above.
+                db.session.add(ActivityLog(
+                    user_id=current_user.id,
+                    owner_id=target_owner_id,
+                    action_type='admin_statement_generated',
+                    entity_type='account_statement',
+                    entity_id=statement.id,
+                    description=(
+                        f'ADMIN {current_user.get_full_name()} ({current_user.email}) generated account '
+                        f'statement {statement.reference_number} for tenant {target_owner.get_full_name()} '
+                        f'({target_owner.email}, user id {target_owner_id}), covering '
+                        f'{form.period_start.data} to {form.period_end.data}.'
+                    ),
+                ))
+                db.session.commit()
+                flash(f'Statement {statement.reference_number} generated for {target_owner.get_full_name()}.', 'success')
+                return redirect(url_for('wallet_statement_view', statement_id=statement.id))
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Error generating admin account statement: {str(e)}")
+                flash(f'Error generating statement: {str(e)}', 'danger')
+
+    return render_template('wallet_statement.html', is_owner=True, form=form, report=None,
+                          owner=target_owner, admin_target=target_user)
