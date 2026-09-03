@@ -634,6 +634,35 @@ def rate_limit_exceeded(e):
     if request.endpoint == 'profile_password':
         flash('Too many password change attempts - please wait a minute and try again.', 'danger')
         return redirect(url_for('profile'))
+
+    # Public client portal (api/portal.py). These visitors are NOT logged in,
+    # so the generic redirect(url_for('home')) below would bounce a paying
+    # client off their invoice and onto the marketing landing page, which
+    # reads as "the link is broken" rather than "slow down for a moment".
+    #
+    # For the ACTION routes (accept/decline/sign/pay) the useful destination
+    # is the document they were acting on, which they can still read: those
+    # are limited separately and far more generously, so the redirect lands
+    # on a page that works and shows the explanation as a toast.
+    #
+    # For the VIEW routes themselves, redirecting back to the same view would
+    # be a redirect LOOP while the limit is still in force, so those get a
+    # self-contained rendered page instead - no redirect, nothing to loop on.
+    if request.blueprint == 'portal':
+        token = (request.view_args or {}).get('token')
+        endpoint = (request.endpoint or '').rsplit('.', 1)[-1]
+        view_for = {
+            'accept_quote': 'portal.view_quote',
+            'decline_quote': 'portal.view_quote',
+            'sign_contract': 'portal.view_contract',
+            'decline_contract': 'portal.view_contract',
+            'pay_invoice': 'portal.view_invoice',
+        }.get(endpoint)
+        if view_for and token:
+            flash('Too many requests in a row - please wait a moment and try again.', 'warning')
+            return redirect(url_for(view_for, token=token))
+        return render_template('portal/too_many_requests.html'), 429
+
     flash('Too many requests - please wait a moment and try again.', 'danger')
     return redirect(url_for('home'))
 

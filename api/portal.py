@@ -29,8 +29,49 @@ from utils.email_utils import (
 )
 from utils.document_print import build_print_context, build_contract_print_context
 from utils.analytics import log_event
+# Import direction is safe: security.py imports only flask/flask_talisman/
+# flask_limiter - never anything from api/ or models/ - so this cannot become
+# a circular import. Same `from security import limiter` api/index.py uses to
+# decorate /login.
+from security import limiter
 
 portal_bp = Blueprint('portal', __name__, url_prefix='/portal')
+
+# --------------------------------------------------------------------------
+# RATE LIMITS ON THIS BLUEPRINT
+#
+# This file is the app's public money surface: every route is reachable with
+# no login at all, guarded only by an unguessable token in the URL, and the
+# actions behind them accept a quote, sign a contract, or start a payment.
+# Before this, portal.py carried no limits whatsoever.
+#
+# Two tiers, applied per route below:
+#
+#   VIEW_LIMIT (60/minute) - the read-only page views and their /print
+#   variants. Deliberately generous: a client legitimately reloads an
+#   invoice while paying, opens the print view, hits back, and a single link
+#   is routinely forwarded around a company so several people at one office
+#   (sharing one NAT'd public IP, i.e. ONE rate-limit key) open it at once.
+#   The cost of a false positive here is a client who cannot read the
+#   invoice they were asked to pay, so this tier is set to stop only
+#   automated token-scanning, not humans.
+#
+#   ACTION_LIMIT (10/minute) - the state-changing POSTs. A real client
+#   clicks Accept or Sign once; ten a minute is already far beyond human
+#   use, while still leaving room for a double-click or a retry after a
+#   network error. (The templates also disable the button on submit - see
+#   confirmAndDisable in portal/base.html - so this is the backstop, not the
+#   first line of defence.)
+#
+# The payment callback is EXEMPT - see the comment on it directly.
+#
+# These are per-client-IP, keyed by security.client_ip_key, which reads the
+# rightmost X-Forwarded-For entry rather than request.remote_addr; behind
+# Vercel remote_addr is the proxy and would have made this one shared
+# counter for every client in the world. See that function's docstring.
+# --------------------------------------------------------------------------
+VIEW_LIMIT = "60 per minute"
+ACTION_LIMIT = "10 per minute"
 
 pesapal = PesaPalPayment()
 
@@ -58,6 +99,7 @@ def _split_name(full_name):
 # --------------------------------------------------------------------------
 
 @portal_bp.route('/quote/<token>')
+@limiter.limit(VIEW_LIMIT)
 def view_quote(token):
     """Client-facing quote view: accept or decline"""
     quote = Quote.query.filter_by(public_token=token).first_or_404()
@@ -70,6 +112,7 @@ def view_quote(token):
 
 
 @portal_bp.route('/quote/<token>/print')
+@limiter.limit(VIEW_LIMIT)
 def print_quote(token):
     """Standalone printable/PDF view of a quote (client view, no login required)"""
     quote = Quote.query.filter_by(public_token=token).first_or_404()
@@ -77,6 +120,7 @@ def print_quote(token):
 
 
 @portal_bp.route('/quote/<token>/accept', methods=['POST'])
+@limiter.limit(ACTION_LIMIT)
 def accept_quote(token):
     """Client accepts the quote"""
     quote = Quote.query.filter_by(public_token=token).first_or_404()
@@ -125,6 +169,7 @@ def accept_quote(token):
 
 
 @portal_bp.route('/quote/<token>/decline', methods=['POST'])
+@limiter.limit(ACTION_LIMIT)
 def decline_quote(token):
     """Client declines the quote, optionally with a reason"""
     quote = Quote.query.filter_by(public_token=token).first_or_404()
@@ -192,6 +237,7 @@ def _log_portal_contract_activity(action_type, contract, description):
 
 
 @portal_bp.route('/contract/<token>')
+@limiter.limit(VIEW_LIMIT)
 def view_contract(token):
     """Client-facing contract view: review and sign or decline.
 
@@ -209,6 +255,7 @@ def view_contract(token):
 
 
 @portal_bp.route('/contract/<token>/print')
+@limiter.limit(VIEW_LIMIT)
 def print_contract(token):
     """Standalone printable/PDF view of a contract (client view, no login).
 
@@ -221,6 +268,7 @@ def print_contract(token):
 
 
 @portal_bp.route('/contract/<token>/sign', methods=['POST'])
+@limiter.limit(ACTION_LIMIT)
 def sign_contract(token):
     """Client signs the contract.
 
@@ -292,6 +340,7 @@ def sign_contract(token):
 
 
 @portal_bp.route('/contract/<token>/decline', methods=['POST'])
+@limiter.limit(ACTION_LIMIT)
 def decline_contract(token):
     """Client declines the contract, optionally with a reason (mirrors quote decline)"""
     contract = Contract.query.filter_by(public_token=token).first_or_404()
@@ -329,6 +378,7 @@ def decline_contract(token):
 # --------------------------------------------------------------------------
 
 @portal_bp.route('/invoice/<token>')
+@limiter.limit(VIEW_LIMIT)
 def view_invoice(token):
     """Client-facing invoice view: pay via PesaPal"""
     invoice = Invoice.query.filter_by(public_token=token).first_or_404()
@@ -344,6 +394,7 @@ def view_invoice(token):
 
 
 @portal_bp.route('/invoice/<token>/print')
+@limiter.limit(VIEW_LIMIT)
 def print_invoice(token):
     """Standalone printable/PDF view of an invoice (client view, no login required)"""
     invoice = Invoice.query.filter_by(public_token=token).first_or_404()
@@ -351,6 +402,7 @@ def print_invoice(token):
 
 
 @portal_bp.route('/invoice/<token>/pay', methods=['POST'])
+@limiter.limit(ACTION_LIMIT)
 def pay_invoice(token):
     """Kick off a PesaPal payment order for this invoice and redirect the client to it"""
     invoice = Invoice.query.filter_by(public_token=token).first_or_404()
@@ -392,6 +444,32 @@ def pay_invoice(token):
 
 
 @portal_bp.route('/invoice/<token>/payment/callback')
+# DELIBERATELY EXEMPT FROM RATE LIMITING - do not "tidy this up" by adding a
+# limit. This endpoint is how the app finds out that money arrived. PesaPal
+# calls it server-to-server as an IPN (and the client's browser is also
+# redirected here after paying), and PesaPal retries from ITS OWN small pool
+# of server addresses - so every confirmation for every tenant of this app
+# arrives under the same handful of rate-limit keys. A per-IP limit is
+# therefore exactly backwards here: the busier the app gets, the more likely
+# it is to throttle PesaPal itself. A dropped confirmation is not a retry-
+# later inconvenience, it is an invoice the client HAS PAID that is never
+# marked paid, whose owner is never notified, and which then goes out as an
+# overdue reminder to a customer who already paid.
+#
+# Nothing is given up by exempting it, because throttling was never what
+# protects this route. It is already guarded, and those guards do not weaken
+# under repetition (see the SECURITY comments in the body below):
+#   - the invoice is found only by its unguessable public_token;
+#   - the PesaPal order tracking id must match the one THIS invoice recorded
+#     server-side when its payment was started, so it cannot be pointed at an
+#     unrelated completed transaction;
+#   - the confirmed amount must cover the invoice total;
+#   - marking paid is idempotent (guarded by `status != PAID`), so replaying
+#     the same callback a thousand times produces one state change, one
+#     analytics event and one notification email.
+# The residual cost of an unlimited endpoint is one PesaPal status API call
+# per request, which is bounded by PesaPal's own rate limits, not ours.
+@limiter.exempt
 def invoice_payment_callback(token):
     """PesaPal redirects (and calls as IPN) here after a payment attempt.
 

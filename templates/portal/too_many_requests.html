@@ -1,0 +1,37 @@
+{# Shown to a public portal visitor whose requests tripped the per-IP rate
+   limit on a VIEW route (see the 429 handler in api/index.py). A rendered
+   page, not a redirect: the view routes redirecting back to themselves while
+   the limit is still in force would be a redirect loop.
+
+   Extends the portal base so a client sees the same branded chrome as the
+   invoice/quote they came from, rather than a raw server error page. No
+   brand_* context is passed in here (the request never reached the view that
+   would have loaded it), so the base's own 'ELIZA' defaults apply. #}
+{% extends "portal/base.html" %}
+
+{% block title %}Please slow down{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="fas fa-hourglass-half fa-3x text-muted mb-3"></i>
+        <h4 class="mb-3">Too many requests</h4>
+        <p class="text-muted mb-4">
+            This page was opened a lot of times in quick succession, so it has been
+            paused for a moment. Nothing has gone wrong with your document and
+            no action you have already taken has been lost.
+        </p>
+        <p class="text-muted mb-4">
+            Please wait about a minute, then reload this page using the original
+            link from your email.
+        </p>
+        {# Deliberately no "retry" button: a button here invites exactly the
+           rapid re-clicking that tripped the limit, and reloading before the
+           window expires would just re-serve this same page. #}
+        <p class="small text-muted mb-0">
+            If this keeps happening, reply to the email this link came from and
+            let the sender know.
+        </p>
+    </div>
+</div>
+{% endblock %}
