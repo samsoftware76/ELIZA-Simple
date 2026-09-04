@@ -1267,42 +1267,40 @@ main.public-main {
     }
 }
 
-/* ---- Screenshot slot on the landing -------------------------------
-   A deliberately neutral, obviously-empty frame, NOT a stand-in image.
-   Dashed border + hatched ground reads as "nothing here yet" to anyone
-   looking at it, and its 16:10 ratio is the shape of the 1440x900 grab
-   that belongs in it. Delete this whole block when the real PNG lands. */
+/* ---- Screenshot on the landing ------------------------------------
+   Holds a real grab of the running app. The frame is a solid hairline
+   card rather than the old dashed placeholder: the image is now the
+   content, so the border should read as a window edge, not as an empty
+   slot. No fixed aspect ratio - the <img> carries its own intrinsic
+   width/height attributes, which reserves the right space during load
+   and avoids the layout shift a padding-top box would cause once the
+   real pixels arrive. */
 .pub-shot {
     margin: 0 0 28px;
 }
 
 .pub-shot-frame {
-    position: relative;
     width: 100%;
-    padding-top: 62.5%; /* 1440x900 */
-    border: 1px dashed #ced4da;
+    border: 1px solid #e9ecef;
     border-radius: 8px;
     background-color: #f8f9fa;
-    background-image: repeating-linear-gradient(
-        45deg,
-        rgba(206, 212, 218, 0.22) 0,
-        rgba(206, 212, 218, 0.22) 1px,
-        transparent 1px,
-        transparent 9px
-    );
+    overflow: hidden;
+    /* The screenshot's own chrome is light, so a faint lift separates it
+       from the page without the heavy shadow this design system dropped. */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-.pub-shot-label {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 12px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: #adb5bd;
+.pub-shot-img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.pub-shot-caption {
+    margin-top: 10px;
+    font-size: 13px;
+    color: #6c757d;
     text-align: center;
-    padding: 0 16px;
 }
 
 /* ---- "Also in the app" strip on the landing ---------------------- */

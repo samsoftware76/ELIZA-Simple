@@ -261,21 +261,21 @@
             <p class="pub-hero-note">14 days free on any paid plan. No card to start.</p>
         </section>
 
-        {# ---------------------------------------------------------------
-           SCREENSHOT SLOT - intentionally an empty labelled frame, not
-           artwork. Replace this whole <figure> with a real screenshot:
-             static/img/dashboard-1440x900.png - the signed-in dashboard at
-             1440x900 with the KPI row (active projects / outstanding
-             invoices / hours this month / overdue tasks), the "Projects in
-             progress" panel and the sidebar visible. Use a demo account,
-             not a real client's data.
-           When it goes in, also add a 1200x630 PNG and the og:image tag
-           that templates/base.html currently omits on purpose.
-           --------------------------------------------------------------- #}
-        <figure class="pub-shot" aria-hidden="true">
+        {# A real screenshot of the running app (owner-supplied), not artwork
+           and not a mockup - what a signed-in user actually sees. Width is
+           capped by .pub-shot-frame rather than the intrinsic 1596x917 so it
+           scales down on a phone; loading="lazy" keeps it off the critical
+           path since it sits below the hero CTA.
+           Still outstanding: a 1200x630 PNG for the og:image tag that
+           templates/base.html omits on purpose (an SVG there previews as
+           broken on WhatsApp/Slack/X rather than as nothing). #}
+        <figure class="pub-shot">
             <div class="pub-shot-frame">
-                <span class="pub-shot-label">Screenshot of the dashboard goes here</span>
+                <img src="{{ url_for('static', filename='img/app-projects-screenshot.png') }}"
+                     alt="The ELIZA projects screen: a sidebar grouped into Work, Billing and Insights, and a project listed with its client, status, priority and dates."
+                     class="pub-shot-img" width="1596" height="917" loading="lazy">
             </div>
+            <figcaption class="pub-shot-caption">Projects, clients, billing and contracts in one place.</figcaption>
         </figure>
 
         <div class="row pub-benefits">
